@@ -15,6 +15,8 @@ import { TIER_META } from "@/lib/tier-meta";
 import { tierColorVar } from "@/lib/utils/tier-style";
 import { getPublicTierList, type PublicTierList } from "@/lib/supabase/profiles";
 import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
+import { CATEGORY_FILTERS, type CategoryFilter } from "@/lib/utils/content-type";
+import { cn } from "@/lib/utils/cn";
 
 type LoadState =
   | { status: "loading" }
@@ -23,6 +25,7 @@ type LoadState =
 
 export function PublicTierListView({ username }: { username: string }) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [category, setCategory] = useState<CategoryFilter>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -68,7 +71,24 @@ export function PublicTierListView({ username }: { username: string }) {
 
   const { profile, titles, channels } = state.data;
   const displayName = profile.displayName || `@${profile.username}`;
+
+  // Channels live outside RankedTitle and have no mediaType, so "youtube" is a
+  // category of its own here rather than another value of the title filter.
+  const visibleTitles = category === "all" || category === "youtube"
+    ? category === "youtube" ? [] : titles
+    : titles.filter((t) => t.mediaType === category);
+  const visibleChannels = category === "all" || category === "youtube" ? channels : [];
+
   const total = titles.length + channels.length;
+  const shown = visibleTitles.length + visibleChannels.length;
+
+  // Offering a category that this particular list has nothing in would be a
+  // dead button, so the row only advertises what is actually here.
+  const availableFilters = CATEGORY_FILTERS.filter((f) => {
+    if (f.value === "all") return true;
+    if (f.value === "youtube") return channels.length > 0;
+    return titles.some((t) => t.mediaType === f.value);
+  });
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 pb-16 pt-6 md:px-6">
@@ -77,16 +97,42 @@ export function PublicTierListView({ username }: { username: string }) {
         <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{displayName}</h1>
         <p className="mt-1 text-sm text-muted">
           @{profile.username} · {titlesCountLabel(total)}
+          {category !== "all" && ` · показано ${shown}`}
         </p>
       </header>
+
+      {availableFilters.length > 2 && (
+        <div
+          className="mb-5 flex flex-wrap gap-1 rounded-lg border border-border p-0.5"
+          role="group"
+          aria-label="Категория"
+        >
+          {availableFilters.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setCategory(opt.value)}
+              aria-pressed={category === opt.value}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                category === opt.value
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted hover:text-foreground"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-3">
         {TIER_ORDER.map((tier) => (
           <ReadOnlyTierRow
             key={tier}
             tier={tier}
-            titles={titles.filter((t) => t.tier === tier).sort((a, b) => a.order - b.order)}
-            channels={channels.filter((c) => c.tier === tier).sort((a, b) => a.order - b.order)}
+            titles={visibleTitles.filter((t) => t.tier === tier).sort((a, b) => a.order - b.order)}
+            channels={visibleChannels.filter((c) => c.tier === tier).sort((a, b) => a.order - b.order)}
           />
         ))}
       </div>

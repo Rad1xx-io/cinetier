@@ -61,3 +61,15 @@ export const CONTENT_TYPE_ACCENTS: Record<ContentType, ContentTypeAccent> = {
 export function contentTypeAccent(type: ContentType): ContentTypeAccent {
   return CONTENT_TYPE_ACCENTS[type];
 }
+
+/** "all" plus every catalog — the vocabulary any category filter draws from. */
+export type CategoryFilter = "all" | ContentType;
+
+export const CATEGORY_FILTERS: { value: CategoryFilter; label: string }[] = [
+  { value: "all", label: "Все" },
+  { value: "movie", label: "Фильмы" },
+  { value: "tv", label: "Сериалы" },
+  { value: "anime", label: "Аниме" },
+  { value: "game", label: "Игры" },
+  { value: "youtube", label: "YouTube" },
+];
