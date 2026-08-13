@@ -1,4 +1,7 @@
-export type MediaType = "movie" | "tv";
+export type MediaType = "movie" | "tv" | "anime" | "game";
+
+/** TMDB only ever produces these two — narrower than the shared ranking MediaType so movie/tv-only components (mediaTypeLabel, DiscoverCard, TitleDetailsView) can't accidentally be handed "anime". */
+export type TMDBMediaType = "movie" | "tv";
 
 export type Tier = "S" | "A" | "B" | "C" | "D" | "F";
 
@@ -16,7 +19,7 @@ export interface TMDBGenre {
 /** Normalized shape used for search results and popular listings (movie or tv). */
 export interface TitleSummary {
   tmdbId: number;
-  mediaType: MediaType;
+  mediaType: TMDBMediaType;
   title: string;
   originalTitle: string;
   posterPath: string | null;
@@ -35,7 +38,10 @@ export interface TitleDetails extends TitleSummary {
   status: string | null;
 }
 
-/** The minimal record persisted per title in local storage. */
+/** The minimal record persisted per title in local storage. `tmdbId` holds the
+ *  external numeric id from whichever source the mediaType implies (TMDB for
+ *  movie/tv, AniList for anime) — namespaced by mediaType in `titleKey`, so
+ *  ids never collide across sources without needing a separate field. */
 export interface RankedTitle {
   tmdbId: number;
   mediaType: MediaType;

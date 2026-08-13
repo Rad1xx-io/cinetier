@@ -25,6 +25,8 @@ const MEDIA_OPTIONS: { value: MediaFilter; label: string }[] = [
   { value: "all", label: "Все" },
   { value: "movie", label: "Фильмы" },
   { value: "tv", label: "Сериалы" },
+  { value: "anime", label: "Аниме" },
+  { value: "game", label: "Игры" },
 ];
 
 export function Toolbar({
@@ -121,7 +123,7 @@ export function Toolbar({
             <option value="newest">Недавно добавленные</option>
             <option value="title">Название А-Я</option>
             <option value="year">Год выпуска</option>
-            <option value="rating">Рейтинг TMDB</option>
+            <option value="rating">Рейтинг</option>
           </select>
 
           <Button variant="ghost" size="sm" onClick={onReset} disabled={isDefault}>

@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TopNav } from "@/components/navigation/top-nav";
+import { MobileHeader } from "@/components/navigation/mobile-header";
 import { BottomNav } from "@/components/navigation/bottom-nav";
+import { CloudSyncProvider } from "@/components/auth/cloud-sync-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,7 +34,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
+        <CloudSyncProvider />
         <TopNav />
+        <MobileHeader />
         <main className="flex-1 pb-20 md:pb-0">{children}</main>
         <footer className="hidden border-t border-border px-6 py-6 text-center text-xs text-muted md:block">
           Этот продукт использует TMDB API, но не одобрен и не сертифицирован TMDB.

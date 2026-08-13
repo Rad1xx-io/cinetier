@@ -13,7 +13,7 @@ export function RankedCard({ title }: { title: RankedTitle }) {
         <TierPill tier={title.tier} className="absolute left-1.5 top-1.5 shadow" />
       </div>
       <div>
-        <p className="line-clamp-1 text-xs font-medium">{title.title}</p>
+        <p className="line-clamp-1 break-words text-xs font-medium">{title.title}</p>
         <p className="text-[11px] text-muted">{releaseYear(title.releaseDate)}</p>
       </div>
     </Link>

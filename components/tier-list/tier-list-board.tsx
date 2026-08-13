@@ -5,16 +5,15 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
+  MeasuringStrategy,
   PointerSensor,
   TouchSensor,
-  closestCorners,
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useRankedTitles } from "@/lib/hooks/use-ranked-titles";
 import { useDensity } from "@/lib/hooks/use-density";
 import { TIER_ORDER } from "@/lib/types";
@@ -22,14 +21,17 @@ import type { RankedTitle, TierOrUnrated } from "@/lib/types";
 import {
   filterAndSortTierItems,
   groupByTier,
-  resolveContainer,
   tierItemKey,
   type MediaFilter,
   type SortMode,
   type TierContainers,
 } from "@/lib/utils/tier-grouping";
+import { applyDrop, flattenBuckets, tierCollisionDetection } from "@/lib/utils/tier-dnd";
 import { TierRow } from "@/components/tier-list/tier-row";
 import { Toolbar } from "@/components/tier-list/toolbar";
+import { TierListActions } from "@/components/tier-list/tier-list-actions";
+import { Toast } from "@/components/ui/toast";
+import { useToast } from "@/lib/hooks/use-toast";
 import { Poster } from "@/components/movie-card/poster";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -38,18 +40,42 @@ export function TierListBoard() {
   const { titles, hydrated, remove, setTier, reorderAll } = useRankedTitles();
   const { density, setDensity } = useDensity();
   const [containers, setContainers] = useState<TierContainers>(() => groupByTier([]));
+  const containersRef = useRef(containers);
   const draggingRef = useRef(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const savedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const boardRef = useRef<HTMLDivElement>(null);
+  const { toast, show: notify } = useToast();
+
   const [search, setSearch] = useState("");
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>("all");
   const [sort, setSort] = useState<SortMode>("manual");
 
+  /**
+   * Writes the ref and the state together, always in that order.
+   *
+   * The ref — not the `containers` state variable — is what every drag handler
+   * reads. dnd-kit fires onDragOver and onDragEnd from the same burst of
+   * pointer events and does not wait for React to commit in between, so a
+   * handler reading state (or a ref synced from state by an effect, which is
+   * strictly worse: it lands a full commit later) can see the board as it was
+   * *before* the move it is supposed to finish. That is what made drops land
+   * back in their original tier at random.
+   */
+  const commitContainers = useCallback((next: TierContainers) => {
+    containersRef.current = next;
+    setContainers(next);
+  }, []);
+
   useEffect(() => {
+    // Storage changed from somewhere else (quick tier menu, another tab, cloud
+    // sync pulling down). Never while dragging — that would yank the board out
+    // from under the pointer.
     if (!draggingRef.current) {
-      setContainers(groupByTier(titles));
+      containersRef.current = groupByTier(titles);
+      setContainers(containersRef.current);
     }
   }, [titles]);
 
@@ -72,83 +98,72 @@ export function TierListBoard() {
   );
 
   const isDefaultFilters = search === "" && mediaFilter === "all" && sort === "manual";
-  const dragEnabled = isDefaultFilters;
+
+  /**
+   * A media tab or a search term only *hides* cards — the ones still on screen
+   * keep their real positions, and every drop is resolved against the full
+   * list by item id (see handleDragEnd), so dragging on a filtered tab is
+   * exactly as correct as on "Все".
+   *
+   * A non-manual sort is the one case that genuinely cannot work: the visible
+   * order is not the stored order, so "dropped between these two cards" has no
+   * manual position to write back. Only that stays disabled.
+   */
+  const dragEnabled = sort === "manual";
 
   function handleDragStart(event: DragStartEvent) {
     draggingRef.current = true;
     setActiveId(String(event.active.id));
   }
 
-  function handleDragOver(event: DragOverEvent) {
-    const { active, over } = event;
-    if (!over) return;
-
-    // Container resolution happens *inside* the updater, against `prev` — never
-    // against the `containers` state variable from the render closure. dnd-kit
-    // can fire onDragOver and onDragEnd back-to-back faster than React commits
-    // a render in between, so resolving against the outer closure was stale and
-    // silently dropped cross-tier moves (see incident: item never left Unrated).
-    setContainers((prev) => {
-      const activeContainer = resolveContainer(prev, String(active.id));
-      const overContainer = resolveContainer(prev, String(over.id));
-      if (!activeContainer || !overContainer || activeContainer === overContainer) return prev;
-
-      const activeItems = prev[activeContainer];
-      const overItems = prev[overContainer];
-      const activeIndex = activeItems.findIndex((t) => tierItemKey(t) === active.id);
-      if (activeIndex === -1) return prev;
-      const movedItem = activeItems[activeIndex];
-      const overIndex = overItems.findIndex((t) => tierItemKey(t) === over.id);
-
-      const newActiveItems = activeItems.filter((t) => tierItemKey(t) !== String(active.id));
-      const insertAt = overIndex >= 0 ? overIndex : overItems.length;
-      const newOverItems = [
-        ...overItems.slice(0, insertAt),
-        { ...movedItem, tier: overContainer },
-        ...overItems.slice(insertAt),
-      ];
-
-      return { ...prev, [activeContainer]: newActiveItems, [overContainer]: newOverItems };
-    });
-  }
-
+  /**
+   * Deliberately no onDragOver handler.
+   *
+   * Rewriting the board mid-drag to preview the move is a feedback loop here,
+   * because these rows wrap and their height depends on what they hold. Moving
+   * the card into the hovered row makes that row taller and its neighbours
+   * shift, which slides a row boundary out from under a stationary pointer, so
+   * the next collision pass resolves to the neighbouring row and moves the card
+   * back — which restores the old heights and flips it again. dnd-kit
+   * re-measures on every render (MeasuringStrategy.Always), so the two states
+   * ping-pong until React aborts the render with "Maximum update depth
+   * exceeded" and the page goes blank.
+   *
+   * The layout therefore stays completely still during a drag: the DragOverlay
+   * carries the card under the cursor and the hovered row lights up via
+   * `isOver`, which is feedback enough. The board changes exactly once, on drop.
+   */
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     draggingRef.current = false;
     setActiveId(null);
     if (!over) return;
 
-    setContainers((prev) => {
-      const activeContainer = resolveContainer(prev, String(active.id));
-      const overContainer = resolveContainer(prev, String(over.id));
-      if (!activeContainer || !overContainer) return prev;
+    // `applyDrop` covers both shapes of drop under one rule: a same-tier
+    // reorder and a cross-tier move. Persisting happens here, once, outside any
+    // setState updater — `reorderAll` writes localStorage synchronously and
+    // dispatches a change event, which React must not see inside a reducer
+    // (Strict Mode double-invokes those, firing the write twice and letting the
+    // `[titles]` effect stomp the fresh board with a stale snapshot).
+    const next = applyDrop(containersRef.current, String(active.id), String(over.id), tierItemKey);
+    if (next === containersRef.current) return;
 
-      const items = prev[overContainer];
-      const activeIndex = items.findIndex((t) => tierItemKey(t) === active.id);
-      const overIndex = items.findIndex((t) => tierItemKey(t) === over.id);
+    commitContainers(next);
+    persist(next, String(active.id));
+  }
 
-      let next = prev;
-      if (activeContainer === overContainer && activeIndex !== -1 && overIndex !== -1 && activeIndex !== overIndex) {
-        next = { ...prev, [overContainer]: arrayMove(items, activeIndex, overIndex) };
-      }
-
-      persist(next, String(active.id));
-      return next;
-    });
+  function handleDragCancel() {
+    draggingRef.current = false;
+    setActiveId(null);
   }
 
   function persist(next: TierContainers, movedKey: string) {
     const now = Date.now();
-    const flat: RankedTitle[] = [];
-    for (const tier of TIER_ORDER) {
-      next[tier].forEach((t, index) => {
-        flat.push({
-          ...t,
-          order: index,
-          updatedAt: tierItemKey(t) === movedKey ? now : t.updatedAt,
-        });
-      });
-    }
+    const flat = flattenBuckets<RankedTitle>(next, (t, index) => ({
+      ...t,
+      order: index,
+      updatedAt: tierItemKey(t) === movedKey ? now : t.updatedAt,
+    }));
     reorderAll(flat);
     flashSaved();
   }
@@ -206,11 +221,14 @@ export function TierListBoard() {
 
   return (
     <div className="mx-auto max-w-[1600px] px-0 pb-6 md:px-6">
-      <div className="px-4 pt-4 md:px-0 md:pt-6">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Тир-лист</h1>
-        <p className="mt-1 text-sm text-muted">
-          Перетаскивайте тайтлы между тирами, чтобы выстроить свой рейтинг.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3 px-4 pt-4 md:px-0 md:pt-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Тир-лист</h1>
+          <p className="mt-1 text-sm text-muted">
+            Перетаскивайте тайтлы между тирами, чтобы выстроить свой рейтинг.
+          </p>
+        </div>
+        <TierListActions boardRef={boardRef} onNotify={notify} />
       </div>
 
       <div className="mt-4 px-4 md:px-0">
@@ -231,12 +249,17 @@ export function TierListBoard() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={tierCollisionDetection}
+        // The board no longer mutates mid-drag (see handleDragEnd), so one
+        // measurement per drag is both correct and enough. `Always` would
+        // re-measure on every render, which is what let the old live preview
+        // ping-pong a card between two rows until React gave up.
+        measuring={{ droppable: { strategy: MeasuringStrategy.BeforeDragging } }}
         onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
       >
-        <div className="mt-4 space-y-3 px-4 md:px-0">
+        <div ref={boardRef} className="relative mt-4 space-y-3 bg-background px-4 py-2 md:px-0">
           {TIER_ORDER.map((tier) => (
             <TierRow
               key={tier}
@@ -250,6 +273,13 @@ export function TierListBoard() {
               onQuickTierChange={handleQuickTierChange}
             />
           ))}
+          {/* Invisible on screen; the export handler reveals it for the shot. */}
+          <p
+            data-export-watermark
+            className="pointer-events-none absolute bottom-1 right-3 text-xs font-semibold tracking-tight opacity-0"
+          >
+            Cine<span className="text-accent">Tier</span>
+          </p>
         </div>
 
         <DragOverlay>
@@ -265,6 +295,8 @@ export function TierListBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      <Toast toast={toast} />
     </div>
   );
 }

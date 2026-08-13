@@ -37,7 +37,7 @@ export function groupByTier(titles: RankedTitle[]): TierContainers {
   return base;
 }
 
-export type MediaFilter = "all" | "movie" | "tv";
+export type MediaFilter = "all" | "movie" | "tv" | "anime" | "game";
 export type SortMode = "manual" | "title" | "newest" | "year" | "rating";
 
 export interface TierFilterOptions {

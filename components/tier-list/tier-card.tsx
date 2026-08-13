@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { GripVertical, X } from "lucide-react";
 import { Poster } from "@/components/movie-card/poster";
+import { ContentTypeBadge } from "@/components/ui/content-type-badge";
 import { QuickTierMenu } from "@/components/tier-list/quick-tier-menu";
 import type { RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { Density } from "@/lib/hooks/use-density";
@@ -75,6 +76,7 @@ function TierCardImpl({
         />
         {draggable && (
           <span
+            data-export-hide
             className="pointer-events-none absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-md bg-background/70 text-foreground/80 backdrop-blur"
             aria-hidden
           >
@@ -82,6 +84,7 @@ function TierCardImpl({
           </span>
         )}
         <button
+          data-export-hide
           type="button"
           onClick={() => onRemove(title)}
           className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-md bg-background/80 text-muted backdrop-blur transition-opacity hover:text-tier-s focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
@@ -89,7 +92,7 @@ function TierCardImpl({
         >
           <X className="h-4 w-4" aria-hidden />
         </button>
-        <div className="absolute bottom-1 left-1/2 -translate-x-1/2">
+        <div data-export-hide className="absolute bottom-1 left-1/2 -translate-x-1/2">
           <QuickTierMenu
             currentTier={title.tier}
             label={title.title}
@@ -97,10 +100,13 @@ function TierCardImpl({
           />
         </div>
       </div>
-      <p className="mt-1.5 line-clamp-1 text-[11px] font-medium" title={title.title}>
+      <p className="mt-1.5 line-clamp-1 break-words text-[11px] font-medium" title={title.title}>
         {title.title}
       </p>
-      <p className="text-[10px] text-muted">{releaseYear(title.releaseDate)}</p>
+      <div className="mt-0.5 flex items-center gap-1">
+        <ContentTypeBadge type={title.mediaType} />
+        <span className="text-[10px] text-muted">{releaseYear(title.releaseDate)}</span>
+      </div>
     </div>
   );
 }

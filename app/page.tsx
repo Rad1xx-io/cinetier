@@ -6,6 +6,7 @@ import { useRankedTitles } from "@/lib/hooks/use-ranked-titles";
 import { StatsGrid } from "@/components/dashboard/stats-grid";
 import { TitleShelf } from "@/components/dashboard/title-shelf";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { Hero } from "@/components/dashboard/hero";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 
@@ -38,7 +39,8 @@ export default function DashboardPage() {
 
   if (titles.length === 0) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10 md:px-6">
+      <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 md:px-6">
+        <Hero />
         <EmptyState />
       </div>
     );

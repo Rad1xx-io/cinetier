@@ -50,8 +50,18 @@ body {
   color: var(--foreground);
 }
 
-* {
-  border-color: var(--border);
+/*
+ * Default border colour, so a bare `border` utility needs no colour class.
+ *
+ * Must stay inside @layer base: Tailwind's utilities live in a cascade layer,
+ * and unlayered rules beat layered ones no matter their specificity. Left
+ * unlayered, this `*` silently overrode every border-<colour> utility in the
+ * app — accent and tier-coloured borders all rendered as the neutral token.
+ */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 ::selection {

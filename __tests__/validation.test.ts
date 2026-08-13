@@ -50,6 +50,10 @@ describe("isRankedTitle", () => {
     expect(isRankedTitle({ ...makeTitle(), mediaType: "book" })).toBe(false);
   });
 
+  it("accepts an anime record (AniList id in the tmdbId field, namespaced by mediaType)", () => {
+    expect(isRankedTitle(makeTitle({ tmdbId: 16498, mediaType: "anime", title: "Attack on Titan" }))).toBe(true);
+  });
+
   it("rejects non-object input", () => {
     expect(isRankedTitle(null)).toBe(false);
     expect(isRankedTitle("not a title")).toBe(false);

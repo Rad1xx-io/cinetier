@@ -2,11 +2,61 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
+    /**
+     * Opt-in escape hatch for NAT64 networks, set only in .env.local.
+     *
+     * Next 16 refuses to optimize an image whose hostname resolves to a private
+     * address. On an IPv6-only link with NAT64 — a phone hotspot, for instance —
+     * every public host resolves through the 64:ff9b::/96 prefix, which trips
+     * that check and turns every remote cover into a broken image locally.
+     * Hosting platforms have ordinary dual-stack DNS and never hit this, so the
+     * relaxation stays off unless the developer asks for it, and `remotePatterns`
+     * below still limits fetches to the known CDNs either way.
+     */
+    dangerouslyAllowLocalIP: process.env.ALLOW_LOCAL_IP_IMAGES === "true",
     remotePatterns: [
       {
         protocol: "https",
         hostname: "image.tmdb.org",
         pathname: "/t/p/**",
+      },
+      {
+        protocol: "https",
+        hostname: "yt3.googleusercontent.com",
+      },
+      {
+        protocol: "https",
+        hostname: "yt3.ggpht.com",
+      },
+      {
+        protocol: "https",
+        hostname: "s4.anilist.co",
+      },
+      {
+        protocol: "https",
+        hostname: "s1.anilist.co",
+      },
+      {
+        protocol: "https",
+        hostname: "s2.anilist.co",
+      },
+      // Steam serves the same asset from several CDNs and swaps between them
+      // per request, so match the whole family rather than chasing hostnames.
+      {
+        protocol: "https",
+        hostname: "**.steamstatic.com",
+      },
+      {
+        protocol: "https",
+        hostname: "**.akamaihd.net",
+      },
+      {
+        protocol: "https",
+        hostname: "**.steampowered.com",
+      },
+      {
+        protocol: "https",
+        hostname: "images.igdb.com",
       },
     ],
   },

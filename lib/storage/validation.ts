@@ -11,7 +11,10 @@ export function isRankedTitle(value: unknown): value is RankedTitle {
   const v = value as Record<string, unknown>;
   return (
     typeof v.tmdbId === "number" &&
-    (v.mediaType === "movie" || v.mediaType === "tv") &&
+    (v.mediaType === "movie" ||
+      v.mediaType === "tv" ||
+      v.mediaType === "anime" ||
+      v.mediaType === "game") &&
     typeof v.title === "string" &&
     (v.posterPath === null || typeof v.posterPath === "string") &&
     (v.releaseDate === null || typeof v.releaseDate === "string") &&

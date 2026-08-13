@@ -3,7 +3,7 @@ import { DiscoverClient } from "@/components/search/discover-client";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata = {
-  title: "Поиск — CineTier",
+  title: "Фильмы и сериалы — CineTier",
 };
 
 export default function DiscoverPage() {

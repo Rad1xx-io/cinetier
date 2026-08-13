@@ -4,9 +4,9 @@ import Link from "next/link";
 import { Plus, Star } from "lucide-react";
 import { Poster } from "@/components/movie-card/poster";
 import { TierPill } from "@/components/movie-card/tier-pill";
-import { Badge } from "@/components/ui/badge";
+import { ContentTypeBadge } from "@/components/ui/content-type-badge";
 import type { RankedTitle, TitleSummary } from "@/lib/types";
-import { formatRating, mediaTypeLabel, releaseYear } from "@/lib/utils/format";
+import { formatRating, releaseYear } from "@/lib/utils/format";
 import { titleHref } from "@/lib/utils/title-route";
 
 interface DiscoverCardProps {
@@ -19,7 +19,7 @@ export function DiscoverCard({ title, ranked, onAdd }: DiscoverCardProps) {
   return (
     <div className="group relative flex flex-col gap-2">
       <Link href={titleHref(title.mediaType, title.tmdbId)} className="block">
-        <Poster posterPath={title.posterPath} title={title.title} className="transition-transform group-hover:scale-[1.02]" />
+        <Poster posterPath={title.posterPath} title={title.title} className="transition-all duration-200 group-hover:scale-[1.02] group-hover:ring-2 group-hover:ring-accent/40" />
       </Link>
 
       {ranked ? (
@@ -38,14 +38,12 @@ export function DiscoverCard({ title, ranked, onAdd }: DiscoverCardProps) {
       )}
 
       <div className="flex flex-col gap-1">
-        <Link href={titleHref(title.mediaType, title.tmdbId)} className="line-clamp-1 text-sm font-medium hover:text-accent">
+        <Link href={titleHref(title.mediaType, title.tmdbId)} className="line-clamp-1 break-words text-sm font-medium hover:text-accent">
           {title.title}
         </Link>
         <div className="flex items-center gap-2 text-xs text-muted">
           <span>{releaseYear(title.releaseDate)}</span>
-          <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-            {mediaTypeLabel(title.mediaType)}
-          </Badge>
+          <ContentTypeBadge type={title.mediaType} />
           <span className="flex items-center gap-0.5">
             <Star className="h-3 w-3 fill-accent text-accent" aria-hidden />
             {formatRating(title.voteAverage)}

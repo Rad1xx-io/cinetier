@@ -1,0 +1,165 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ListChecks, TriangleAlert } from "lucide-react";
+import { Poster } from "@/components/movie-card/poster";
+import { ChannelThumbnail } from "@/components/channel-card/channel-thumbnail";
+import { ContentTypeBadge } from "@/components/ui/content-type-badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TIER_ORDER } from "@/lib/types";
+import type { RankedTitle, TierOrUnrated } from "@/lib/types";
+import type { RankedChannel } from "@/lib/types/youtube";
+import { TIER_META } from "@/lib/tier-meta";
+import { tierColorVar } from "@/lib/utils/tier-style";
+import { getPublicTierList, type PublicTierList } from "@/lib/supabase/profiles";
+import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
+
+type LoadState =
+  | { status: "loading" }
+  | { status: "missing" }
+  | { status: "ready"; data: PublicTierList };
+
+export function PublicTierListView({ username }: { username: string }) {
+  const [state, setState] = useState<LoadState>({ status: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+    getPublicTierList(username)
+      .then((data) => {
+        if (cancelled) return;
+        setState(data ? { status: "ready", data } : { status: "missing" });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: "missing" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [username]);
+
+  if (state.status === "loading") {
+    return (
+      <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-8 md:px-6">
+        <Skeleton className="h-9 w-56" />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-28" />
+        ))}
+      </div>
+    );
+  }
+
+  if (state.status === "missing") {
+    return (
+      <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-24 text-center">
+        <TriangleAlert className="h-10 w-10 text-muted" aria-hidden />
+        <h1 className="text-lg font-semibold">Тир-лист не найден</h1>
+        <p className="text-sm text-muted">
+          Пользователя <span className="text-foreground">@{username}</span> не существует, либо его
+          список закрыт.
+        </p>
+        <Button asChild variant="secondary">
+          <Link href="/">На главную</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const { profile, titles, channels } = state.data;
+  const displayName = profile.displayName || `@${profile.username}`;
+  const total = titles.length + channels.length;
+
+  return (
+    <div className="mx-auto max-w-[1600px] px-4 pb-16 pt-6 md:px-6">
+      <header className="mb-6">
+        <p className="text-xs uppercase tracking-wide text-muted">Тир-лист пользователя</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{displayName}</h1>
+        <p className="mt-1 text-sm text-muted">
+          @{profile.username} · {titlesCountLabel(total)}
+        </p>
+      </header>
+
+      <div className="space-y-3">
+        {TIER_ORDER.map((tier) => (
+          <ReadOnlyTierRow
+            key={tier}
+            tier={tier}
+            titles={titles.filter((t) => t.tier === tier).sort((a, b) => a.order - b.order)}
+            channels={channels.filter((c) => c.tier === tier).sort((a, b) => a.order - b.order)}
+          />
+        ))}
+      </div>
+
+      <div className="mt-10 flex flex-col items-center gap-3 rounded-2xl border border-border bg-surface px-6 py-8 text-center">
+        <ListChecks className="h-8 w-8 text-accent" aria-hidden />
+        <p className="text-sm text-muted">Соберите свой тир-лист фильмов, аниме, игр и каналов.</p>
+        <Button asChild size="sm">
+          <Link href="/">Начать в CineTier</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** The same row shape as the editable board, minus every control. */
+function ReadOnlyTierRow({
+  tier,
+  titles,
+  channels,
+}: {
+  tier: TierOrUnrated;
+  titles: RankedTitle[];
+  channels: RankedChannel[];
+}) {
+  const isUnrated = tier === "Unrated";
+  const meta = TIER_META[tier];
+  const count = titles.length + channels.length;
+
+  // An empty "не оценено" row is noise on someone else's list.
+  if (isUnrated && count === 0) return null;
+
+  return (
+    <div className="flex rounded-xl border border-border bg-surface">
+      <div
+        className="flex w-20 shrink-0 flex-col items-center justify-center gap-0.5 rounded-l-xl px-1.5 py-3 text-center sm:w-24 md:w-28"
+        style={{
+          backgroundColor: isUnrated ? "var(--surface-raised)" : tierColorVar(tier),
+          color: isUnrated ? "var(--muted)" : "var(--background)",
+        }}
+      >
+        <span className="text-lg font-bold sm:text-2xl" aria-hidden>
+          {isUnrated ? "—" : tier}
+        </span>
+        <span className="line-clamp-2 break-words text-[10px] font-medium leading-tight sm:text-xs">
+          {meta.name}
+        </span>
+        <span className="text-[10px] opacity-80">{titlesCountLabel(count)}</span>
+      </div>
+
+      <div className="flex min-h-28 flex-1 flex-wrap content-start items-start gap-3 p-3 sm:min-h-32">
+        {count === 0 && <p className="flex h-24 items-center px-2 text-xs text-muted">Пусто</p>}
+
+        {titles.map((t) => (
+          <div key={`${t.mediaType}-${t.tmdbId}`} className="w-20 shrink-0 sm:w-24">
+            <Poster posterPath={t.posterPath} title={t.title} sizes="96px" />
+            <p className="mt-1.5 line-clamp-1 break-words text-[11px] font-medium" title={t.title}>
+              {t.title}
+            </p>
+            <ContentTypeBadge type={t.mediaType} className="mt-0.5" />
+          </div>
+        ))}
+
+        {channels.map((c) => (
+          <div key={c.channelId} className="w-20 shrink-0 sm:w-24">
+            <ChannelThumbnail thumbnailUrl={c.thumbnailUrl} title={c.title} sizes="96px" />
+            <p className="mt-1.5 line-clamp-1 break-words text-[11px] font-medium" title={c.title}>
+              {c.title}
+            </p>
+            <ContentTypeBadge type="youtube" className="mt-0.5" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

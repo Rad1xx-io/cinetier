@@ -1,4 +1,4 @@
-import type { MediaType, TitleDetails, TitleSummary } from "@/lib/types";
+import type { TMDBMediaType, TitleDetails, TitleSummary } from "@/lib/types";
 import type { TMDBRawMovie, TMDBRawTVShow } from "@/lib/tmdb/types";
 
 function isTVShow(raw: TMDBRawMovie | TMDBRawTVShow): raw is TMDBRawTVShow {
@@ -7,9 +7,9 @@ function isTVShow(raw: TMDBRawMovie | TMDBRawTVShow): raw is TMDBRawTVShow {
 
 export function mapToSummary(
   raw: TMDBRawMovie | TMDBRawTVShow,
-  fallbackMediaType?: MediaType
+  fallbackMediaType?: TMDBMediaType
 ): TitleSummary {
-  const mediaType: MediaType = isTVShow(raw) ? "tv" : fallbackMediaType ?? "movie";
+  const mediaType: TMDBMediaType = isTVShow(raw) ? "tv" : fallbackMediaType ?? "movie";
   const tv = isTVShow(raw) ? raw : null;
   const movie = !tv ? (raw as TMDBRawMovie) : null;
   const originalTitle = tv ? tv.original_name : movie!.original_title;
@@ -35,7 +35,7 @@ export function mapToSummary(
 
 export function mapToDetails(
   raw: TMDBRawMovie | TMDBRawTVShow,
-  mediaType: MediaType
+  mediaType: TMDBMediaType
 ): TitleDetails {
   const summary = mapToSummary(raw, mediaType);
   const tv = isTVShow(raw) ? raw : null;

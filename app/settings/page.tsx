@@ -1,4 +1,5 @@
 import { ImportExportPanel } from "@/components/settings/import-export-panel";
+import { AccountPanel } from "@/components/auth/account-panel";
 
 export const metadata = {
   title: "Настройки — CineTier",
@@ -12,7 +13,11 @@ export default function SettingsPage() {
         <p className="mt-1 text-sm text-muted">Управление вашими локальными данными CineTier.</p>
       </div>
 
-      <ImportExportPanel />
+      <AccountPanel />
+
+      <div id="export">
+        <ImportExportPanel />
+      </div>
 
       <p className="border-t border-border pt-6 text-xs leading-relaxed text-muted">
         Этот продукт использует TMDB API, но не одобрен и не сертифицирован TMDB. Все данные о

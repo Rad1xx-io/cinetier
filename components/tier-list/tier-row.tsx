@@ -37,10 +37,15 @@ function TierRowImpl({
   const meta = TIER_META[tier];
 
   return (
+    // The droppable covers the whole row, tier label included — dropping on the
+    // big coloured letter is the obvious gesture, and when it wasn't a target
+    // the drop silently did nothing.
     <div
+      ref={setNodeRef}
       className={cn(
-        "flex rounded-xl border border-border bg-surface",
-        isUnrated && "mt-2 border-dashed"
+        "flex rounded-xl border border-border bg-surface transition-colors",
+        isUnrated && "mt-2 border-dashed",
+        isOver && "border-accent"
       )}
     >
       <div
@@ -54,13 +59,12 @@ function TierRowImpl({
         <span className="text-lg font-bold sm:text-2xl" aria-hidden>
           {isUnrated ? "—" : tier}
         </span>
-        <span className="line-clamp-2 text-[10px] font-medium leading-tight sm:text-xs">
+        <span className="line-clamp-2 break-words text-[10px] font-medium leading-tight sm:text-xs">
           {meta.name}
         </span>
         <span className="text-[10px] opacity-80">{titlesCountLabel(items.length)}</span>
       </div>
       <div
-        ref={setNodeRef}
         role="list"
         aria-label={`Тайтлы в тире «${meta.name}»`}
         className={cn(
@@ -71,7 +75,7 @@ function TierRowImpl({
         <SortableContext items={itemIds} strategy={rectSortingStrategy}>
           {items.length === 0 && (
             <p className="flex h-24 items-center px-2 text-xs text-muted">
-              {draggable ? "Перетащите тайтлы сюда" : filtersActive ? "Нет совпадений" : "Здесь пока пусто"}
+              {filtersActive ? "Нет совпадений" : draggable ? "Перетащите тайтлы сюда" : "Здесь пока пусто"}
             </p>
           )}
           {items.map((title) => (

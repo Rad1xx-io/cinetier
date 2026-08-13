@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeSearchQuery } from "@/lib/utils/search-query";
 import { tmdbFetch, TMDBError } from "@/lib/tmdb/client";
 import { mapToSummary } from "@/lib/tmdb/mappers";
 import type { TMDBPagedResponse, TMDBRawMovie, TMDBRawTVShow } from "@/lib/tmdb/types";
@@ -62,7 +63,7 @@ async function runSearch(
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const query = searchParams.get("query")?.trim() ?? "";
+  const query = sanitizeSearchQuery(searchParams.get("query") ?? "");
   const type = searchParams.get("type") ?? "all";
   const page = Number(searchParams.get("page") ?? "1") || 1;
 

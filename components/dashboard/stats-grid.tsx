@@ -14,21 +14,25 @@ export function StatsGrid({ titles }: { titles: RankedTitle[] }) {
   }));
 
   return (
-    <div className="grid grid-cols-4 gap-2 sm:grid-cols-4 md:grid-cols-8">
-      <StatTile label="Оценено" value={rated.length} className="col-span-2 md:col-span-2" />
-      <StatTile label="Не оценено" value={unrated} className="col-span-2 md:col-span-2" />
-      <StatTile label="Фильмы" value={movies} className="col-span-2 md:col-span-2" />
-      <StatTile label="Сериалы" value={tvShows} className="col-span-2 md:col-span-2" />
-      {tierCounts.map(({ tier, count }) => (
-        <StatTile
-          key={tier}
-          label={`Тир ${tier}`}
-          title={TIER_META[tier].name}
-          value={count}
-          accent={tierColorVar(tier)}
-          className="col-span-1 sm:col-span-1"
-        />
-      ))}
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+        <StatTile label="Всего в списке" value={titles.length} className="col-span-2 sm:col-span-1" />
+        <StatTile label="Оценено" value={rated.length} />
+        <StatTile label="Не оценено" value={unrated} />
+        <StatTile label="Фильмы" value={movies} />
+        <StatTile label="Сериалы" value={tvShows} />
+      </div>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {tierCounts.map(({ tier, count }) => (
+          <StatTile
+            key={tier}
+            label={`Тир ${tier}`}
+            title={TIER_META[tier].name}
+            value={count}
+            accent={tierColorVar(tier)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
