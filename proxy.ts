@@ -38,5 +38,15 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  /**
+   * `/auth/callback` is deliberately excluded.
+   *
+   * The proxy calls getUser() on every matched request. On the callback there is
+   * no session yet — only the PKCE verifier cookie the exchange is about to
+   * need — and that failed lookup makes @supabase/ssr write auth cookies back
+   * through setAll, clearing the verifier before the route handler ever runs.
+   * The exchange then fails and the user lands signed-out, which is precisely
+   * the "Google returns a token but nothing is saved" symptom.
+   */
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|auth/callback).*)"],
 };
