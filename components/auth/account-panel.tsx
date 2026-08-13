@@ -46,7 +46,7 @@ export function AccountPanel() {
     <div className="rounded-xl border border-border bg-surface p-4">
       <h2 className="font-semibold">Аккаунт</h2>
       <p className="mt-1 text-sm text-muted">
-        Сейчас вы гость — рейтинг хранится только в этом браузере. Войдите по email, чтобы
+        Сейчас вы гость — рейтинг хранится только в этом браузере. Войдите, чтобы
         синхронизировать его между устройствами.
       </p>
       <div className="mt-3">

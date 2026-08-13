@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Mail, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type SendStatus =
@@ -45,6 +46,17 @@ export function MagicLinkForm({ redirectTo = "/" }: MagicLinkFormProps) {
 
   return (
     <div>
+      {/* Google first: it is one click, while the email route costs a trip to
+          the inbox. Both create the account on first use, so neither is a
+          separate "registration". */}
+      <GoogleSignInButton redirectTo={redirectTo} />
+
+      <div className="my-3 flex items-center gap-3">
+        <span className="h-px flex-1 bg-border" />
+        <span className="text-xs text-muted">или по email</span>
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
         <Input
           type="email"

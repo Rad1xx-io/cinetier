@@ -74,9 +74,9 @@ function SignedOutButtons({ compact }: { compact: boolean }) {
 
       {open && (
         <div className="absolute right-0 top-full z-30 mt-2 w-80 max-w-[90vw] rounded-xl border border-border bg-surface-raised p-4 shadow-xl">
-          <h2 className="text-sm font-semibold">Вход по email</h2>
+          <h2 className="text-sm font-semibold">Вход в CineTier</h2>
           <p className="mt-1 text-xs text-muted">
-            Пришлём ссылку для входа — если аккаунта ещё нет, он создастся автоматически.
+            Если аккаунта ещё нет, он создастся автоматически.
           </p>
           <div className="mt-3">
             <MagicLinkForm redirectTo="/" />
