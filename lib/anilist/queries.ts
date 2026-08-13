@@ -1,6 +1,9 @@
 const MEDIA_FIELDS = `
   id
   title { romaji english native }
+  # AniList has no Russian title field; community-submitted ones live here and
+  # are what the mapper promotes to the headline for a Russian-language UI.
+  synonyms
   description(asHtml: false)
   coverImage { large medium color }
   bannerImage

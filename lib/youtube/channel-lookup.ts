@@ -11,6 +11,14 @@ import type { ChannelSummary } from "@/lib/types/youtube";
 
 const CHANNELS_LIST_BATCH_SIZE = 50;
 
+/**
+ * Defaults for an unfiltered browse or search. The UI is Russian, so the
+ * catalog people see before touching any filter should be too — previously it
+ * opened on the US trending chart regardless.
+ */
+const DEFAULT_REGION = "RU";
+const DEFAULT_RELEVANCE_LANGUAGE = "ru";
+
 /** channels.list accepts at most 50 ids per call, so large id lists are fetched in parallel chunks. */
 async function enrichChannelIds(channelIds: string[]): Promise<ChannelSummary[]> {
   if (channelIds.length === 0) return [];
@@ -131,6 +139,8 @@ async function seedSearchChannelIds(regionCode: string): Promise<string[]> {
         maxResults: 50,
         q,
         regionCode,
+        // The seed queries are English words used purely to reach the index;
+        // the region is what makes the results local, so no language bias here.
       }).catch(() => ({ items: [] }) as YouTubeSearchResponse)
     )
   );
@@ -221,7 +231,12 @@ export async function discoverChannels(
       type: "channel",
       maxResults: 50,
       q: query,
-      regionCode: country,
+      regionCode: country ?? DEFAULT_REGION,
+      // Only applied when the user has not named a country: this is a
+      // Russian-language app, so an unqualified search should lean Russian —
+      // but once someone explicitly asks for Japan, biasing the results toward
+      // Russian would fight the filter they just set.
+      relevanceLanguage: country ? undefined : DEFAULT_RELEVANCE_LANGUAGE,
       pageToken: params.pageToken,
     });
     channelIds = dedupeIds(searchData.items.map((item) => item.id.channelId).filter(Boolean) as string[]);
@@ -233,7 +248,7 @@ export async function discoverChannels(
     ]);
     channelIds = dedupeIds(seedIds, trendIds);
   } else {
-    channelIds = await trendingChannelIds("US");
+    channelIds = await trendingChannelIds(DEFAULT_REGION);
   }
 
   let results = await enrichChannelIds(channelIds);

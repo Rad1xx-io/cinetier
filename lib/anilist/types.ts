@@ -32,6 +32,8 @@ export interface AniListRelationEdge {
 export interface AniListMedia {
   id: number;
   title: AniListTitle;
+  /** Alternative names, including community-submitted Russian ones. */
+  synonyms?: string[];
   description: string | null;
   coverImage: AniListCoverImage | null;
   bannerImage: string | null;

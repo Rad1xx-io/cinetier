@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { TopNav } from "@/components/navigation/top-nav";
 import { MobileHeader } from "@/components/navigation/mobile-header";
 import { BottomNav } from "@/components/navigation/bottom-nav";
+import { Analytics } from "@vercel/analytics/next";
 import { CloudSyncProvider } from "@/components/auth/cloud-sync-provider";
 import "./globals.css";
 
@@ -42,6 +43,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           Этот продукт использует TMDB API, но не одобрен и не сертифицирован TMDB.
         </footer>
         <BottomNav />
+        {/* Vercel Web Analytics. Inert outside a Vercel deployment, so local
+            runs and other hosts are unaffected. */}
+        <Analytics />
       </body>
     </html>
   );

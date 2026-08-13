@@ -14,17 +14,59 @@ function stripHtml(value: string | null): string {
     .trim();
 }
 
-function pickTitle(title: AniListMedia["title"]): string {
-  return title.english ?? title.romaji ?? title.native ?? "Untitled";
+const CYRILLIC = /[а-яё]/i;
+
+/**
+ * Letters that exist in other Cyrillic alphabets but not in Russian.
+ *
+ * "Cyrillic" alone is not the same as "Russian": AniList's synonym lists carry
+ * Ukrainian, Bulgarian and Serbian names too, and a naive Cyrillic test picked
+ * "Сталевий алхімік" over the Russian title for Fullmetal Alchemist. Ukrainian
+ * і/ї/є/ґ, Belarusian ў and the Serbian ђ/ћ/њ/љ/џ/ј are the giveaways.
+ */
+const NON_RUSSIAN_CYRILLIC = /[іїєґўђћњљџѕјѐѝ]/i;
+
+/**
+ * AniList has no Russian title field — `title` carries only romaji, english and
+ * native (Japanese). Community-submitted Russian names do live in `synonyms`
+ * though ("Атака титанов" for Attack on Titan, verified), so the first Cyrillic
+ * synonym is the closest thing to an official localisation the API offers.
+ *
+ * Only entries that are mostly Cyrillic qualify: a synonym list also holds
+ * transliterations and stray punctuation, and a string with one Russian letter
+ * in it is not a Russian title.
+ */
+function russianSynonym(synonyms: string[] | undefined): string | null {
+  for (const value of synonyms ?? []) {
+    if (NON_RUSSIAN_CYRILLIC.test(value)) continue;
+    const letters = value.replace(/[^\p{L}]/gu, "");
+    if (!letters) continue;
+    const cyrillic = letters.match(/[а-яё]/gi)?.length ?? 0;
+    if (CYRILLIC.test(value) && cyrillic / letters.length > 0.6) return value;
+  }
+  return null;
+}
+
+function pickTitle(raw: AniListMedia): string {
+  return (
+    russianSynonym(raw.synonyms) ??
+    raw.title.english ??
+    raw.title.romaji ??
+    raw.title.native ??
+    "Untitled"
+  );
 }
 
 export function mapMediaToSummary(raw: AniListMedia): AnimeSummary {
+  const russian = russianSynonym(raw.synonyms);
   return {
     anilistId: raw.id,
-    title: pickTitle(raw.title),
+    title: pickTitle(raw),
     titles: {
       romaji: raw.title.romaji,
-      english: raw.title.english,
+      // Keeps the English name reachable as the secondary line even when the
+      // Russian one has taken the headline.
+      english: raw.title.english ?? (russian ? raw.title.romaji : null),
       native: raw.title.native,
     },
     coverImage: raw.coverImage?.large ?? raw.coverImage?.medium ?? null,
