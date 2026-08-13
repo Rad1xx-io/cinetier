@@ -4,6 +4,7 @@ import { tmdbFetch, TMDBError } from "@/lib/tmdb/client";
 import { mapToSummary } from "@/lib/tmdb/mappers";
 import type { TMDBPagedResponse, TMDBRawMovie, TMDBRawTVShow } from "@/lib/tmdb/types";
 import type { SearchResponse } from "@/lib/types";
+import { MIN_RESULTS_BEFORE_FALLBACK, searchWithFallback } from "@/lib/search/with-fallback";
 
 export const dynamic = "force-dynamic";
 
@@ -73,16 +74,28 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // TMDB's own search already matches Russian queries against localized titles
-    // (no need to translate the query ourselves). If the ru-RU pass genuinely
-    // finds nothing, retry once against en-US in case that title has no Russian
-    // translation indexed at all.
-    let payload = await runSearch(type, query, page);
-    if (payload.results.length === 0) {
-      payload = await runSearch(type, query, page, "en-US");
+    // TMDB matches Russian queries against its localized titles, so the typed
+    // term is tried untouched first. Only when that comes back thin do the
+    // corrected spellings get a turn — and the en-US retry stays as the last
+    // resort for titles with no Russian translation indexed at all.
+    let correctedQuery: string | null = null;
+    let page1 = await runSearch(type, query, page);
+
+    if (page1.results.length < MIN_RESULTS_BEFORE_FALLBACK) {
+      const merged = await searchWithFallback(
+        query,
+        async (term) => (await runSearch(type, term, page)).results,
+        (t) => `${t.mediaType}-${t.tmdbId}`
+      );
+      correctedQuery = merged.correctedQuery;
+      page1 = { ...page1, results: merged.results };
     }
 
-    return NextResponse.json(payload);
+    if (page1.results.length === 0) {
+      page1 = await runSearch(type, query, page, "en-US");
+    }
+
+    return NextResponse.json({ ...page1, correctedQuery });
   } catch (error) {
     const status = error instanceof TMDBError ? error.status : 500;
     return NextResponse.json(

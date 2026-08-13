@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 0;
 
   try {
-    const { results, hasMore, stale } = await discoverGames({
+    const { results, hasMore, stale, correctedQuery } = await discoverGames({
       query,
       genre: isGameGenre(genreRaw) ? genreRaw : undefined,
       platform: isGamePlatform(platformRaw) ? platformRaw : undefined,
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       page,
     });
 
-    const payload: GameSearchResponse = { results, hasMore, stale };
+    const payload: GameSearchResponse = { results, hasMore, stale, correctedQuery };
     return NextResponse.json(payload);
   } catch (error) {
     const status =

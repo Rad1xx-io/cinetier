@@ -1,6 +1,7 @@
 import "server-only";
 import { youtubeFetch } from "@/lib/youtube/client";
 import { mapChannelToSummary } from "@/lib/youtube/mappers";
+import { searchWithFallback } from "@/lib/search/with-fallback";
 import type {
   YouTubeChannelItem,
   YouTubeChannelsResponse,
@@ -204,6 +205,8 @@ export interface DiscoverChannelsResult {
   /** Present only for text search — lets the client fetch a further real page
    *  once its local pool of already-fetched results is exhausted. */
   nextPageToken?: string;
+  /** Spelling that rescued a thin search, for the "возможно, вы искали" hint. */
+  correctedQuery?: string | null;
 }
 
 /**
@@ -214,6 +217,50 @@ export interface DiscoverChannelsResult {
  * subscriber floor and sort are applied server-side to the merged, deduped,
  * enriched pool before it's ever sent to the client.
  */
+/**
+ * One search.list call, with the region and language defaults applied.
+ *
+ * `relevanceLanguage` is only sent when no country is chosen: this is a
+ * Russian-language app, so an unqualified search should lean Russian, but once
+ * someone asks for Japan a Russian bias fights the filter they just set.
+ */
+async function searchChannelsOnce(
+  term: string,
+  country: string | undefined,
+  pageToken: string | undefined
+): Promise<YouTubeSearchResponse> {
+  return youtubeFetch<YouTubeSearchResponse>("/search", {
+    part: "snippet",
+    type: "channel",
+    maxResults: 50,
+    q: term,
+    regionCode: country ?? DEFAULT_REGION,
+    relevanceLanguage: country ? undefined : DEFAULT_RELEVANCE_LANGUAGE,
+    pageToken,
+  });
+}
+
+/** Retries with a corrected spelling when the typed term finds almost nothing. */
+async function searchChannels(
+  query: string,
+  country: string | undefined,
+  pageToken: string | undefined
+): Promise<YouTubeSearchResponse & { correctedQuery: string | null }> {
+  let nextPageToken: string | undefined;
+
+  const { results, correctedQuery } = await searchWithFallback(
+    query,
+    async (term) => {
+      const data = await searchChannelsOnce(term, country, pageToken);
+      nextPageToken ??= data.nextPageToken;
+      return data.items;
+    },
+    (item) => item.id.channelId ?? ""
+  );
+
+  return { items: results, nextPageToken, correctedQuery };
+}
+
 export async function discoverChannels(
   params: DiscoverChannelsParams
 ): Promise<DiscoverChannelsResult> {
@@ -224,23 +271,13 @@ export async function discoverChannels(
 
   let channelIds: string[];
   let nextPageToken: string | undefined;
+  let correctedQuery: string | null = null;
 
   if (query) {
-    const searchData = await youtubeFetch<YouTubeSearchResponse>("/search", {
-      part: "snippet",
-      type: "channel",
-      maxResults: 50,
-      q: query,
-      regionCode: country ?? DEFAULT_REGION,
-      // Only applied when the user has not named a country: this is a
-      // Russian-language app, so an unqualified search should lean Russian —
-      // but once someone explicitly asks for Japan, biasing the results toward
-      // Russian would fight the filter they just set.
-      relevanceLanguage: country ? undefined : DEFAULT_RELEVANCE_LANGUAGE,
-      pageToken: params.pageToken,
-    });
+    const searchData = await searchChannels(query, country, params.pageToken);
     channelIds = dedupeIds(searchData.items.map((item) => item.id.channelId).filter(Boolean) as string[]);
     nextPageToken = searchData.nextPageToken;
+    correctedQuery = searchData.correctedQuery;
   } else if (country) {
     const [seedIds, trendIds] = await Promise.all([
       seedSearchChannelIds(country),
@@ -262,5 +299,5 @@ export async function discoverChannels(
 
   results = sortChannels(results, sort);
 
-  return { results, nextPageToken: query ? nextPageToken : undefined };
+  return { results, nextPageToken: query ? nextPageToken : undefined, correctedQuery };
 }

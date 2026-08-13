@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Loader2, Search, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CorrectedQueryHint } from "@/components/ui/corrected-query-hint";
 import { GamesResultsGrid } from "@/components/games-search/games-results-grid";
 import {
   DEFAULT_GAME_FILTERS,
@@ -61,6 +62,7 @@ export function GamesDiscoverClient() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [correctedQuery, setCorrectedQuery] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
 
   const { titles, add } = useRankedTitles();
@@ -109,6 +111,7 @@ export function GamesDiscoverClient() {
         const data = await fetchJson<GameSearchResponse>(buildUrl(0), controller.signal);
         if (requestIdRef.current !== requestId) return;
         setResults(data.results);
+        setCorrectedQuery(data.correctedQuery ?? null);
         setHasMore(data.hasMore);
         setStale(Boolean(data.stale));
         setPage(0);
@@ -208,6 +211,8 @@ export function GamesDiscoverClient() {
         canReset={filtersDirty}
         onReset={handleReset}
       />
+
+      <CorrectedQueryHint correctedQuery={correctedQuery} />
 
       {error && (
         <div className="flex items-center gap-2 rounded-lg border border-tier-s/30 bg-tier-s/10 px-4 py-3 text-sm text-tier-s">

@@ -1,6 +1,6 @@
 import "server-only";
 import { igdbFetch } from "@/lib/igdb/client";
-import { expandQueryVariants } from "@/lib/games/query-variants";
+import { normalizeQuery } from "@/lib/search/normalize-query";
 import { mapGameToDetails, mapGameToSummary } from "@/lib/igdb/mappers";
 import type { IGDBGame, IGDBNamed } from "@/lib/igdb/types";
 import type { GameCategory, GameGenre, GamePlatform, GameSort } from "@/lib/steam/filters";
@@ -155,6 +155,8 @@ export interface DiscoverGamesParams {
 export interface DiscoverGamesResult {
   results: GameSummary[];
   hasMore: boolean;
+  /** Spelling that rescued a thin search, for the "возможно, вы искали" hint. */
+  correctedQuery?: string | null;
 }
 
 export async function discoverGames(params: DiscoverGamesParams): Promise<DiscoverGamesResult> {
@@ -226,24 +228,34 @@ export async function discoverGames(params: DiscoverGamesParams): Promise<Discov
    * while "elden ring" returns three. Searching the original *and* its
    * transliteration keeps the first case working instead of trading it away.
    */
-  const terms = query ? expandQueryVariants(query) : [undefined];
+  const terms = query ? normalizeQuery(query).variants : [undefined];
   const pages = await Promise.all(terms.map((term) => igdbFetch<IGDBGame[]>("games", buildQuery(term))));
 
   const seen = new Set<number>();
   const merged: IGDBGame[] = [];
-  for (const games of pages) {
+  let correctedQuery: string | null = null;
+
+  pages.forEach((games, index) => {
+    let added = false;
     for (const game of games) {
       if (!seen.has(game.id)) {
         seen.add(game.id);
         merged.push(game);
+        added = true;
       }
     }
-  }
+    // Credit an alternative spelling only when the typed one came back thin and
+    // this variant is what actually produced results.
+    if (index > 0 && added && !correctedQuery && pages[0].length < 3) {
+      correctedQuery = terms[index] ?? null;
+    }
+  });
 
   return {
     results: merged.slice(0, GAMES_PAGE_SIZE).map(mapGameToSummary),
     // Any variant still holding a full page means there is more to show.
     hasMore: pages.some((games) => games.length > GAMES_PAGE_SIZE),
+    correctedQuery,
   };
 }
 

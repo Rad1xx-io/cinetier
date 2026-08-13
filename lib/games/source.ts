@@ -28,14 +28,15 @@ export interface DiscoverGamesResult {
   hasMore: boolean;
   stale?: boolean;
   source: GamesSource;
+  correctedQuery?: string | null;
 }
 
 export async function discoverGames(
   params: DiscoverGamesParams
 ): Promise<DiscoverGamesResult> {
   if (activeGamesSource() === "igdb") {
-    const { results, hasMore } = await igdb.discoverGames(params);
-    return { results, hasMore, source: "igdb" };
+    const { results, hasMore, correctedQuery } = await igdb.discoverGames(params);
+    return { results, hasMore, correctedQuery, source: "igdb" };
   }
   const { results, hasMore, stale } = await steam.discoverGames(params);
   return { results, hasMore, stale, source: "steam" };

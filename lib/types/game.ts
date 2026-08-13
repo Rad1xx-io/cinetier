@@ -35,6 +35,8 @@ export interface GameDetails extends GameSummary {
 export interface GameSearchResponse {
   results: GameSummary[];
   hasMore: boolean;
+  /** Spelling that rescued a thin search, for the "возможно, вы искали" hint. */
+  correctedQuery?: string | null;
   /** Results came from cache because the upstream store was unavailable. */
   stale?: boolean;
 }

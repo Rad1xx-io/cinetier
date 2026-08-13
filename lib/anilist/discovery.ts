@@ -3,6 +3,7 @@ import type { AnimeFormat, AnimeSortMode } from "@/lib/anilist/anime-filters";
 import { anilistFetch } from "@/lib/anilist/client";
 import { DISCOVER_ANIME_QUERY, ANIME_DETAILS_QUERY, GENRE_COLLECTION_QUERY } from "@/lib/anilist/queries";
 import { mapMediaToDetails, mapMediaToSummary } from "@/lib/anilist/mappers";
+import { searchWithFallback } from "@/lib/search/with-fallback";
 import type {
   AniListGenreCollectionResponse,
   AniListMediaResponse,
@@ -34,21 +35,48 @@ export interface DiscoverAnimeParams {
 }
 
 export async function discoverAnime(params: DiscoverAnimeParams): Promise<AnimeSearchResponse> {
-  const data = await anilistFetch<AniListPageResponse>(DISCOVER_ANIME_QUERY, {
-    page: params.page ?? 1,
-    perPage: params.perPage ?? 24,
-    search: params.query?.trim() || undefined,
-    genre: params.genre || undefined,
-    seasonYear: params.year,
-    season: params.season,
-    status: params.status,
-    format: params.format,
-    sort: SORT_MAP[params.sort ?? "popularity"],
-  });
+  const query = params.query?.trim();
+
+  async function fetchPage(search: string | undefined) {
+    return anilistFetch<AniListPageResponse>(DISCOVER_ANIME_QUERY, {
+      page: params.page ?? 1,
+      perPage: params.perPage ?? 24,
+      search,
+      genre: params.genre || undefined,
+      seasonYear: params.year,
+      season: params.season,
+      status: params.status,
+      format: params.format,
+      sort: SORT_MAP[params.sort ?? "popularity"],
+    });
+  }
+
+  if (!query) {
+    const data = await fetchPage(undefined);
+    return {
+      results: data.Page.media.map(mapMediaToSummary),
+      hasNextPage: data.Page.pageInfo.hasNextPage,
+      correctedQuery: null,
+    };
+  }
+
+  // AniList indexes Russian names through its synonyms, so most Cyrillic
+  // queries land unaided; the fallback only covers the ones that do not.
+  let hasNextPage = false;
+  const { results, correctedQuery } = await searchWithFallback(
+    query,
+    async (term) => {
+      const data = await fetchPage(term);
+      hasNextPage = hasNextPage || data.Page.pageInfo.hasNextPage;
+      return data.Page.media;
+    },
+    (media) => String(media.id)
+  );
 
   return {
-    results: data.Page.media.map(mapMediaToSummary),
-    hasNextPage: data.Page.pageInfo.hasNextPage,
+    results: results.map(mapMediaToSummary),
+    hasNextPage,
+    correctedQuery,
   };
 }
 

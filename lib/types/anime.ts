@@ -46,4 +46,6 @@ export interface AnimeDetails extends AnimeSummary {
 export interface AnimeSearchResponse {
   results: AnimeSummary[];
   hasNextPage: boolean;
+  /** Spelling that rescued a thin search, for the "возможно, вы искали" hint. */
+  correctedQuery?: string | null;
 }

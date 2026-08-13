@@ -35,6 +35,8 @@ export interface RankedChannel {
 export interface ChannelSearchResponse {
   nextPageToken?: string;
   results: ChannelSummary[];
+  /** Spelling that rescued a thin search, for the "возможно, вы искали" hint. */
+  correctedQuery?: string | null;
 }
 
 export interface ApiErrorBody {

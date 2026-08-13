@@ -62,6 +62,8 @@ export interface SearchResponse {
   totalPages: number;
   totalResults: number;
   results: TitleSummary[];
+  /** Spelling that rescued a thin search, for the "возможно, вы искали" hint. */
+  correctedQuery?: string | null;
 }
 
 export interface ApiErrorBody {

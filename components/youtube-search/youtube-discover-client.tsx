@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Loader2, Search, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CorrectedQueryHint } from "@/components/ui/corrected-query-hint";
 import { ChannelResultsGrid } from "@/components/youtube-search/channel-results-grid";
 import {
   ChannelFilters,
@@ -70,6 +71,7 @@ export function YouTubeDiscoverClient() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [correctedQuery, setCorrectedQuery] = useState<string | null>(null);
 
   const { channels, add } = useRankedChannels();
   const rankedByKey = useMemo(() => {
@@ -106,6 +108,7 @@ export function YouTubeDiscoverClient() {
         );
         if (requestIdRef.current !== requestId) return;
         setResults(data.results);
+        setCorrectedQuery(data.correctedQuery ?? null);
         setNextPageToken(data.nextPageToken);
         setVisibleCount(PAGE_SIZE);
       } catch (err) {
@@ -209,6 +212,8 @@ export function YouTubeDiscoverClient() {
           фильтр, даже если контент им подходит.
         </p>
       )}
+
+      <CorrectedQueryHint correctedQuery={correctedQuery} />
 
       {error && (
         <div className="flex items-center gap-2 rounded-lg border border-tier-s/30 bg-tier-s/10 px-4 py-3 text-sm text-tier-s">

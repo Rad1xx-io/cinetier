@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   const sort = VALID_SORTS.includes(sortRaw as ChannelSortMode) ? (sortRaw as ChannelSortMode) : "subscribers_desc";
 
   try {
-    const { results, nextPageToken } = await discoverChannels({
+    const { results, nextPageToken, correctedQuery } = await discoverChannels({
       query,
       country,
       minSubscribers,
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       pageToken,
     });
 
-    const payload: ChannelSearchResponse = { results, nextPageToken };
+    const payload: ChannelSearchResponse = { results, nextPageToken, correctedQuery };
     return NextResponse.json(payload);
   } catch (error) {
     const status = error instanceof YouTubeError ? error.status : 500;

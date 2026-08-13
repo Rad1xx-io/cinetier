@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Loader2, Search, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CorrectedQueryHint } from "@/components/ui/corrected-query-hint";
 import { AnimeResultsGrid } from "@/components/anime-search/anime-results-grid";
 import {
   AnimeFilters,
@@ -75,6 +76,7 @@ export function AnimeDiscoverClient() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [correctedQuery, setCorrectedQuery] = useState<string | null>(null);
 
   const { titles, add } = useRankedTitles();
   const rankedByKey = useMemo(() => {
@@ -119,6 +121,7 @@ export function AnimeDiscoverClient() {
         );
         if (requestIdRef.current !== requestId) return;
         setResults(data.results);
+        setCorrectedQuery(data.correctedQuery ?? null);
         setHasNextPage(data.hasNextPage);
         setPage(1);
       } catch (err) {
@@ -204,6 +207,8 @@ export function AnimeDiscoverClient() {
           onReset={() => setFilters(DEFAULT_ANIME_FILTERS)}
         />
       </div>
+
+      <CorrectedQueryHint correctedQuery={correctedQuery} />
 
       {error && (
         <div className="flex items-center gap-2 rounded-lg border border-tier-s/30 bg-tier-s/10 px-4 py-3 text-sm text-tier-s">

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Loader2, Search, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CorrectedQueryHint } from "@/components/ui/corrected-query-hint";
 import { ResultsGrid } from "@/components/search/results-grid";
 import {
   DEFAULT_TITLE_FILTERS,
@@ -66,6 +67,7 @@ export function DiscoverClient() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [correctedQuery, setCorrectedQuery] = useState<string | null>(null);
 
   const { titles, add } = useRankedTitles();
   const rankedByKey = useMemo(() => {
@@ -129,6 +131,7 @@ export function DiscoverClient() {
         const data = await fetchJson<SearchResponse>(buildUrl(1), controller.signal);
         if (requestIdRef.current !== requestId) return;
         setResults(data.results);
+        setCorrectedQuery(data.correctedQuery ?? null);
         setTotalPages(data.totalPages);
         setPage(1);
       } catch (err) {
@@ -245,6 +248,8 @@ export function DiscoverClient() {
           </p>
         )}
       </div>
+
+      <CorrectedQueryHint correctedQuery={correctedQuery} />
 
       {error && (
         <div className="flex items-center gap-2 rounded-lg border border-tier-s/30 bg-tier-s/10 px-4 py-3 text-sm text-tier-s">
