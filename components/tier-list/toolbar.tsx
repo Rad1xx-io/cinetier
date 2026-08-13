@@ -4,14 +4,15 @@ import { Check, LayoutGrid, Rows3, RotateCcw, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Density } from "@/lib/hooks/use-density";
-import type { MediaFilter, SortMode } from "@/lib/utils/tier-grouping";
+import type { SortMode } from "@/lib/utils/tier-grouping";
+import { CATEGORY_FILTERS, type CategoryFilter } from "@/lib/utils/content-type";
 import { cn } from "@/lib/utils/cn";
 
 interface ToolbarProps {
   search: string;
   onSearchChange: (value: string) => void;
-  mediaFilter: MediaFilter;
-  onMediaFilterChange: (value: MediaFilter) => void;
+  mediaFilter: CategoryFilter;
+  onMediaFilterChange: (value: CategoryFilter) => void;
   sort: SortMode;
   onSortChange: (value: SortMode) => void;
   density: Density;
@@ -21,13 +22,9 @@ interface ToolbarProps {
   saved: boolean;
 }
 
-const MEDIA_OPTIONS: { value: MediaFilter; label: string }[] = [
-  { value: "all", label: "Все" },
-  { value: "movie", label: "Фильмы" },
-  { value: "tv", label: "Сериалы" },
-  { value: "anime", label: "Аниме" },
-  { value: "game", label: "Игры" },
-];
+// Shared with the public list so both places name the catalogs identically —
+// "youtube" included, which the board now holds alongside RankedTitle rows.
+const MEDIA_OPTIONS = CATEGORY_FILTERS;
 
 export function Toolbar({
   search,

@@ -15,17 +15,22 @@ import {
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useRankedTitles } from "@/lib/hooks/use-ranked-titles";
+import { useRankedChannels } from "@/lib/hooks/use-ranked-channels";
 import { useDensity } from "@/lib/hooks/use-density";
 import { TIER_ORDER } from "@/lib/types";
 import type { RankedTitle, TierOrUnrated } from "@/lib/types";
+import type { RankedChannel } from "@/lib/types/youtube";
+import { type SortMode } from "@/lib/utils/tier-grouping";
 import {
-  filterAndSortTierItems,
-  groupByTier,
-  tierItemKey,
-  type MediaFilter,
-  type SortMode,
-  type TierContainers,
-} from "@/lib/utils/tier-grouping";
+  boardItemKey,
+  filterAndSortBoardItems,
+  groupBoard,
+  splitBoardItems,
+  toBoardItems,
+  type BoardBuckets,
+  type BoardItem,
+} from "@/lib/utils/board-item";
+import { type CategoryFilter } from "@/lib/utils/content-type";
 import { applyDrop, flattenBuckets, tierCollisionDetection } from "@/lib/utils/tier-dnd";
 import { TierRow } from "@/components/tier-list/tier-row";
 import { Toolbar } from "@/components/tier-list/toolbar";
@@ -33,13 +38,20 @@ import { TierListActions } from "@/components/tier-list/tier-list-actions";
 import { Toast } from "@/components/ui/toast";
 import { useToast } from "@/lib/hooks/use-toast";
 import { Poster } from "@/components/movie-card/poster";
+import { ChannelThumbnail } from "@/components/channel-card/channel-thumbnail";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/dashboard/empty-state";
 
 export function TierListBoard() {
   const { titles, hydrated, remove, setTier, reorderAll } = useRankedTitles();
+  const {
+    channels,
+    remove: removeChannel,
+    setTier: setChannelTier,
+    reorderAll: reorderAllChannels,
+  } = useRankedChannels();
   const { density, setDensity } = useDensity();
-  const [containers, setContainers] = useState<TierContainers>(() => groupByTier([]));
+  const [containers, setContainers] = useState<BoardBuckets>(() => groupBoard([]));
   const containersRef = useRef(containers);
   const draggingRef = useRef(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -50,7 +62,7 @@ export function TierListBoard() {
   const { toast, show: notify } = useToast();
 
   const [search, setSearch] = useState("");
-  const [mediaFilter, setMediaFilter] = useState<MediaFilter>("all");
+  const [mediaFilter, setMediaFilter] = useState<CategoryFilter>("all");
   const [sort, setSort] = useState<SortMode>("manual");
 
   /**
@@ -64,7 +76,7 @@ export function TierListBoard() {
    * *before* the move it is supposed to finish. That is what made drops land
    * back in their original tier at random.
    */
-  const commitContainers = useCallback((next: TierContainers) => {
+  const commitContainers = useCallback((next: BoardBuckets) => {
     containersRef.current = next;
     setContainers(next);
   }, []);
@@ -74,10 +86,10 @@ export function TierListBoard() {
     // sync pulling down). Never while dragging — that would yank the board out
     // from under the pointer.
     if (!draggingRef.current) {
-      containersRef.current = groupByTier(titles);
+      containersRef.current = groupBoard(toBoardItems(titles, channels));
       setContainers(containersRef.current);
     }
-  }, [titles]);
+  }, [titles, channels]);
 
   useEffect(() => {
     return () => {
@@ -145,7 +157,7 @@ export function TierListBoard() {
     // dispatches a change event, which React must not see inside a reducer
     // (Strict Mode double-invokes those, firing the write twice and letting the
     // `[titles]` effect stomp the fresh board with a stale snapshot).
-    const next = applyDrop(containersRef.current, String(active.id), String(over.id), tierItemKey);
+    const next = applyDrop(containersRef.current, String(active.id), String(over.id), boardItemKey);
     if (next === containersRef.current) return;
 
     commitContainers(next);
@@ -157,14 +169,34 @@ export function TierListBoard() {
     setActiveId(null);
   }
 
-  function persist(next: TierContainers, movedKey: string) {
+  /**
+   * Writes the reordered board back to whichever store each row came from.
+   *
+   * Both stores are rewritten on every drop, even when only one kind moved: a
+   * cross-tier drag changes the surrounding order in a tier that may hold both,
+   * and splitting a partially-updated board across two writes is how the two
+   * would drift apart.
+   */
+  function persist(next: BoardBuckets, movedKey: string) {
     const now = Date.now();
-    const flat = flattenBuckets<RankedTitle>(next, (t, index) => ({
-      ...t,
+    const flat = flattenBuckets<BoardItem>(next, (item, index) => ({
+      ...item,
       order: index,
-      updatedAt: tierItemKey(t) === movedKey ? now : t.updatedAt,
     }));
-    reorderAll(flat);
+    const { titles: nextTitles, channels: nextChannels } = splitBoardItems(flat);
+
+    reorderAll(
+      nextTitles.map((t) => ({
+        ...t,
+        updatedAt: `title:${t.mediaType}-${t.tmdbId}` === movedKey ? now : t.updatedAt,
+      }))
+    );
+    reorderAllChannels(
+      nextChannels.map((c) => ({
+        ...c,
+        updatedAt: `channel:${c.channelId}` === movedKey ? now : c.updatedAt,
+      }))
+    );
     flashSaved();
   }
 
@@ -183,6 +215,21 @@ export function TierListBoard() {
     [setTier, flashSaved]
   );
 
+  const handleRemoveChannel = useCallback(
+    (channel: RankedChannel) => {
+      removeChannel(channel.channelId);
+    },
+    [removeChannel]
+  );
+
+  const handleChannelTierChange = useCallback(
+    (channel: RankedChannel, tier: TierOrUnrated) => {
+      setChannelTier(channel.channelId, tier);
+      flashSaved();
+    },
+    [setChannelTier, flashSaved]
+  );
+
   function handleReset() {
     setSearch("");
     setMediaFilter("all");
@@ -190,15 +237,19 @@ export function TierListBoard() {
   }
 
   const displayContainers = useMemo(() => {
-    const result = {} as TierContainers;
+    const result = {} as BoardBuckets;
     for (const tier of TIER_ORDER) {
-      result[tier] = filterAndSortTierItems(containers[tier], { search, mediaFilter, sort });
+      result[tier] = filterAndSortBoardItems(containers[tier], {
+        search,
+        category: mediaFilter,
+        sort,
+      });
     }
     return result;
   }, [containers, search, mediaFilter, sort]);
 
-  const activeTitle = activeId
-    ? TIER_ORDER.flatMap((t) => containers[t]).find((t) => tierItemKey(t) === activeId)
+  const activeItem = activeId
+    ? TIER_ORDER.flatMap((t) => containers[t]).find((i) => boardItemKey(i) === activeId)
     : undefined;
 
   if (!hydrated) {
@@ -211,7 +262,9 @@ export function TierListBoard() {
     );
   }
 
-  if (titles.length === 0) {
+  // Channels count too now that the board holds both, otherwise someone whose
+  // list is only YouTube channels would be told it is empty.
+  if (titles.length === 0 && channels.length === 0) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 md:px-6">
         <EmptyState />
@@ -265,12 +318,14 @@ export function TierListBoard() {
               key={tier}
               tier={tier}
               items={displayContainers[tier]}
-              itemIds={displayContainers[tier].map(tierItemKey)}
+              itemIds={displayContainers[tier].map(boardItemKey)}
               draggable={dragEnabled}
               filtersActive={!isDefaultFilters}
               density={density}
-              onRemove={handleRemove}
-              onQuickTierChange={handleQuickTierChange}
+              onRemoveTitle={handleRemove}
+              onRemoveChannel={handleRemoveChannel}
+              onTitleTier={handleQuickTierChange}
+              onChannelTier={handleChannelTierChange}
             />
           ))}
           {/* Invisible on screen; the export handler reveals it for the shot. */}
@@ -283,14 +338,23 @@ export function TierListBoard() {
         </div>
 
         <DragOverlay>
-          {activeTitle ? (
+          {activeItem ? (
             <div className={density === "compact" ? "w-16 sm:w-20" : "w-24 sm:w-28"}>
-              <Poster
-                posterPath={activeTitle.posterPath}
-                title={activeTitle.title}
-                sizes="120px"
-                className="shadow-xl ring-2 ring-accent"
-              />
+              {activeItem.kind === "title" ? (
+                <Poster
+                  posterPath={activeItem.title.posterPath}
+                  title={activeItem.title.title}
+                  sizes="120px"
+                  className="shadow-xl ring-2 ring-accent"
+                />
+              ) : (
+                <ChannelThumbnail
+                  thumbnailUrl={activeItem.channel.thumbnailUrl}
+                  title={activeItem.channel.title}
+                  sizes="120px"
+                  className="shadow-xl ring-2 ring-accent"
+                />
+              )}
             </div>
           ) : null}
         </DragOverlay>

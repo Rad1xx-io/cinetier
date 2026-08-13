@@ -3,23 +3,27 @@
 import { memo } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
-import { TierCard } from "@/components/tier-list/tier-card";
+import { BoardCard } from "@/components/tier-list/board-card";
 import type { RankedTitle, TierOrUnrated } from "@/lib/types";
+import type { RankedChannel } from "@/lib/types/youtube";
 import type { Density } from "@/lib/hooks/use-density";
 import { TIER_META } from "@/lib/tier-meta";
 import { tierColorVar } from "@/lib/utils/tier-style";
+import { boardItemKey, type BoardItem } from "@/lib/utils/board-item";
 import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
 import { cn } from "@/lib/utils/cn";
 
 interface TierRowProps {
   tier: TierOrUnrated;
-  items: RankedTitle[];
+  items: BoardItem[];
   itemIds: string[];
   draggable: boolean;
   filtersActive: boolean;
   density: Density;
-  onRemove: (title: RankedTitle) => void;
-  onQuickTierChange: (title: RankedTitle, tier: TierOrUnrated) => void;
+  onRemoveTitle: (title: RankedTitle) => void;
+  onRemoveChannel: (channel: RankedChannel) => void;
+  onTitleTier: (title: RankedTitle, tier: TierOrUnrated) => void;
+  onChannelTier: (channel: RankedChannel, tier: TierOrUnrated) => void;
 }
 
 function TierRowImpl({
@@ -29,8 +33,10 @@ function TierRowImpl({
   draggable,
   filtersActive,
   density,
-  onRemove,
-  onQuickTierChange,
+  onRemoveTitle,
+  onRemoveChannel,
+  onTitleTier,
+  onChannelTier,
 }: TierRowProps) {
   const { setNodeRef, isOver } = useDroppable({ id: tier });
   const isUnrated = tier === "Unrated";
@@ -78,15 +84,16 @@ function TierRowImpl({
               {filtersActive ? "Нет совпадений" : draggable ? "Перетащите тайтлы сюда" : "Здесь пока пусто"}
             </p>
           )}
-          {items.map((title) => (
-            <TierCard
-              key={`${title.mediaType}-${title.tmdbId}`}
-              title={title}
-              itemId={`${title.mediaType}-${title.tmdbId}`}
+          {items.map((item) => (
+            <BoardCard
+              key={boardItemKey(item)}
+              item={item}
               draggable={draggable}
               density={density}
-              onRemove={onRemove}
-              onQuickTierChange={onQuickTierChange}
+              onRemoveTitle={onRemoveTitle}
+              onRemoveChannel={onRemoveChannel}
+              onTitleTier={onTitleTier}
+              onChannelTier={onChannelTier}
             />
           ))}
         </SortableContext>
