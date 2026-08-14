@@ -1,4 +1,5 @@
 import type { MediaType, RankedTitle } from "@/lib/types";
+import type { CriterionScore } from "@/lib/types/criteria";
 import type { AddTitleInput, RankingRepository } from "@/lib/storage/repository";
 import { titleKey } from "@/lib/storage/repository";
 import { validateImportedTitles } from "@/lib/storage/validation";
@@ -108,6 +109,31 @@ export class LocalStorageRepository implements RankingRepository {
       }
       return t;
     });
+    this.write(next);
+    return updated;
+  }
+
+  updateCriteria(
+    tmdbId: number,
+    mediaType: MediaType,
+    criteriaScores: CriterionScore[]
+  ): RankedTitle | undefined {
+    const titles = this.readCache();
+    let updated: RankedTitle | undefined;
+
+    const next = titles.map((t) => {
+      if (titleKey(t.tmdbId, t.mediaType) !== titleKey(tmdbId, mediaType)) return t;
+      // An empty list means "no breakdown" rather than "a breakdown of nothing",
+      // so the field goes away entirely and exports stay clean.
+      const rest = { ...t };
+      delete rest.criteriaScores;
+      updated =
+        criteriaScores.length > 0
+          ? { ...rest, criteriaScores, updatedAt: Date.now() }
+          : { ...rest, updatedAt: Date.now() };
+      return updated;
+    });
+
     this.write(next);
     return updated;
   }

@@ -58,7 +58,7 @@ export function UsernameDialog({ userId, open, onClose, onSaved }: UsernameDialo
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
-      className="w-[min(28rem,92vw)] rounded-2xl border border-border bg-surface p-0 text-foreground backdrop:bg-black/60 backdrop:backdrop-blur-sm"
+      className="m-auto w-[min(28rem,92vw)] rounded-2xl border border-border bg-surface p-0 text-foreground backdrop:bg-black/60 backdrop:backdrop-blur-sm"
     >
       <form onSubmit={handleSubmit} className="p-5">
         <div className="flex items-start justify-between gap-4">

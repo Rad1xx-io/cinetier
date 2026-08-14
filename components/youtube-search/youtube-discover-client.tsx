@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Loader2, Search, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { trackItemAdded } from "@/lib/analytics/events";
 import { CorrectedQueryHint } from "@/components/ui/corrected-query-hint";
 import { ChannelResultsGrid } from "@/components/youtube-search/channel-results-grid";
 import {
@@ -160,6 +161,7 @@ export function YouTubeDiscoverClient() {
   }, [hasMoreLocal, results.length, nextPageToken, debouncedQuery, filters]);
 
   function handleAdd(channel: ChannelSummary) {
+    trackItemAdded(`youtube-${channel.channelId}`, "youtube", debouncedQuery ? "search" : "discover");
     add({
       channelId: channel.channelId,
       title: channel.title,

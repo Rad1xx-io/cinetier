@@ -1,6 +1,7 @@
 import { localStorageRepository } from "@/lib/storage/local-storage-repository";
 import type { RankingRepository } from "@/lib/storage/repository";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
+import type { CriterionScore } from "@/lib/types/criteria";
 
 export { RANKINGS_CHANGED_EVENT } from "@/lib/storage/local-storage-repository";
 export type { AddTitleInput, RankingRepository } from "@/lib/storage/repository";
@@ -35,6 +36,14 @@ export function updateTier(
   tier: TierOrUnrated
 ): RankedTitle | undefined {
   return repository.updateTier(tmdbId, mediaType, tier);
+}
+
+export function updateCriteria(
+  tmdbId: number,
+  mediaType: MediaType,
+  criteriaScores: CriterionScore[]
+): RankedTitle | undefined {
+  return repository.updateCriteria(tmdbId, mediaType, criteriaScores);
 }
 
 export function reorderAll(titles: RankedTitle[]): void {

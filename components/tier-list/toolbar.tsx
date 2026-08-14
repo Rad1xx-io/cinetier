@@ -64,7 +64,14 @@ export function Toolbar({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border border-border p-0.5" role="group" aria-label="Фильтр по типу">
+          {/* Six labels do not fit one line on a 375px screen, and the row is the
+              widest thing on the page — wrapping keeps it inside the viewport
+              instead of giving the whole document a horizontal scrollbar. */}
+          <div
+            className="flex flex-wrap rounded-lg border border-border p-0.5"
+            role="group"
+            aria-label="Фильтр по типу"
+          >
             {MEDIA_OPTIONS.map((opt) => (
               <button
                 key={opt.value}

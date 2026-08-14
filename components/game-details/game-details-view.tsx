@@ -7,12 +7,14 @@ import { useRankedTitles } from "@/lib/hooks/use-ranked-titles";
 import { Poster } from "@/components/movie-card/poster";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CriteriaSection } from "@/components/criteria/criteria-section";
 import type { TierOrUnrated } from "@/lib/types";
 import { TIER_ORDER } from "@/lib/types";
 import type { GameDetails } from "@/lib/types/game";
 import { releaseYear } from "@/lib/utils/format";
 import { tierColorVar, tierLabel } from "@/lib/utils/tier-style";
 import { cn } from "@/lib/utils/cn";
+import { trackItemAdded, trackItemRanked } from "@/lib/analytics/events";
 
 export function GameDetailsView({ details }: { details: GameDetails }) {
   const { titles, add, remove, setTier, hydrated } = useRankedTitles();
@@ -31,7 +33,13 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
     };
   }
 
+  function handleAdd() {
+    trackItemAdded(`game-${details.appId}`, "game", "details");
+    add(addInput());
+  }
+
   function handleTierChange(tier: TierOrUnrated) {
+    trackItemRanked(`game-${details.appId}`, tier, ranked?.tier);
     if (!ranked) add(addInput(tier));
     else setTier(details.appId, "game", tier);
   }
@@ -115,7 +123,7 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
               </p>
 
               {!ranked ? (
-                <Button onClick={() => add(addInput())} disabled={!hydrated}>
+                <Button onClick={handleAdd} disabled={!hydrated}>
                   <Plus className="h-4 w-4" aria-hidden />
                   Добавить в список
                 </Button>
@@ -154,6 +162,13 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
                   </Button>
                 </div>
               )}
+
+              <CriteriaSection
+                tmdbId={details.appId}
+                mediaType={"game"}
+                isRanked={Boolean(ranked)}
+                criteriaScores={ranked?.criteriaScores}
+              />
             </div>
           </div>
         </div>

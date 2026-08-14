@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Loader2, Search, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { trackItemAdded } from "@/lib/analytics/events";
 import { CorrectedQueryHint } from "@/components/ui/corrected-query-hint";
 import { GamesResultsGrid } from "@/components/games-search/games-results-grid";
 import {
@@ -159,6 +160,7 @@ export function GamesDiscoverClient() {
   }, [page, buildUrl]);
 
   function handleAdd(game: GameSummary) {
+    trackItemAdded(`game-${game.appId}`, "game", debouncedQuery ? "search" : "discover");
     add({
       tmdbId: game.appId,
       mediaType: "game",

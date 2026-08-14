@@ -2,6 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
+import type { CriterionScore } from "@/lib/types/criteria";
 import {
   addTitle,
   clearAll,
@@ -10,6 +11,7 @@ import {
   removeTitle,
   reorderAll,
   updateTier,
+  updateCriteria,
 } from "@/lib/storage";
 import type { AddTitleInput } from "@/lib/storage";
 import { getServerSnapshot, getSnapshot, subscribe } from "@/lib/storage/ranked-titles-store";
@@ -34,6 +36,11 @@ export function useRankedTitles() {
     (tmdbId: number, mediaType: MediaType) => removeTitle(tmdbId, mediaType),
     []
   );
+  const setCriteria = useCallback(
+    (tmdbId: number, mediaType: MediaType, criteriaScores: CriterionScore[]) =>
+      updateCriteria(tmdbId, mediaType, criteriaScores),
+    []
+  );
   const setTier = useCallback(
     (tmdbId: number, mediaType: MediaType, tier: TierOrUnrated) =>
       updateTier(tmdbId, mediaType, tier),
@@ -47,6 +54,7 @@ export function useRankedTitles() {
     add,
     remove,
     setTier,
+    setCriteria,
     reorderAll,
     clearAll,
     exportRatings,

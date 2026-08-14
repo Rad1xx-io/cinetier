@@ -1,4 +1,5 @@
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
+import type { CriterionScore } from "@/lib/types/criteria";
 
 export interface AddTitleInput {
   tmdbId: number;
@@ -21,6 +22,12 @@ export interface RankingRepository {
   add(input: AddTitleInput): RankedTitle;
   remove(tmdbId: number, mediaType: MediaType): void;
   updateTier(tmdbId: number, mediaType: MediaType, tier: TierOrUnrated): RankedTitle | undefined;
+  /** Replaces the whole breakdown; an empty array clears it. */
+  updateCriteria(
+    tmdbId: number,
+    mediaType: MediaType,
+    criteriaScores: CriterionScore[]
+  ): RankedTitle | undefined;
   /** Overwrites the full list, used to persist drag-and-drop tier/order changes in one write. */
   reorderAll(titles: RankedTitle[]): void;
   clearAll(): void;

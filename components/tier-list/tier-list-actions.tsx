@@ -1,23 +1,40 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, Loader2, Share2 } from "lucide-react";
+import { Download, Loader2, Send, Share2, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UsernameDialog } from "@/components/profile/username-dialog";
+import { CreateBattleModal } from "@/components/battle/create-battle-modal";
+import { PublishPostDialog } from "@/components/feed/publish-post-dialog";
+import { suggestedPostCategory } from "@/lib/feed/post-preview";
 import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
 import { getMyProfile, type Profile } from "@/lib/supabase/profiles";
+import { trackLinkCopied, trackShareClicked } from "@/lib/analytics/events";
+import type { RankedTitle } from "@/lib/types";
+import type { RankedChannel } from "@/lib/types/youtube";
 
 interface TierListActionsProps {
   /** The element to rasterise — the tier rows only, without the toolbar. */
   boardRef: React.RefObject<HTMLElement | null>;
   onNotify: (message: string) => void;
+  /** The ranked pool a battle is built from — both stores, since a battle can
+   *  be about channels as easily as films. */
+  titles: RankedTitle[];
+  channels: RankedChannel[];
 }
 
-export function TierListActions({ boardRef, onNotify }: TierListActionsProps) {
+export function TierListActions({
+  boardRef,
+  onNotify,
+  titles,
+  channels,
+}: TierListActionsProps) {
   const { user } = useSupabaseSession();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [exporting, setExporting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [battleOpen, setBattleOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -37,6 +54,9 @@ export function TierListActions({ boardRef, onNotify }: TierListActionsProps) {
   const copyLink = useCallback(
     async (handle: string) => {
       const url = `${window.location.origin}/u/${handle}`;
+      // Counted before the write: a clipboard refusal still falls back to
+      // showing the link, so the user got their link either way.
+      trackLinkCopied("tier_list", handle);
       try {
         await navigator.clipboard.writeText(url);
         onNotify("Ссылка скопирована!");
@@ -106,6 +126,9 @@ export function TierListActions({ boardRef, onNotify }: TierListActionsProps) {
   }, [boardRef, onNotify]);
 
   const handleShare = useCallback(() => {
+    // Fired on every press, including the ones that end at the username dialog
+    // or the sign-in prompt — those are exactly the drop-offs worth seeing.
+    trackShareClicked("tier_list", shareHandle ?? "unclaimed");
     if (shareHandle) {
       void copyLink(shareHandle);
       return;
@@ -117,6 +140,26 @@ export function TierListActions({ boardRef, onNotify }: TierListActionsProps) {
     }
     onNotify("Войдите, чтобы получить ссылку на свой тир-лист");
   }, [shareHandle, user, copyLink, onNotify]);
+
+  const handleStartBattle = useCallback(() => {
+    // Same gate as sharing: a battle row is owned by its creator, so there is
+    // nothing to insert without a session.
+    if (!user) {
+      onNotify("Войдите, чтобы создать батл");
+      return;
+    }
+    setBattleOpen(true);
+  }, [user, onNotify]);
+
+  const handlePublish = useCallback(() => {
+    // Same gate as the rest: a post is owned by its author and signed with their
+    // handle, so there is nothing to insert without a session.
+    if (!user) {
+      onNotify("Войдите, чтобы опубликовать пост");
+      return;
+    }
+    setPublishOpen(true);
+  }, [user, onNotify]);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -133,6 +176,34 @@ export function TierListActions({ boardRef, onNotify }: TierListActionsProps) {
         <Share2 className="h-3.5 w-3.5" aria-hidden />
         Скопировать ссылку
       </Button>
+
+      <Button variant="secondary" size="sm" onClick={handlePublish}>
+        <Send className="h-3.5 w-3.5" aria-hidden />
+        Опубликовать
+      </Button>
+
+      <Button size="sm" onClick={handleStartBattle} className="relative">
+        <Swords className="h-3.5 w-3.5" aria-hidden />
+        Батл вкусов
+        {/* The one action here that brings other people in, so it gets the only
+            accent button and a marker drawing the eye to it. */}
+        <span className="absolute -right-1 -top-1 rounded-full bg-tier-s px-1 py-px text-[9px] font-bold uppercase leading-tight text-white">
+          new
+        </span>
+      </Button>
+
+      <PublishPostDialog
+        open={publishOpen}
+        onClose={() => setPublishOpen(false)}
+        suggestedCategory={suggestedPostCategory(titles, channels)}
+      />
+
+      <CreateBattleModal
+        open={battleOpen}
+        onClose={() => setBattleOpen(false)}
+        titles={titles}
+        channels={channels}
+      />
 
       {user && (
         <UsernameDialog

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Loader2, Search, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { trackItemAdded } from "@/lib/analytics/events";
 import { CorrectedQueryHint } from "@/components/ui/corrected-query-hint";
 import { ResultsGrid } from "@/components/search/results-grid";
 import {
@@ -172,6 +173,7 @@ export function DiscoverClient() {
   }, [page, buildUrl]);
 
   function handleAdd(title: TitleSummary) {
+    trackItemAdded(`${title.mediaType}-${title.tmdbId}`, title.mediaType, debouncedQuery ? "search" : "discover");
     add({
       tmdbId: title.tmdbId,
       mediaType: title.mediaType,

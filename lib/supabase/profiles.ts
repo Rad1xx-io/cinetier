@@ -3,12 +3,15 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
+import type { CriterionScore } from "@/lib/types/criteria";
 
 export interface Profile {
   id: string;
   username: string;
   displayName: string | null;
   isPublic: boolean;
+  /** Whether visitors may copy this list onto their own board. */
+  allowFork: boolean;
 }
 
 interface ProfileRow {
@@ -16,6 +19,7 @@ interface ProfileRow {
   username: string;
   display_name: string | null;
   is_public: boolean;
+  allow_fork?: boolean | null;
 }
 
 function fromRow(row: ProfileRow): Profile {
@@ -24,6 +28,9 @@ function fromRow(row: ProfileRow): Profile {
     username: row.username,
     displayName: row.display_name,
     isPublic: row.is_public,
+    // Defaulted rather than required: a profile row written before migration 008
+    // has no column to read, and forking was allowed for everyone until then.
+    allowFork: row.allow_fork ?? true,
   };
 }
 
@@ -46,7 +53,7 @@ export async function getMyProfile(userId: string): Promise<Profile | null> {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,username,display_name,is_public")
+    .select("id,username,display_name,is_public,allow_fork")
     .eq("id", userId)
     .maybeSingle();
 
@@ -81,7 +88,7 @@ export async function saveProfile(input: {
       },
       { onConflict: "id" }
     )
-    .select("id,username,display_name,is_public")
+    .select("id,username,display_name,is_public,allow_fork")
     .single();
 
   if (error) {
@@ -102,7 +109,15 @@ export interface PublicTierList {
   channels: RankedChannel[];
 }
 
+interface PublicCriterionRow {
+  rating_id: string;
+  criterion_id: string;
+  name: string;
+  score: number;
+}
+
 interface PublicTitleRow {
+  id: string;
   tmdb_id: number;
   media_type: MediaType;
   title: string;
@@ -142,6 +157,26 @@ export async function setProfileVisibility(
 }
 
 /**
+ * Flips whether visitors may fork this list.
+ *
+ * Independent of `is_public`: publishing is about who can *see* the list,
+ * forking about who can take a copy, and people reasonably want one without
+ * the other.
+ */
+export async function setProfileForkPolicy(
+  userId: string,
+  allowFork: boolean
+): Promise<boolean> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return false;
+  const { error } = await supabase
+    .from("profiles")
+    .update({ allow_fork: allowFork, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+  return !error;
+}
+
+/**
  * Reads someone else's published list. Relies entirely on the RLS policies from
  * migration 004: an unpublished profile simply yields no rows rather than an
  * error, so the caller treats "nothing found" and "not shared" the same way.
@@ -152,7 +187,7 @@ export async function getPublicTierList(username: string): Promise<PublicTierLis
 
   const { data: profileRow } = await supabase
     .from("profiles")
-    .select("id,username,display_name,is_public")
+    .select("id,username,display_name,is_public,allow_fork")
     .eq("username", username.toLowerCase())
     .maybeSingle();
 
@@ -160,18 +195,34 @@ export async function getPublicTierList(username: string): Promise<PublicTierLis
   const profile = fromRow(profileRow as ProfileRow);
   if (!profile.isPublic) return null;
 
-  const [titlesRes, channelsRes] = await Promise.all([
+  const [titlesRes, channelsRes, criteriaRes] = await Promise.all([
     supabase
       .from("ranked_titles")
-      .select("tmdb_id,media_type,title,poster_path,release_date,tier,order,vote_average,added_at,updated_at")
+      // `id` comes along so the criteria rows below can be matched back to their
+      // title; it is dropped again in the mapping and never leaves this function.
+      .select("id,tmdb_id,media_type,title,poster_path,release_date,tier,order,vote_average,added_at,updated_at")
       .eq("user_id", profile.id),
     supabase
       .from("ranked_channels")
       .select("channel_id,title,thumbnail_url,country,tier,order,subscriber_count,added_at,updated_at")
       .eq("user_id", profile.id),
+    // One query for the whole list rather than one per title: a shared page is
+    // read start to finish, so there is nothing to defer here.
+    supabase
+      .from("criteria_scores")
+      .select("rating_id,criterion_id,name,score")
+      .eq("user_id", profile.id),
   ]);
 
+  const criteriaByRating = new Map<string, CriterionScore[]>();
+  for (const row of (criteriaRes.data ?? []) as PublicCriterionRow[]) {
+    const list = criteriaByRating.get(row.rating_id) ?? [];
+    list.push({ criterionId: row.criterion_id, name: row.name, score: row.score });
+    criteriaByRating.set(row.rating_id, list);
+  }
+
   const titles: RankedTitle[] = ((titlesRes.data ?? []) as PublicTitleRow[]).map((r) => ({
+    ...(criteriaByRating.has(r.id) ? { criteriaScores: criteriaByRating.get(r.id) } : {}),
     tmdbId: r.tmdb_id,
     mediaType: r.media_type,
     title: r.title,

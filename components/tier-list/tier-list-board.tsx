@@ -41,6 +41,37 @@ import { Poster } from "@/components/movie-card/poster";
 import { ChannelThumbnail } from "@/components/channel-card/channel-thumbnail";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { trackItemRanked, trackListCreationStarted, trackListSaved } from "@/lib/analytics/events";
+import { takeForkInteraction, takeForkToast } from "@/lib/storage/fork-handoff";
+
+/**
+ * Which tier a board item currently sits in, or null if it is not on the board.
+ * Analytics needs the tier the card came *from*, which the drop result no longer
+ * remembers, so it is read off the pre-drop buckets.
+ */
+function tierOfKey(buckets: BoardBuckets, key: string): TierOrUnrated | null {
+  for (const tier of TIER_ORDER) {
+    if (buckets[tier].some((item) => boardItemKey(item) === key)) return tier;
+  }
+  return null;
+}
+
+/** `title:movie-603` / `channel:UC…` -> the id shape the analytics funnel uses. */
+function analyticsItemId(boardKey: string): string {
+  return boardKey.startsWith("channel:")
+    ? `youtube-${boardKey.slice("channel:".length)}`
+    : boardKey.slice("title:".length);
+}
+
+/**
+ * Reports `list_creation_started` the first time a freshly forked board is
+ * edited, then never again — the armed flag lives in sessionStorage and is
+ * consumed on read, so no component has to remember whether it already fired.
+ */
+function noteForkInteraction(): void {
+  const pending = takeForkInteraction();
+  if (pending) trackListCreationStarted(pending.category, true, pending.originalListId);
+}
 
 export function TierListBoard() {
   const { titles, hydrated, remove, setTier, reorderAll } = useRankedTitles();
@@ -60,6 +91,19 @@ export function TierListBoard() {
 
   const boardRef = useRef<HTMLDivElement>(null);
   const { toast, show: notify } = useToast();
+
+  useEffect(() => {
+    // Read here rather than during render: there is no sessionStorage on the
+    // server, so a render-phase read would desync hydration. The message is
+    // removed as it is read, so this fires at most once per arrival.
+    //
+    // Notified synchronously on purpose. Deferring past a microtask — the
+    // obvious way to keep a state setter out of an effect body — drops the
+    // toast in development: the deferred call lands on the instance Strict Mode
+    // throws away, and the confirmation never appears.
+    const message = takeForkToast();
+    if (message) notify(message);
+  }, [notify]);
 
   const [search, setSearch] = useState("");
   const [mediaFilter, setMediaFilter] = useState<CategoryFilter>("all");
@@ -157,11 +201,18 @@ export function TierListBoard() {
     // dispatches a change event, which React must not see inside a reducer
     // (Strict Mode double-invokes those, firing the write twice and letting the
     // `[titles]` effect stomp the fresh board with a stale snapshot).
-    const next = applyDrop(containersRef.current, String(active.id), String(over.id), boardItemKey);
+    const movedKey = String(active.id);
+    const fromTier = tierOfKey(containersRef.current, movedKey);
+    const next = applyDrop(containersRef.current, movedKey, String(over.id), boardItemKey);
     if (next === containersRef.current) return;
 
     commitContainers(next);
-    persist(next, String(active.id));
+    persist(next, movedKey);
+
+    const toTier = tierOfKey(next, movedKey);
+    if (toTier) {
+      trackItemRanked(analyticsItemId(movedKey), toTier, fromTier ?? undefined);
+    }
   }
 
   function handleDragCancel() {
@@ -198,6 +249,11 @@ export function TierListBoard() {
       }))
     );
     flashSaved();
+
+    // The board is the list: there is one per user and it saves on every drop,
+    // so "saved" is reported here rather than behind a button that does not exist.
+    trackListSaved("board", flat.length, false);
+    noteForkInteraction();
   }
 
   const handleRemove = useCallback(
@@ -211,6 +267,8 @@ export function TierListBoard() {
     (title: RankedTitle, tier: TierOrUnrated) => {
       setTier(title.tmdbId, title.mediaType, tier);
       flashSaved();
+      trackItemRanked(`${title.mediaType}-${title.tmdbId}`, tier, title.tier);
+      noteForkInteraction();
     },
     [setTier, flashSaved]
   );
@@ -226,6 +284,8 @@ export function TierListBoard() {
     (channel: RankedChannel, tier: TierOrUnrated) => {
       setChannelTier(channel.channelId, tier);
       flashSaved();
+      trackItemRanked(`youtube-${channel.channelId}`, tier, channel.tier);
+      noteForkInteraction();
     },
     [setChannelTier, flashSaved]
   );
@@ -281,7 +341,12 @@ export function TierListBoard() {
             Перетаскивайте тайтлы между тирами, чтобы выстроить свой рейтинг.
           </p>
         </div>
-        <TierListActions boardRef={boardRef} onNotify={notify} />
+        <TierListActions
+          boardRef={boardRef}
+          onNotify={notify}
+          titles={titles}
+          channels={channels}
+        />
       </div>
 
       <div className="mt-4 px-4 md:px-0">

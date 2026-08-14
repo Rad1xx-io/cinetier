@@ -7,6 +7,7 @@ import { useRankedTitles } from "@/lib/hooks/use-ranked-titles";
 import { Poster } from "@/components/movie-card/poster";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CriteriaSection } from "@/components/criteria/criteria-section";
 import type { TierOrUnrated, TitleDetails } from "@/lib/types";
 import { TIER_ORDER } from "@/lib/types";
 import { backdropUrl } from "@/lib/utils/tmdb-image";
@@ -14,6 +15,7 @@ import { formatRating, mediaTypeLabel, releaseYear } from "@/lib/utils/format";
 import { tierColorVar, tierLabel } from "@/lib/utils/tier-style";
 import { pluralizeRu } from "@/lib/utils/pluralize-ru";
 import { cn } from "@/lib/utils/cn";
+import { trackItemAdded, trackItemRanked } from "@/lib/analytics/events";
 
 export function TitleDetailsView({ details }: { details: TitleDetails }) {
   const { titles, add, remove, setTier, hydrated } = useRankedTitles();
@@ -24,6 +26,7 @@ export function TitleDetailsView({ details }: { details: TitleDetails }) {
   const backdrop = backdropUrl(details.backdropPath);
 
   function handleAdd() {
+    trackItemAdded(`${details.mediaType}-${details.tmdbId}`, details.mediaType, "details");
     add({
       tmdbId: details.tmdbId,
       mediaType: details.mediaType,
@@ -34,6 +37,7 @@ export function TitleDetailsView({ details }: { details: TitleDetails }) {
   }
 
   function handleTierChange(tier: TierOrUnrated) {
+    trackItemRanked(`${details.mediaType}-${details.tmdbId}`, tier, ranked?.tier);
     if (!ranked) {
       add({
         tmdbId: details.tmdbId,
@@ -157,6 +161,13 @@ export function TitleDetailsView({ details }: { details: TitleDetails }) {
                   </Button>
                 </div>
               )}
+
+              <CriteriaSection
+                tmdbId={details.tmdbId}
+                mediaType={details.mediaType}
+                isRanked={Boolean(ranked)}
+                criteriaScores={ranked?.criteriaScores}
+              />
             </div>
           </div>
         </div>

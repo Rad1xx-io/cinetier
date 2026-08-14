@@ -13,7 +13,7 @@ export function BottomNav() {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Основная навигация"
     >
-      <div className="grid grid-cols-6">
+      <div className="grid grid-cols-7">
         {NAV_ITEMS.map((item) => {
           const active = isNavItemActive(pathname, item.href);
           const Icon = item.icon;

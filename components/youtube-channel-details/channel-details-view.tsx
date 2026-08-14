@@ -14,6 +14,7 @@ import { formatCompactCount } from "@/lib/utils/format";
 import { tierColorVar, tierLabel } from "@/lib/utils/tier-style";
 import { findCountryLabel } from "@/lib/youtube/region-groups";
 import { cn } from "@/lib/utils/cn";
+import { trackItemAdded, trackItemRanked } from "@/lib/analytics/events";
 
 export function ChannelDetailsView({ details }: { details: ChannelDetails }) {
   const { channels, add, remove, setTier, hydrated } = useRankedChannels();
@@ -21,6 +22,7 @@ export function ChannelDetailsView({ details }: { details: ChannelDetails }) {
   const ranked = channels.find((c) => c.channelId === details.channelId);
 
   function handleAdd() {
+    trackItemAdded(`youtube-${details.channelId}`, "youtube", "details");
     add({
       channelId: details.channelId,
       title: details.title,
@@ -31,6 +33,7 @@ export function ChannelDetailsView({ details }: { details: ChannelDetails }) {
   }
 
   function handleTierChange(tier: TierOrUnrated) {
+    trackItemRanked(`youtube-${details.channelId}`, tier, ranked?.tier);
     if (!ranked) {
       add({
         channelId: details.channelId,

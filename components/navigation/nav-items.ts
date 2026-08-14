@@ -6,6 +6,7 @@ import {
   Gamepad2,
   ListChecks,
   SquarePlay,
+  MessagesSquare,
 } from "lucide-react";
 
 export interface NavItem {
@@ -20,6 +21,7 @@ const MOVIES: NavItem = { href: "/discover", label: "Фильмы", icon: Clappe
 const ANIME: NavItem = { href: "/anime", label: "Аниме", icon: Drama };
 const YOUTUBE: NavItem = { href: "/youtube", label: "YouTube", icon: SquarePlay };
 const GAMES: NavItem = { href: "/games", label: "Игры", icon: Gamepad2 };
+const FEED: NavItem = { href: "/feed", label: "Лента", icon: MessagesSquare };
 const SETTINGS: NavItem = { href: "/settings", label: "Настройки", icon: Settings };
 
 /**
@@ -42,6 +44,7 @@ export const TIER_LIST_NAV_ITEM: NavItem = {
  */
 export const NAV_ITEMS: NavItem[] = [
   TIER_LIST_NAV_ITEM,
+  FEED,
   MOVIES,
   ANIME,
   YOUTUBE,
@@ -55,7 +58,7 @@ export const NAV_ITEMS: NavItem[] = [
  * either side ends up, so these two lists only need to be roughly even, not
  * pixel-matched.
  */
-export const DESKTOP_NAV_LEFT: NavItem[] = [MOVIES, ANIME];
+export const DESKTOP_NAV_LEFT: NavItem[] = [FEED, MOVIES, ANIME];
 export const DESKTOP_NAV_RIGHT: NavItem[] = [YOUTUBE, GAMES];
 
 /** Categories that don't get a primary header slot yet — rendered under "More" once non-empty. */

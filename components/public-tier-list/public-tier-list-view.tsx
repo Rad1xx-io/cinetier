@@ -15,6 +15,14 @@ import { TIER_META } from "@/lib/tier-meta";
 import { tierColorVar } from "@/lib/utils/tier-style";
 import { getPublicTierList, type PublicTierList } from "@/lib/supabase/profiles";
 import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
+import { criteriaAverage, type CriterionScore } from "@/lib/types/criteria";
+import { trackSharedContentViewed } from "@/lib/analytics/events";
+import { ForkButton } from "@/components/public-tier-list/fork-button";
+
+/** One criterion per line, for the badge's native tooltip. */
+function criteriaTooltip(scores: CriterionScore[] | undefined): string {
+  return (scores ?? []).map((c) => `${c.name}: ${c.score.toFixed(1)}`).join("\n");
+}
 import { CATEGORY_FILTERS, type CategoryFilter } from "@/lib/utils/content-type";
 import { cn } from "@/lib/utils/cn";
 
@@ -33,6 +41,9 @@ export function PublicTierListView({ username }: { username: string }) {
       .then((data) => {
         if (cancelled) return;
         setState(data ? { status: "ready", data } : { status: "missing" });
+        // Reported on a successful load rather than on mount: a view of a list
+        // that turned out not to exist is not a view of shared content.
+        if (data) trackSharedContentViewed("tier_list", data.profile.username, data.profile.id);
       })
       .catch(() => {
         if (!cancelled) setState({ status: "missing" });
@@ -92,13 +103,16 @@ export function PublicTierListView({ username }: { username: string }) {
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 pb-16 pt-6 md:px-6">
-      <header className="mb-6">
-        <p className="text-xs uppercase tracking-wide text-muted">Тир-лист пользователя</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{displayName}</h1>
-        <p className="mt-1 text-sm text-muted">
-          @{profile.username} · {titlesCountLabel(total)}
-          {category !== "all" && ` · показано ${shown}`}
-        </p>
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted">Тир-лист пользователя</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{displayName}</h1>
+          <p className="mt-1 text-sm text-muted">
+            @{profile.username} · {titlesCountLabel(total)}
+            {category !== "all" && ` · показано ${shown}`}
+          </p>
+        </div>
+        <ForkButton profile={profile} sourceTitles={titles} sourceChannels={channels} />
       </header>
 
       {availableFilters.length > 2 && (
@@ -186,15 +200,30 @@ function ReadOnlyTierRow({
       <div className="flex min-h-28 flex-1 flex-wrap content-start items-start gap-3 p-3 sm:min-h-32">
         {count === 0 && <p className="flex h-24 items-center px-2 text-xs text-muted">Пусто</p>}
 
-        {titles.map((t) => (
-          <div key={`${t.mediaType}-${t.tmdbId}`} className="w-20 shrink-0 sm:w-24">
-            <Poster posterPath={t.posterPath} title={t.title} sizes="96px" />
-            <p className="mt-1.5 line-clamp-1 break-words text-[11px] font-medium" title={t.title}>
-              {t.title}
-            </p>
-            <ContentTypeBadge type={t.mediaType} className="mt-0.5" />
-          </div>
-        ))}
+        {titles.map((t) => {
+          const average = criteriaAverage(t.criteriaScores);
+          return (
+            <div key={`${t.mediaType}-${t.tmdbId}`} className="w-20 shrink-0 sm:w-24">
+              <div className="relative">
+                <Poster posterPath={t.posterPath} title={t.title} sizes="96px" />
+                {average !== null && (
+                  <span
+                    className="absolute right-1 top-1 rounded-md bg-background/85 px-1.5 py-0.5 text-[10px] font-bold text-accent backdrop-blur"
+                    // A tier row has no room for the chips themselves, so the
+                    // breakdown they would show rides along as a tooltip.
+                    title={criteriaTooltip(t.criteriaScores)}
+                  >
+                    {average.toFixed(1)}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1.5 line-clamp-1 break-words text-[11px] font-medium" title={t.title}>
+                {t.title}
+              </p>
+              <ContentTypeBadge type={t.mediaType} className="mt-0.5" />
+            </div>
+          );
+        })}
 
         {channels.map((c) => (
           <div key={c.channelId} className="w-20 shrink-0 sm:w-24">

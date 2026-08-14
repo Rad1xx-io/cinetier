@@ -6,6 +6,20 @@ export function isValidTier(value: unknown): value is TierOrUnrated {
   return typeof value === "string" && (VALID_TIERS as string[]).includes(value);
 }
 
+/** Imported records may carry criteria; a malformed entry must not poison the whole title. */
+function isCriteriaScores(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!Array.isArray(value)) return false;
+  return value.every(
+    (item) =>
+      item &&
+      typeof item === "object" &&
+      typeof (item as Record<string, unknown>).criterionId === "string" &&
+      typeof (item as Record<string, unknown>).name === "string" &&
+      typeof (item as Record<string, unknown>).score === "number"
+  );
+}
+
 export function isRankedTitle(value: unknown): value is RankedTitle {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
@@ -21,6 +35,7 @@ export function isRankedTitle(value: unknown): value is RankedTitle {
     isValidTier(v.tier) &&
     typeof v.order === "number" &&
     (v.voteAverage === undefined || typeof v.voteAverage === "number") &&
+    isCriteriaScores(v.criteriaScores) &&
     typeof v.addedAt === "number" &&
     typeof v.updatedAt === "number"
   );

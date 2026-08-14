@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   saveProfile,
+  setProfileForkPolicy,
   setProfileVisibility,
   validateUsername,
   type Profile,
 } from "@/lib/supabase/profiles";
+import { trackListPublished } from "@/lib/analytics/events";
 
 interface UsernameFormProps {
   userId: string;
@@ -115,7 +117,12 @@ export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
             onChange={async (e) => {
               const next = e.target.checked;
               const ok = await setProfileVisibility(userId, next);
-              if (ok) onSaved({ ...profile, isPublic: next });
+              if (ok) {
+                onSaved({ ...profile, isPublic: next });
+                // Only the switch to public is a publication; turning it back
+                // off is the opposite and has no event of its own.
+                if (next) trackListPublished(profile.username);
+              }
             }}
             className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
           />
@@ -123,6 +130,29 @@ export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
             <span className="font-medium text-foreground">Открыть тир-лист по ссылке.</span> Пока
             включено, список виден любому, у кого есть адрес — включая посетителей без аккаунта.
             Снимите галочку, чтобы закрыть доступ, не теряя юзернейм.
+          </label>
+        </div>
+      )}
+
+      {profile?.isPublic && (
+        <div className="mt-3 flex items-start gap-2.5">
+          <input
+            id="allow-fork"
+            type="checkbox"
+            checked={profile.allowFork}
+            onChange={async (e) => {
+              const next = e.target.checked;
+              const ok = await setProfileForkPolicy(userId, next);
+              if (ok) onSaved({ ...profile, allowFork: next });
+            }}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+          />
+          <label htmlFor="allow-fork" className="text-xs leading-relaxed text-muted">
+            <span className="font-medium text-foreground">
+              Разрешить другим форкать мой тир-лист.
+            </span>{" "}
+            Посетители смогут скопировать вашу расстановку себе. Отключение прячет кнопку — но
+            всё, что видно на странице, при желании всё равно можно переписать вручную.
           </label>
         </div>
       )}

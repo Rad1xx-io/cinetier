@@ -7,12 +7,14 @@ import { useRankedTitles } from "@/lib/hooks/use-ranked-titles";
 import { Poster } from "@/components/movie-card/poster";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CriteriaSection } from "@/components/criteria/criteria-section";
 import type { TierOrUnrated } from "@/lib/types";
 import { TIER_ORDER } from "@/lib/types";
 import type { AnimeDetails } from "@/lib/types/anime";
 import { formatEpisodes, formatScore, seasonLabel, statusLabel } from "@/lib/utils/anime-format";
 import { tierColorVar, tierLabel } from "@/lib/utils/tier-style";
 import { cn } from "@/lib/utils/cn";
+import { trackItemAdded, trackItemRanked } from "@/lib/analytics/events";
 
 export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
   const { titles, add, remove, setTier, hydrated } = useRankedTitles();
@@ -21,6 +23,7 @@ export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
   const releaseDate = details.year ? `${details.year}-01-01` : null;
 
   function handleAdd() {
+    trackItemAdded(`anime-${details.anilistId}`, "anime", "details");
     add({
       tmdbId: details.anilistId,
       mediaType: "anime",
@@ -32,6 +35,7 @@ export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
   }
 
   function handleTierChange(tier: TierOrUnrated) {
+    trackItemRanked(`anime-${details.anilistId}`, tier, ranked?.tier);
     if (!ranked) {
       add({
         tmdbId: details.anilistId,
@@ -159,6 +163,13 @@ export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
                   </Button>
                 </div>
               )}
+
+              <CriteriaSection
+                tmdbId={details.anilistId}
+                mediaType={"anime"}
+                isRanked={Boolean(ranked)}
+                criteriaScores={ranked?.criteriaScores}
+              />
             </div>
 
             {details.relations.length > 0 && (

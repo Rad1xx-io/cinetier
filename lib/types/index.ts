@@ -1,3 +1,5 @@
+import type { CriterionScore } from "@/lib/types/criteria";
+
 export type MediaType = "movie" | "tv" | "anime" | "game";
 
 /** TMDB only ever produces these two — narrower than the shared ranking MediaType so movie/tv-only components (mediaTypeLabel, DiscoverCard, TitleDetailsView) can't accidentally be handed "anime". */
@@ -53,6 +55,12 @@ export interface RankedTitle {
   order: number;
   /** TMDB rating at the time of adding, for the optional "sort by rating" view. Optional so older exports without it still validate. */
   voteAverage?: number;
+  /**
+   * The user's own breakdown, when they filled one in. Absent on everything
+   * ranked before criteria existed, and on anything judged by tier alone —
+   * which is the common case, so nothing downstream may assume it is there.
+   */
+  criteriaScores?: CriterionScore[];
   addedAt: number;
   updatedAt: number;
 }

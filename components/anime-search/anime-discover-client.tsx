@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Loader2, Search, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { trackItemAdded } from "@/lib/analytics/events";
 import { CorrectedQueryHint } from "@/components/ui/corrected-query-hint";
 import { AnimeResultsGrid } from "@/components/anime-search/anime-results-grid";
 import {
@@ -162,6 +163,7 @@ export function AnimeDiscoverClient() {
   }, [page, debouncedQuery, filters]);
 
   function handleAdd(anime: AnimeSummary) {
+    trackItemAdded(`anime-${anime.anilistId}`, "anime", debouncedQuery ? "search" : "discover");
     add({
       tmdbId: anime.anilistId,
       mediaType: "anime",
