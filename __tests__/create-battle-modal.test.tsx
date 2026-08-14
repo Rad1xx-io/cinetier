@@ -15,6 +15,7 @@ vi.mock("@/lib/analytics/tracker", () => ({
 
 const { CreateBattleModal } = await import("@/components/battle/create-battle-modal");
 const { MIN_POOL_SIZE, MAX_POOL_SIZE, DEFAULT_POOL_SIZE } = await import("@/lib/battle/pool");
+const { BATTLE_PRESETS } = await import("@/lib/battle/presets");
 
 function title(
   id: number,
@@ -528,8 +529,16 @@ describe("CreateBattleModal — presets", () => {
     openPresets();
 
     expect(screen.getByText(/Выбрано 0 из/)).toBeDefined();
-    expect((screen.getByRole("button", { name: "Создать батл" }) as HTMLButtonElement).disabled)
-      .toBe(true);
+  });
+
+  it("offers a blind pass instead of blocking when nothing is rated", () => {
+    openPresets();
+
+    // The old behaviour refused to go on. Picking a set you have not worked
+    // through is the normal case, so it now leads into rating it yourself.
+    const submit = screen.getByRole("button", { name: /Оценить и создать/ }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+    expect(screen.getByText(/сначала пройдёте набор сами/)).toBeDefined();
   });
 
   it("counts an entry once the creator rates it inline", () => {
@@ -581,10 +590,14 @@ describe("CreateBattleModal — presets", () => {
     expect(itemTitles().join("|")).toBe(before);
   });
 
-  it("creates a battle from the rated preset entries", async () => {
+  it("creates a battle straight away once everything on offer is rated", async () => {
     openPresets();
+    fireEvent.change(screen.getByLabelText(/Максимум позиций/), {
+      target: { value: String(MIN_POOL_SIZE) },
+    });
 
     rateFirst(MIN_POOL_SIZE);
+    // Nothing left unrated, so no pass is needed and the label says so.
     fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
 
     await waitFor(() => expect(createBattle).toHaveBeenCalledTimes(1));
@@ -599,6 +612,9 @@ describe("CreateBattleModal — presets", () => {
 
   it("records the preset it came from", async () => {
     openPresets();
+    fireEvent.change(screen.getByLabelText(/Максимум позиций/), {
+      target: { value: String(MIN_POOL_SIZE) },
+    });
 
     rateFirst(MIN_POOL_SIZE);
     fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
@@ -612,4 +628,167 @@ describe("CreateBattleModal — presets", () => {
       preset: "modern-classics",
     });
   });
+});
+
+describe("CreateBattleModal — the author's own blind pass", () => {
+  function openPresets(list: RankedTitle[] = []) {
+    open(list);
+    fireEvent.click(screen.getByRole("button", { name: /Подборки/ }));
+  }
+
+  function setSize(n: number) {
+    fireEvent.change(screen.getByLabelText(/Максимум позиций/), { target: { value: String(n) } });
+  }
+
+  function startPass() {
+    fireEvent.click(screen.getByRole("button", { name: /Оценить и создать/ }));
+  }
+
+  /** A tier button in the one-card-at-a-time voting screen. */
+  function voteTier(tier: string) {
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${tier} —`) }));
+  }
+
+  function skipCard() {
+    fireEvent.click(screen.getByRole("button", { name: /Пропустить/ }));
+  }
+
+  it("opens the voting screen instead of writing anything", () => {
+    openPresets();
+    setSize(MIN_POOL_SIZE);
+
+    startPass();
+
+    expect(screen.getByText("Сначала оцените сами")).toBeDefined();
+    expect(screen.getByText(`Позиция 1 из ${MIN_POOL_SIZE}`)).toBeDefined();
+    // Nothing is stored until the pass finishes — a half-rated battle must never
+    // exist for a friend to open.
+    expect(createBattle).not.toHaveBeenCalled();
+  });
+
+  it("creates the battle from what the author answered during the pass", async () => {
+    openPresets();
+    setSize(MIN_POOL_SIZE);
+    startPass();
+
+    for (let i = 0; i < MIN_POOL_SIZE; i++) voteTier("B");
+
+    await waitFor(() => expect(createBattle).toHaveBeenCalledTimes(1));
+    const [category, items, ratings] = createBattle.mock.calls[0];
+
+    expect(category).toBe("cinema");
+    expect(items).toHaveLength(MIN_POOL_SIZE);
+    expect(new Set(Object.values(ratings))).toEqual(new Set(["B"]));
+  });
+
+  it("hands back the link once the pass is done", async () => {
+    openPresets();
+    setSize(MIN_POOL_SIZE);
+    startPass();
+
+    for (let i = 0; i < MIN_POOL_SIZE; i++) voteTier("A");
+
+    expect(await screen.findByText("https://cinetier.app/battle/battle-xyz")).toBeDefined();
+    expect(screen.getByText("Ссылка готова!")).toBeDefined();
+  });
+
+  it("only asks about entries the author has not ranked", () => {
+    // Deal the whole pool so the hand is known, then put most of it on the
+    // author's own board. The shuffle makes any smaller hand non-deterministic.
+    const preset = BATTLE_PRESETS[0];
+    const owned = preset.items.slice(0, preset.items.length - 3).map((item) => {
+      const [mediaType, id] = item.id.split("-");
+      return title(Number(id), item.title, "A", mediaType as MediaType);
+    });
+
+    openPresets(owned);
+    setSize(MAX_POOL_SIZE);
+    startPass();
+
+    // Only the three it has never seen: an opinion already on their board is not
+    // asked for a second time.
+    expect(screen.getByText("Позиция 1 из 3")).toBeDefined();
+  });
+
+  it("keeps a tier given inline and does not re-ask for it", () => {
+    openPresets();
+    setSize(MIN_POOL_SIZE);
+
+    const rated = screen
+      .queryAllByRole("group")
+      .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Оценить"))[0];
+    fireEvent.click(within(rated).getByRole("button", { name: /: S$/ }));
+
+    startPass();
+
+    expect(screen.getByText(`Позиция 1 из ${MIN_POOL_SIZE - 1}`)).toBeDefined();
+  });
+
+  it("merges the inline tier with the pass answers", async () => {
+    openPresets();
+    setSize(MIN_POOL_SIZE);
+
+    const rated = screen
+      .queryAllByRole("group")
+      .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Оценить"))[0];
+    fireEvent.click(within(rated).getByRole("button", { name: /: S$/ }));
+
+    startPass();
+    for (let i = 0; i < MIN_POOL_SIZE - 1; i++) voteTier("D");
+
+    await waitFor(() => expect(createBattle).toHaveBeenCalledTimes(1));
+    const [, , ratings] = createBattle.mock.calls[0];
+
+    expect(Object.keys(ratings)).toHaveLength(MIN_POOL_SIZE);
+    expect(Object.values(ratings).filter((t) => t === "S")).toHaveLength(1);
+    expect(Object.values(ratings).filter((t) => t === "D")).toHaveLength(MIN_POOL_SIZE - 1);
+  });
+
+  it("refuses to create when too much was skipped, keeping what was rated", async () => {
+    openPresets();
+    setSize(MIN_POOL_SIZE);
+    startPass();
+
+    voteTier("A");
+    for (let i = 0; i < MIN_POOL_SIZE - 1; i++) skipCard();
+
+    expect(await screen.findByText(/Оценено 1 из 5 нужных/)).toBeDefined();
+    expect(createBattle).not.toHaveBeenCalled();
+    // Back on the picker with the one answer preserved.
+    expect(screen.getByText(/Выбрано 1 из/)).toBeDefined();
+  });
+
+  it("can be abandoned without losing the line-up", () => {
+    openPresets();
+    setSize(MIN_POOL_SIZE);
+    startPass();
+
+    fireEvent.click(screen.getByRole("button", { name: /Вернуться к набору/ }));
+
+    expect(screen.getByText("Батл вкусов")).toBeDefined();
+    expect(itemButtons()).toHaveLength(MIN_POOL_SIZE);
+    expect(createBattle).not.toHaveBeenCalled();
+  });
+
+  it("does not offer a pass when the author's own list already covers the set", () => {
+    openPresets();
+    setSize(MIN_POOL_SIZE);
+    rateAllVisible();
+
+    expect(screen.queryByRole("button", { name: /Оценить и создать/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Создать батл" })).toBeDefined();
+  });
+
+  /** Rates every row shown in the picker, via the inline buttons. */
+  function rateAllVisible(tier = "A") {
+    let groups = screen
+      .queryAllByRole("group")
+      .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Оценить"));
+    while (groups.length > 0) {
+      fireEvent.click(within(groups[0]).getByRole("button", { name: new RegExp(`: ${tier}$`) }));
+      groups = screen
+        .queryAllByRole("group")
+        .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Оценить"));
+    }
+  }
 });

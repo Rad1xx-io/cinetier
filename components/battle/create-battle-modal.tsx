@@ -32,6 +32,7 @@ import {
   type PoolCandidate,
 } from "@/lib/battle/pool";
 import { BATTLE_PRESETS, presetBySlug, shufflePreset, titlesMatch } from "@/lib/battle/presets";
+import { BattleVoting } from "@/components/battle/battle-voting";
 import { TIERS, type Tier, type RankedTitle } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
 import type { BattleCategory } from "@/lib/types/battle";
@@ -92,6 +93,12 @@ export function CreateBattleModal({
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   /** Tiers the creator assigns to preset entries they had not ranked before. */
   const [presetRatings, setPresetRatings] = useState<Record<string, Tier>>({});
+  /**
+   * `setup` picks the line-up; `rating` is the author's own blind pass over the
+   * entries they have never ranked. Nothing is written until that pass finishes,
+   * so a half-rated battle can never exist for a friend to open.
+   */
+  const [step, setStep] = useState<"setup" | "rating">("setup");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [battleId, setBattleId] = useState<string | null>(null);
@@ -110,6 +117,7 @@ export function CreateBattleModal({
       setExcluded(new Set());
       setPresetRatings({});
       setPresetSeed(0);
+      setStep("setup");
       setError(null);
       setBattleId(null);
       setCopied(false);
@@ -173,7 +181,20 @@ export function CreateBattleModal({
             ...(posterUrl ? { posterUrl } : {}),
           }));
 
+  /**
+   * Preset entries the author has never ranked. They do not block the battle any
+   * more — the author rates them in one blind pass instead, which is the whole
+   * point of picking a ready-made set you have not worked through.
+   */
+  const unrated =
+    source === "preset"
+      ? presetRows.filter((row) => !row.tier && !excluded.has(row.id))
+      : [];
+
   const enough = selected.length >= MIN_POOL_SIZE;
+  /** Enough only once the author has rated what is missing. */
+  const enoughAfterRating = selected.length + unrated.length >= MIN_POOL_SIZE;
+  const needsOwnPass = source === "preset" && unrated.length > 0 && enoughAfterRating;
   const activeCategory = source === "list" ? category : (preset?.category ?? "cinema");
 
   function toggleExcluded(id: string) {
@@ -194,14 +215,70 @@ export function CreateBattleModal({
     });
   }
 
-  async function handleCreate() {
+  /** Turns a preset row into the shape `createBattle` stores. */
+  function toCandidate(row: {
+    id: string;
+    title: string;
+    posterUrl?: string;
+    category: BattleCategory;
+    order: number;
+    tier: Tier;
+  }): PoolCandidate {
+    return {
+      id: row.id,
+      title: row.title,
+      category: row.category,
+      tier: row.tier,
+      order: row.order,
+      ...(row.posterUrl ? { posterUrl: row.posterUrl } : {}),
+    };
+  }
+
+  function handleSubmit() {
+    if (needsOwnPass) {
+      setError(null);
+      setStep("rating");
+      return;
+    }
+    void createFrom(selected);
+  }
+
+  /**
+   * The author has finished their own pass. Their answers are merged with the
+   * tiers they already had and the battle is built from the union — recomputed
+   * here rather than read back from state, which has not re-rendered yet.
+   */
+  function handleOwnPassComplete(ratings: Record<string, string>) {
+    const merged = { ...presetRatings, ...(ratings as Record<string, Tier>) };
+    setPresetRatings(merged);
+    setStep("setup");
+
+    const finalSelection = presetRows
+      .filter((row) => !excluded.has(row.id))
+      .map((row) => ({ ...row, tier: merged[row.id] ?? row.tier }))
+      .filter((row): row is typeof row & { tier: Tier } => Boolean(row.tier))
+      .map(toCandidate);
+
+    if (finalSelection.length < MIN_POOL_SIZE) {
+      // Skipping is allowed during the pass, so it can end below the floor.
+      // What was rated is kept — the author only has to fill the gap.
+      setError(
+        `Оценено ${finalSelection.length} из ${MIN_POOL_SIZE} нужных. Оцените ещё немного — пропущенные позиции в батл не попадут.`
+      );
+      return;
+    }
+
+    void createFrom(finalSelection);
+  }
+
+  async function createFrom(finalSelection: PoolCandidate[]) {
     setCreating(true);
     setError(null);
 
     const id = await createBattle(
       activeCategory,
-      toBattleItems(selected),
-      toCreatorRatings(selected)
+      toBattleItems(finalSelection),
+      toCreatorRatings(finalSelection)
     );
 
     setCreating(false);
@@ -214,7 +291,7 @@ export function CreateBattleModal({
     trackEvent("battle_created", {
       battle_id: id,
       category: activeCategory,
-      items_count: selected.length,
+      items_count: finalSelection.length,
       source,
       ...(source === "preset" ? { preset: presetSlug } : {}),
     });
@@ -265,12 +342,18 @@ export function CreateBattleModal({
           <div className="min-w-0">
             <h2 className="flex items-center gap-2 text-base font-semibold sm:text-lg">
               <Swords className="h-4 w-4 shrink-0 text-accent" aria-hidden />
-              {battleId ? "Ссылка готова!" : "Батл вкусов"}
+              {step === "rating"
+                ? "Сначала оцените сами"
+                : battleId
+                  ? "Ссылка готова!"
+                  : "Батл вкусов"}
             </h2>
             <p className="mt-1 text-sm text-muted">
-              {battleId
-                ? "Отправьте её другу — он оценит тот же набор, и вы увидите процент совпадения."
-                : "Друг оценит ваш набор вслепую, а мы посчитаем, насколько сошлись вкусы."}
+              {step === "rating"
+                ? `${unrated.length} поз. вслепую — потом сразу получите ссылку.`
+                : battleId
+                  ? "Отправьте её другу — он оценит тот же набор, и вы увидите процент совпадения."
+                  : "Друг оценит ваш набор вслепую, а мы посчитаем, насколько сошлись вкусы."}
             </p>
           </div>
           <button
@@ -283,7 +366,32 @@ export function CreateBattleModal({
           </button>
         </div>
 
-        {battleId ? (
+        {step === "rating" ? (
+          <div className="mt-2">
+            <p className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-xs text-muted">
+              Оцените позиции, которых нет в вашем списке. Друг пройдёт тот же набор, и мы сравним
+              ответы — поэтому оценивайте так же честно, как оценивали бы у себя на доске.
+            </p>
+            {/* The same component the friend will play, so the author's answers
+                are produced exactly the way the answers they are compared against
+                will be — one card at a time, nothing else on screen. */}
+            <BattleVoting
+              items={unrated.map((row) => ({
+                id: row.id,
+                title: row.title,
+                category: row.category,
+                ...(row.posterUrl ? { posterUrl: row.posterUrl } : {}),
+              }))}
+              onComplete={handleOwnPassComplete}
+              submitting={creating}
+            />
+            <div className="mt-2 flex justify-start">
+              <Button variant="ghost" size="sm" onClick={() => setStep("setup")} disabled={creating}>
+                Вернуться к набору
+              </Button>
+            </div>
+          </div>
+        ) : battleId ? (
           <div className="mt-5">
             <p className="truncate rounded-lg border border-border bg-surface-raised px-3 py-2.5 text-sm">
               {link}
@@ -475,13 +583,21 @@ export function CreateBattleModal({
               selectedCount={selected.length}
             />
 
-            {!enough && (
+            {needsOwnPass ? (
               <p className="mt-3 flex items-start gap-1.5 text-xs text-muted">
-                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                {source === "preset"
-                  ? `Оцените минимум ${MIN_POOL_SIZE} позиций из подборки — иначе процент совпадения ничего не значит.`
-                  : `Нужно минимум ${MIN_POOL_SIZE} позиций — иначе процент совпадения ничего не значит.`}
+                <Swords className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
+                {unrated.length === presetRows.filter((r) => !excluded.has(r.id)).length
+                  ? `Вы ещё не оценивали эти позиции — сначала пройдёте набор сами, вслепую, потом получите ссылку для друга.`
+                  : `${unrated.length} поз. без вашей оценки. Пройдёте их сами перед тем, как отправлять ссылку.`}
               </p>
+            ) : (
+              !enough && (
+                <p className="mt-3 flex items-start gap-1.5 text-xs text-muted">
+                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                  Нужно минимум {MIN_POOL_SIZE} позиций — иначе процент совпадения ничего не
+                  значит.
+                </p>
+              )
             )}
 
             {error && (
@@ -495,9 +611,13 @@ export function CreateBattleModal({
               <Button variant="ghost" size="sm" onClick={onClose}>
                 Отмена
               </Button>
-              <Button size="sm" onClick={handleCreate} disabled={creating || !enough}>
+              <Button
+                size="sm"
+                onClick={handleSubmit}
+                disabled={creating || (!enough && !needsOwnPass)}
+              >
                 {creating && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-                Создать батл
+                {needsOwnPass ? "Оценить и создать" : "Создать батл"}
               </Button>
             </div>
           </>
