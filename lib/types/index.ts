@@ -61,6 +61,12 @@ export interface RankedTitle {
    * which is the common case, so nothing downstream may assume it is there.
    */
   criteriaScores?: CriterionScore[];
+  /**
+   * Where this can be watched, keyed by service id (see AFFILIATE_PROVIDERS).
+   * Optional and usually absent: nothing in the app populates it yet, so every
+   * consumer must treat an empty result as the normal case, not an error.
+   */
+  affiliateLinks?: Record<string, string>;
   addedAt: number;
   updatedAt: number;
 }

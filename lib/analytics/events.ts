@@ -152,3 +152,25 @@ export function trackDonateClicked(recipientId: string, tierListId?: string): vo
     ...(tierListId ? { tier_list_id: tierListId } : {}),
   });
 }
+
+export interface AffiliateClick {
+  titleId: string;
+  titleName: string;
+  provider: string;
+  url: string;
+}
+
+/**
+ * A visitor leaving for a service that pays for the traffic.
+ *
+ * The destination is recorded because which link earns is the whole question
+ * here; there is nothing personal in it, only where the title can be watched.
+ */
+export function trackAffiliateClicked({ titleId, titleName, provider, url }: AffiliateClick): void {
+  trackEvent("affiliate_link_clicked", {
+    title_id: titleId,
+    title_name: titleName,
+    provider,
+    url,
+  });
+}

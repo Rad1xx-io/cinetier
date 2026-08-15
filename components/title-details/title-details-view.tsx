@@ -8,6 +8,7 @@ import { Poster } from "@/components/movie-card/poster";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CriteriaSection } from "@/components/criteria/criteria-section";
+import { AffiliateLinks } from "@/components/media/affiliate-links";
 import type { TierOrUnrated, TitleDetails } from "@/lib/types";
 import { TIER_ORDER } from "@/lib/types";
 import { backdropUrl } from "@/lib/utils/tmdb-image";
@@ -17,7 +18,14 @@ import { pluralizeRu } from "@/lib/utils/pluralize-ru";
 import { cn } from "@/lib/utils/cn";
 import { trackItemAdded, trackItemRanked } from "@/lib/analytics/events";
 
-export function TitleDetailsView({ details }: { details: TitleDetails }) {
+export function TitleDetailsView({
+  details,
+  watchLinks,
+}: {
+  details: TitleDetails;
+  /** Availability from TMDB, resolved on the server. */
+  watchLinks?: Record<string, string>;
+}) {
   const { titles, add, remove, setTier, hydrated } = useRankedTitles();
 
   const ranked = titles.find(
@@ -167,6 +175,15 @@ export function TitleDetailsView({ details }: { details: TitleDetails }) {
                 mediaType={details.mediaType}
                 isRanked={Boolean(ranked)}
                 criteriaScores={ranked?.criteriaScores}
+              />
+
+              {/* Stored links win over the ones derived from TMDB: a real
+                  partner deep link is a better destination than a search, and
+                  is the only kind that can carry a commission. */}
+              <AffiliateLinks
+                titleId={`${details.mediaType}-${details.tmdbId}`}
+                titleName={details.title}
+                links={{ ...watchLinks, ...ranked?.affiliateLinks }}
               />
             </div>
           </div>

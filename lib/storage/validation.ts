@@ -20,6 +20,18 @@ function isCriteriaScores(value: unknown): boolean {
   );
 }
 
+/**
+ * Shape only — a record of strings. Whether each value is a usable, correctly
+ * branded link is decided at the render site, which is the one place that knows
+ * the answer matters; an import that drops a whole title over one bad URL would
+ * lose more than it protects.
+ */
+function isAffiliateLinks(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.values(value as Record<string, unknown>).every((v) => typeof v === "string");
+}
+
 export function isRankedTitle(value: unknown): value is RankedTitle {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
@@ -36,6 +48,7 @@ export function isRankedTitle(value: unknown): value is RankedTitle {
     typeof v.order === "number" &&
     (v.voteAverage === undefined || typeof v.voteAverage === "number") &&
     isCriteriaScores(v.criteriaScores) &&
+    isAffiliateLinks(v.affiliateLinks) &&
     typeof v.addedAt === "number" &&
     typeof v.updatedAt === "number"
   );
