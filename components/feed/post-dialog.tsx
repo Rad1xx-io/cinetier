@@ -197,6 +197,7 @@ export function PostDialog({
               authorName={post.displayName || `@${post.username}`}
               donationUrl={post.donationUrl}
               tierListId={post.id}
+              variant="compact"
               className="ml-auto"
             />
 

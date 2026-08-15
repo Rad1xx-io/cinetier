@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Eye, GitFork, Heart, MessageCircle } from "lucide-react";
 import { ContentTypeBadge } from "@/components/ui/content-type-badge";
 import { TierBoard } from "@/components/feed/tier-board";
+import { DonateButton } from "@/components/profile/donate-button";
 import { avatarInitials, buildMiniBoard } from "@/lib/feed/post-preview";
 import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
 import type { FeedPost } from "@/lib/supabase/feed";
@@ -107,10 +108,23 @@ export function PostCard({ post, titles, liked, onOpen, onToggleLike }: PostCard
           {post.viewsCount}
         </span>
 
+        {/* Renders nothing when the author set no link, so the row simply
+            closes up — flex gaps only fall between children that exist. */}
+        <DonateButton
+          authorId={post.userId}
+          authorName={post.displayName || `@${post.username}`}
+          donationUrl={post.donationUrl}
+          tierListId={post.id}
+          className="ml-auto"
+        />
+
         {post.isPublic && post.allowFork && (
           <Link
             href={`/u/${post.username}`}
-            className="ml-auto flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:text-accent"
+            className={cn(
+              "flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:text-accent",
+              !post.donationUrl && "ml-auto"
+            )}
             title="Открыть список автора и форкнуть"
           >
             <GitFork className="h-3.5 w-3.5" aria-hidden />

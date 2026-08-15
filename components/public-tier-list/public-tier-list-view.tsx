@@ -113,14 +113,7 @@ export function PublicTierListView({ username }: { username: string }) {
             {category !== "all" && ` · показано ${shown}`}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <DonateButton
-            authorId={profile.id}
-            authorName={displayName}
-            donationUrl={profile.donationUrl}
-          />
-          <ForkButton profile={profile} sourceTitles={titles} sourceChannels={channels} />
-        </div>
+        <ForkButton profile={profile} sourceTitles={titles} sourceChannels={channels} />
       </header>
 
       {availableFilters.length > 2 && (
@@ -159,7 +152,18 @@ export function PublicTierListView({ username }: { username: string }) {
         ))}
       </div>
 
-      <div className="mt-10 flex flex-col items-center gap-3 rounded-2xl border border-border bg-surface px-6 py-8 text-center">
+      {/* Under the board rather than beside the title: asking before someone
+          has seen the work is asking too early, and this is the point where
+          they have just finished reading it. */}
+      <DonateButton
+        authorId={profile.id}
+        authorName={displayName}
+        donationUrl={profile.donationUrl}
+        variant="card"
+        className="mt-10"
+      />
+
+      <div className="mt-6 flex flex-col items-center gap-3 rounded-2xl border border-border bg-surface px-6 py-8 text-center">
         <ListChecks className="h-8 w-8 text-accent" aria-hidden />
         <p className="text-sm text-muted">Соберите свой тир-лист фильмов, аниме, игр и каналов.</p>
         <Button asChild size="sm">
