@@ -40,7 +40,7 @@ beforeEach(() => {
     configurable: true,
   });
   Object.defineProperty(window, "location", {
-    value: { origin: "https://cinetier.app" },
+    value: { origin: "https://tierlistonline.app" },
     configurable: true,
   });
 });
@@ -169,7 +169,7 @@ describe("BattleResults — sharing", () => {
     fireEvent.click(screen.getByRole("button", { name: /Поделиться результатом/ }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("https://cinetier.app/battle/battle-1");
+      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.app/battle/battle-1");
     });
     expect(await screen.findByText("Ссылка скопирована")).toBeDefined();
   });
@@ -194,7 +194,7 @@ describe("BattleResults — sharing", () => {
     fireEvent.click(screen.getByRole("button", { name: /Поделиться результатом/ }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("https://cinetier.app/battle/battle-1");
+      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.app/battle/battle-1");
     });
   });
 

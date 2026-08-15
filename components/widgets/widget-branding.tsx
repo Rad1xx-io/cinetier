@@ -34,7 +34,7 @@ export function WidgetBranding({ listId, theme, className }: WidgetBrandingProps
       )}
     >
       <Clapperboard className="h-2.5 w-2.5 shrink-0" aria-hidden />
-      Powered by CineTier
+      Powered by TierListOnline
     </Link>
   );
 }

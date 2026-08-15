@@ -16,7 +16,7 @@ function imageUrl(imageId: string | undefined, size: string): string | null {
   return `https://images.igdb.com/igdb/image/upload/${size}/${imageId}.jpg`;
 }
 
-/** IGDB scores are 0-100; the rest of CineTier ranks on 0-10. */
+/** IGDB scores are 0-100; the rest of TierListOnline ranks on 0-10. */
 function toTenPointScale(value: number | undefined): number | null {
   if (value === undefined || value === null) return null;
   return Math.round(value) / 10;

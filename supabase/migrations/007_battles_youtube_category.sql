@@ -1,4 +1,4 @@
--- CineTier: allow YouTube channels as a Taste Battle category.
+-- TierListOnline: allow YouTube channels as a Taste Battle category.
 -- Run once in the Supabase SQL Editor (Dashboard -> SQL Editor -> New query).
 --
 -- Migration 006 pinned `battles.category` to the three catalogs that map onto a
@@ -11,7 +11,7 @@
 do $$
 begin
   if to_regclass('public.battles') is null then
-    raise exception 'CineTier: run migration 006 first — public.battles is missing.';
+    raise exception 'TierListOnline: run migration 006 first — public.battles is missing.';
   end if;
 end $$;
 

@@ -7,14 +7,14 @@ import { parseWidgetParams } from "@/lib/widgets/params";
  * result pointing at a chromeless overlay helps nobody.
  */
 export const metadata: Metadata = {
-  title: "Виджет тир-листа — CineTier",
+  title: "Виджет тир-листа — TierListOnline",
   robots: { index: false, follow: false },
 };
 
 /**
  * The OBS browser-source page.
  *
- * `[id]` is a public handle: a board in CineTier belongs to a user and has no
+ * `[id]` is a public handle: a board in TierListOnline belongs to a user and has no
  * id of its own, so /widgets/tier-list/someone mirrors /u/someone.
  */
 export default async function TierListWidgetPage(props: PageProps<"/widgets/tier-list/[id]">) {

@@ -63,7 +63,7 @@ describe("AffiliateLinks", () => {
 
   it("discloses that the links earn money", () => {
     render(<AffiliateLinks {...props} links={{ ivi: "https://ivi.ru/watch/1" }} />);
-    expect(screen.getByText(/приносить CineTier комиссию/)).toBeTruthy();
+    expect(screen.getByText(/приносить TierListOnline комиссию/)).toBeTruthy();
   });
 
   it("reports the click with the title and the destination", () => {

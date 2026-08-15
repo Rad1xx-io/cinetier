@@ -2,7 +2,7 @@ import { ImportExportPanel } from "@/components/settings/import-export-panel";
 import { AccountPanel } from "@/components/auth/account-panel";
 
 export const metadata = {
-  title: "Настройки — CineTier",
+  title: "Настройки — TierListOnline",
 };
 
 export default function SettingsPage() {
@@ -10,7 +10,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-8 px-4 py-8 md:px-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Настройки</h1>
-        <p className="mt-1 text-sm text-muted">Управление вашими локальными данными CineTier.</p>
+        <p className="mt-1 text-sm text-muted">Управление вашими локальными данными TierListOnline.</p>
       </div>
 
       <AccountPanel />

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { BattleView } from "@/components/battle/battle-view";
 
 export const metadata: Metadata = {
-  title: "Батл вкусов — CineTier",
+  title: "Батл вкусов — TierListOnline",
   description: "Оцените тот же набор, что и автор, и узнайте, насколько совпали ваши вкусы.",
 };
 

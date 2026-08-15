@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CineTier — мои рейтинги фильмов и сериалов",
+  title: "TierListOnline — мои рейтинги фильмов и сериалов",
   description: "Личный тир-лист для фильмов и сериалов.",
 };
 

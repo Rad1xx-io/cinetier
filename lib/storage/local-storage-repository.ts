@@ -12,7 +12,7 @@ export const RANKINGS_CHANGED_EVENT = "cinetier:rankings-changed";
 export function isStorageAvailable(): boolean {
   if (typeof window === "undefined") return false;
   try {
-    const testKey = "__cinetier_test__";
+    const testKey = "__tierlistonline_test__";
     window.localStorage.setItem(testKey, "1");
     window.localStorage.removeItem(testKey);
     return true;

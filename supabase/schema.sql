@@ -1,4 +1,4 @@
--- CineTier cloud sync schema.
+-- TierListOnline cloud sync schema.
 -- Run this once in the Supabase project's SQL Editor (Dashboard -> SQL Editor -> New query).
 -- Mirrors lib/types/index.ts RankedTitle. One row per (user, tmdb title).
 

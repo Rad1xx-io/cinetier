@@ -1,4 +1,4 @@
--- CineTier: community feed — posts about a tier list, with likes and comments.
+-- TierListOnline: community feed — posts about a tier list, with likes and comments.
 -- Run once in the Supabase SQL Editor (Dashboard -> SQL Editor -> New query).
 --
 -- READ THIS BEFORE RUNNING. A post is public by design: title, description and
@@ -12,7 +12,7 @@
 do $$
 begin
   if to_regclass('public.profiles') is null then
-    raise exception 'CineTier: run migration 004 first — public.profiles is missing.';
+    raise exception 'TierListOnline: run migration 004 first — public.profiles is missing.';
   end if;
 end $$;
 

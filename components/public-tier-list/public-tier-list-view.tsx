@@ -167,7 +167,7 @@ export function PublicTierListView({ username }: { username: string }) {
         <ListChecks className="h-8 w-8 text-accent" aria-hidden />
         <p className="text-sm text-muted">Соберите свой тир-лист фильмов, аниме, игр и каналов.</p>
         <Button asChild size="sm">
-          <Link href="/">Начать в CineTier</Link>
+          <Link href="/">Начать в TierListOnline</Link>
         </Button>
       </div>
     </div>

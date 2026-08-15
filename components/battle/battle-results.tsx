@@ -65,7 +65,7 @@ export function BattleResults({
     // which beats a clipboard copy the user then has to paste somewhere.
     if (canWebShare()) {
       try {
-        await navigator.share({ title: "CineTier — Батл вкусов", text, url });
+        await navigator.share({ title: "TierListOnline — Батл вкусов", text, url });
         return;
       } catch {
         // Dismissing the sheet rejects too, so fall through to copying rather

@@ -52,9 +52,9 @@ export async function generateMetadata(props: PageProps<"/title/[id]">): Promise
   const { id } = await props.params;
   const result = await loadDetails(id);
   if (result.kind === "ok") {
-    return { title: `${result.details.title} — CineTier` };
+    return { title: `${result.details.title} — TierListOnline` };
   }
-  return { title: "CineTier" };
+  return { title: "TierListOnline" };
 }
 
 export default async function TitleDetailsPage(props: PageProps<"/title/[id]">) {

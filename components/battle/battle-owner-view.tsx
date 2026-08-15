@@ -58,7 +58,7 @@ export function BattleOwnerView({ battle }: { battle: Battle }) {
     if (canWebShare()) {
       try {
         await navigator.share({
-          title: "CineTier — Батл вкусов",
+          title: "TierListOnline — Батл вкусов",
           text: "Оцените тот же набор, что и я, и посмотрим, насколько сойдёмся:",
           url: link,
         });
@@ -151,7 +151,7 @@ export function BattleOwnerView({ battle }: { battle: Battle }) {
                         playable without an account, so most rows have no name to
                         show and saying so beats inventing one. */}
                     <span className="block truncate text-sm font-medium">
-                      {entry.userId ? "Пользователь CineTier" : "Гость"}
+                      {entry.userId ? "Пользователь TierListOnline" : "Гость"}
                     </span>
                     <span className="block text-xs text-muted">
                       {entry.itemsRated} поз. · {formatDate(entry.createdAt)}

@@ -75,7 +75,7 @@ function idsByName(list: IGDBNamed[], wanted: string[]): number[] {
 }
 
 /**
- * CineTier's filter vocabulary came from Steam, which splits the catalog
+ * TierListOnline's filter vocabulary came from Steam, which splits the catalog
  * differently from IGDB — IGDB has no "Action" genre (it files those under
  * Shooter/Fighting/Platform) and no "Casual". Each of ours therefore maps to a
  * set of IGDB names rather than one.

@@ -54,10 +54,10 @@ export function AffiliateLinks({ titleId, titleName, links, className }: Affilia
         ))}
       </ul>
 
-      {/* Required by law in several places CineTier is read from, and the honest
+      {/* Required by law in several places TierListOnline is read from, and the honest
           thing to say regardless — the reader is entitled to know the link earns. */}
       <p className="mt-1.5 text-[11px] text-muted">
-        Переходы по этим ссылкам могут приносить CineTier комиссию. На цену для вас это не влияет.
+        Переходы по этим ссылкам могут приносить TierListOnline комиссию. На цену для вас это не влияет.
       </p>
     </section>
   );

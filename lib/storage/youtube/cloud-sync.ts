@@ -54,7 +54,7 @@ export async function pullCloudChannels(userId: string): Promise<RankedChannel[]
     .eq("user_id", userId);
 
   if (error || !data) {
-    console.error("CineTier: failed to pull cloud channel rankings", error);
+    console.error("TierListOnline: failed to pull cloud channel rankings", error);
     return [];
   }
 
@@ -71,7 +71,7 @@ export async function pushCloudChannels(userId: string, channels: RankedChannel[
       .from("ranked_channels")
       .upsert(rows, { onConflict: "user_id,channel_id" });
     if (error) {
-      console.error("CineTier: failed to push channel rankings to cloud", error);
+      console.error("TierListOnline: failed to push channel rankings to cloud", error);
       return;
     }
   }

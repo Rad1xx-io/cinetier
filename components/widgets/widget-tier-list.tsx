@@ -14,7 +14,7 @@ import type { WidgetParams } from "@/lib/widgets/params";
 import { cn } from "@/lib/utils/cn";
 
 interface WidgetTierListProps {
-  /** A public handle — the only id a board has in CineTier. */
+  /** A public handle — the only id a board has in TierListOnline. */
   listId: string;
   params: WidgetParams;
 }

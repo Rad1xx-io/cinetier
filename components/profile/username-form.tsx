@@ -88,7 +88,7 @@ export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
             autoComplete="off"
           />
           <span className="mt-1 block text-xs text-muted">
-            Появится кнопкой «Поддержать» на вашей публичной странице. CineTier не принимает
+            Появится кнопкой «Поддержать» на вашей публичной странице. TierListOnline не принимает
             платежи и ничего не удерживает — переход идёт напрямую на ваш сервис.
           </span>
         </label>

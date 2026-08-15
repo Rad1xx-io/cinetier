@@ -3,7 +3,7 @@ import { TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const metadata = {
-  title: "Не удалось войти — CineTier",
+  title: "Не удалось войти — TierListOnline",
 };
 
 const REASONS: Record<string, string> = {

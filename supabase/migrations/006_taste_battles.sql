@@ -1,4 +1,4 @@
--- CineTier: Taste Battles.
+-- TierListOnline: Taste Battles.
 -- Run once in the Supabase SQL Editor (Dashboard -> SQL Editor -> New query).
 --
 -- READ THIS BEFORE RUNNING. A battle is a public link by design: anyone holding

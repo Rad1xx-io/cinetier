@@ -1,10 +1,10 @@
--- CineTier: author support links, and a place to record donations later.
+-- TierListOnline: author support links, and a place to record donations later.
 -- Run once in the Supabase SQL Editor (Dashboard -> SQL Editor -> New query).
 --
 -- READ THIS BEFORE RUNNING. Two things here, at very different stages:
 --
 --   * `profiles.donation_url` is live. It is a link the author enters and
---     visitors click — CineTier never touches money, it forwards to Boosty,
+--     visitors click — TierListOnline never touches money, it forwards to Boosty,
 --     CloudTips, Patreon or wherever. It is public, like the rest of a profile.
 --
 --   * `donations` is schema ahead of a feature. Nothing in the app writes to it,
@@ -18,7 +18,7 @@
 do $$
 begin
   if to_regclass('public.profiles') is null then
-    raise exception 'CineTier: run migration 004 first — public.profiles is missing.';
+    raise exception 'TierListOnline: run migration 004 first — public.profiles is missing.';
   end if;
 end $$;
 
@@ -42,7 +42,7 @@ create table if not exists public.donations (
   recipient_id uuid not null references auth.users (id) on delete cascade,
   /*
    * The spec this came from referenced `tier_lists(id)`, which does not exist in
-   * CineTier — a board here is a set of `ranked_titles` rows belonging to a
+   * TierListOnline — a board here is a set of `ranked_titles` rows belonging to a
    * user, not an entity with an id of its own. Kept as a plain uuid so a future
    * per-list identity (a feed post, a battle) can fill it without a migration,
    * with no foreign key to a table that is not there.

@@ -72,7 +72,7 @@ export async function pushCriteria(
       .upsert(rows, { onConflict: "rating_id,criterion_id" });
 
     if (error) {
-      console.error("CineTier: failed to push criteria", error);
+      console.error("TierListOnline: failed to push criteria", error);
       return;
     }
   }
@@ -83,7 +83,7 @@ export async function pushCriteria(
     ? await removal.not("criterion_id", "in", `(${keptIds.map((id) => `"${id}"`).join(",")})`)
     : await removal;
 
-  if (deleteError) console.error("CineTier: failed to prune criteria", deleteError);
+  if (deleteError) console.error("TierListOnline: failed to prune criteria", deleteError);
 }
 
 /** Reads one title's breakdown back down. Empty array when there is none. */

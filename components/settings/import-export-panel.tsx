@@ -34,7 +34,7 @@ export function ImportExportPanel() {
     // (density-less) exports still import fine — see handleFileSelected.
     const bundle = { ...JSON.parse(exportRatings()), displayDensity: density };
     const date = new Date().toISOString().slice(0, 10);
-    downloadJson(`cinetier-export-${date}.json`, JSON.stringify(bundle, null, 2));
+    downloadJson(`tierlistonline-export-${date}.json`, JSON.stringify(bundle, null, 2));
     setNotice({ kind: "success", message: "Ваши рейтинги были экспортированы." });
   }
 
@@ -67,7 +67,7 @@ export function ImportExportPanel() {
     } catch {
       setNotice({
         kind: "error",
-        message: "Этот файл не похож на корректный экспорт CineTier. Ничего не изменено.",
+        message: "Этот файл не похож на корректный экспорт TierListOnline. Ничего не изменено.",
       });
     }
   }

@@ -1,4 +1,4 @@
--- CineTier: public profiles and shareable tier lists.
+-- TierListOnline: public profiles and shareable tier lists.
 -- Run once in the Supabase SQL Editor (Dashboard -> SQL Editor -> New query).
 --
 -- READ THIS BEFORE RUNNING. Sharing a tier list means the ranked rows behind it

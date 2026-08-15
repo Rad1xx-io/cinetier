@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   if (error) {
     // Previously this failure was swallowed and the user was redirected as if
     // nothing had happened — landing signed-out with no explanation anywhere.
-    console.error("CineTier: auth code exchange failed", error.message);
+    console.error("TierListOnline: auth code exchange failed", error.message);
     return NextResponse.redirect(
       new URL(`/auth/auth-code-error?reason=${encodeURIComponent(error.message)}`, request.url)
     );

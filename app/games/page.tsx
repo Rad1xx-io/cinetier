@@ -3,7 +3,7 @@ import { GamesDiscoverClient } from "@/components/games-search/games-discover-cl
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata = {
-  title: "Игры — CineTier",
+  title: "Игры — TierListOnline",
 };
 
 export default function GamesPage() {

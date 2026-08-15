@@ -88,7 +88,7 @@ beforeEach(() => {
   createBattle.mockResolvedValue("battle-xyz");
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   Object.defineProperty(window, "location", {
-    value: { origin: "https://cinetier.app" },
+    value: { origin: "https://tierlistonline.app" },
     configurable: true,
   });
   // jsdom implements <dialog> but not showModal in every version; a no-op keeps
@@ -273,7 +273,7 @@ describe("CreateBattleModal — creating", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
 
-    expect(await screen.findByText("https://cinetier.app/battle/battle-xyz")).toBeDefined();
+    expect(await screen.findByText("https://tierlistonline.app/battle/battle-xyz")).toBeDefined();
     expect(screen.getByText("Ссылка готова!")).toBeDefined();
     expect(trackEvent).toHaveBeenCalledWith("battle_created", {
       battle_id: "battle-xyz",
@@ -304,7 +304,7 @@ describe("CreateBattleModal — sharing the link", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Поделиться ссылкой/ }));
 
     await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith("https://cinetier.app/battle/battle-xyz")
+      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.app/battle/battle-xyz")
     );
     expect(await screen.findByText("Ссылка скопирована")).toBeDefined();
   });
@@ -332,7 +332,7 @@ describe("CreateBattleModal — sharing the link", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Поделиться ссылкой/ }));
 
     await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith("https://cinetier.app/battle/battle-xyz")
+      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.app/battle/battle-xyz")
     );
   });
 });
@@ -688,7 +688,7 @@ describe("CreateBattleModal — the author's own blind pass", () => {
 
     for (let i = 0; i < MIN_POOL_SIZE; i++) voteTier("A");
 
-    expect(await screen.findByText("https://cinetier.app/battle/battle-xyz")).toBeDefined();
+    expect(await screen.findByText("https://tierlistonline.app/battle/battle-xyz")).toBeDefined();
     expect(screen.getByText("Ссылка готова!")).toBeDefined();
   });
 

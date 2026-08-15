@@ -162,7 +162,7 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Поиск по CineTier"
+        aria-label="Поиск по TierListOnline"
         aria-haspopup="true"
         aria-expanded={open}
         className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-raised hover:text-foreground"
@@ -180,7 +180,7 @@ export function GlobalSearch() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Поиск по фильмам, аниме, YouTube…"
               className="pl-9 pr-8"
-              aria-label="Поиск по CineTier"
+              aria-label="Поиск по TierListOnline"
             />
             {query && (
               <button

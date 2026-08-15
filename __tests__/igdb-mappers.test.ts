@@ -46,7 +46,7 @@ describe("mapGameToSummary", () => {
     expect(mapGameToSummary({ ...game, artworks: undefined }).headerImage).toContain("sc3ghi");
   });
 
-  it("rescales the critic aggregate from 0-100 to CineTier's 0-10", () => {
+  it("rescales the critic aggregate from 0-100 to TierListOnline's 0-10", () => {
     expect(mapGameToSummary(game).score).toBe(9.5);
   });
 

@@ -58,7 +58,7 @@ export async function pullCloudTitles(userId: string): Promise<RankedTitle[]> {
     .eq("user_id", userId);
 
   if (error || !data) {
-    console.error("CineTier: failed to pull cloud rankings", error);
+    console.error("TierListOnline: failed to pull cloud rankings", error);
     return [];
   }
 
@@ -80,7 +80,7 @@ export async function pushCloudTitles(userId: string, titles: RankedTitle[]): Pr
       .from("ranked_titles")
       .upsert(rows, { onConflict: "user_id,tmdb_id,media_type" });
     if (error) {
-      console.error("CineTier: failed to push rankings to cloud", error);
+      console.error("TierListOnline: failed to push rankings to cloud", error);
       return;
     }
   }

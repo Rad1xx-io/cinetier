@@ -81,7 +81,7 @@ describe("DonateButton — card", () => {
     expect(screen.getByText(/Поддержите Аня/)).toBeTruthy();
   });
 
-  it("says CineTier takes no cut", () => {
+  it("says TierListOnline takes no cut", () => {
     render(<DonateButton {...base} donationUrl="https://boosty.to/anya" variant="card" />);
     expect(screen.getByText(/не берёт комиссию/)).toBeTruthy();
   });

@@ -1,6 +1,6 @@
 import type { MediaType } from "@/lib/types";
 
-/** Every catalog CineTier ranks, including the one stored outside RankedTitle. */
+/** Every catalog TierListOnline ranks, including the one stored outside RankedTitle. */
 export type ContentType = MediaType | "youtube";
 
 export interface ContentTypeAccent {

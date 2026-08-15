@@ -82,19 +82,19 @@ describe("parseWidgetParams", () => {
 
 describe("buildWidgetUrl", () => {
   it("writes nothing but the path when everything is default", () => {
-    expect(buildWidgetUrl("https://cinetier.app", "owner", WIDGET_DEFAULTS)).toBe(
-      "https://cinetier.app/widgets/tier-list/owner"
+    expect(buildWidgetUrl("https://tierlistonline.app", "owner", WIDGET_DEFAULTS)).toBe(
+      "https://tierlistonline.app/widgets/tier-list/owner"
     );
   });
 
   it("writes only the options that were changed", () => {
-    const url = buildWidgetUrl("https://cinetier.app", "owner", {
+    const url = buildWidgetUrl("https://tierlistonline.app", "owner", {
       theme: "dark",
       compact: true,
       showTitle: true,
       limit: null,
     });
-    expect(url).toBe("https://cinetier.app/widgets/tier-list/owner?theme=dark&compact=true");
+    expect(url).toBe("https://tierlistonline.app/widgets/tier-list/owner?theme=dark&compact=true");
   });
 
   it("writes showTitle only when it is switched off", () => {
@@ -105,8 +105,8 @@ describe("buildWidgetUrl", () => {
   });
 
   it("survives a trailing slash on the origin", () => {
-    expect(buildWidgetUrl("https://cinetier.app/", "owner", {})).toBe(
-      "https://cinetier.app/widgets/tier-list/owner"
+    expect(buildWidgetUrl("https://tierlistonline.app/", "owner", {})).toBe(
+      "https://tierlistonline.app/widgets/tier-list/owner"
     );
   });
 

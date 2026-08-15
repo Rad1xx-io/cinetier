@@ -28,9 +28,9 @@ export async function generateMetadata(props: PageProps<"/anime/[id]">): Promise
   const { id } = await props.params;
   const result = await loadAnime(id);
   if (result.kind === "ok") {
-    return { title: `${result.details.title} — CineTier` };
+    return { title: `${result.details.title} — TierListOnline` };
   }
-  return { title: "CineTier" };
+  return { title: "TierListOnline" };
 }
 
 export default async function AnimeDetailsPage(props: PageProps<"/anime/[id]">) {

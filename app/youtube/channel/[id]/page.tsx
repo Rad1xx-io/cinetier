@@ -30,9 +30,9 @@ export async function generateMetadata(props: PageProps<"/youtube/channel/[id]">
   const { id } = await props.params;
   const result = await loadChannel(id);
   if (result.kind === "ok") {
-    return { title: `${result.details.title} — CineTier` };
+    return { title: `${result.details.title} — TierListOnline` };
   }
-  return { title: "CineTier" };
+  return { title: "TierListOnline" };
 }
 
 export default async function ChannelDetailsPage(props: PageProps<"/youtube/channel/[id]">) {

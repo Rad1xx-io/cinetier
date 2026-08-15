@@ -30,7 +30,7 @@ export default function DashboardPage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
         <p className="text-sm text-muted">
-          Локальное хранилище недоступно в этом браузере, поэтому CineTier не может сохранить
+          Локальное хранилище недоступно в этом браузере, поэтому TierListOnline не может сохранить
           здесь ваши рейтинги. Попробуйте другой браузер или отключите режим инкогнито.
         </p>
       </div>

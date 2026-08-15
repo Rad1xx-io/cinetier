@@ -1,4 +1,4 @@
--- CineTier: per-criterion breakdown for a rated title.
+-- TierListOnline: per-criterion breakdown for a rated title.
 -- Run once in the Supabase SQL Editor (Dashboard -> SQL Editor -> New query).
 --
 -- One row per criterion, keyed to the ranked_titles row it belongs to. Deleting
@@ -13,10 +13,10 @@
 do $$
 begin
   if to_regclass('public.ranked_titles') is null then
-    raise exception 'CineTier: run supabase/schema.sql first — public.ranked_titles is missing.';
+    raise exception 'TierListOnline: run supabase/schema.sql first — public.ranked_titles is missing.';
   end if;
   if to_regclass('public.profiles') is null then
-    raise exception 'CineTier: run migration 004 first — public.profiles is missing.';
+    raise exception 'TierListOnline: run migration 004 first — public.profiles is missing.';
   end if;
 end $$;
 

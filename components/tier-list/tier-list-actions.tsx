@@ -110,7 +110,7 @@ export function TierListActions({
       ]);
 
       const link = document.createElement("a");
-      link.download = `cinetier-${new Date().toISOString().slice(0, 10)}.png`;
+      link.download = `tierlistonline-${new Date().toISOString().slice(0, 10)}.png`;
       link.href = dataUrl;
       link.click();
       onNotify("Изображение сохранено");

@@ -1,4 +1,4 @@
--- CineTier: allow 'anime' as a media_type on ranked_titles.
+-- TierListOnline: allow 'anime' as a media_type on ranked_titles.
 -- Run this once in the Supabase project's SQL Editor (Dashboard -> SQL Editor -> New query).
 -- Existing rows (movie/tv) are unaffected — this only widens the allowed values.
 

@@ -1,4 +1,4 @@
--- CineTier: per-profile control over who may fork a published tier list.
+-- TierListOnline: per-profile control over who may fork a published tier list.
 -- Run once in the Supabase SQL Editor (Dashboard -> SQL Editor -> New query).
 --
 -- Separate from `is_public` on purpose: publishing decides who can *see* the
@@ -13,7 +13,7 @@
 do $$
 begin
   if to_regclass('public.profiles') is null then
-    raise exception 'CineTier: run migration 004 first — public.profiles is missing.';
+    raise exception 'TierListOnline: run migration 004 first — public.profiles is missing.';
   end if;
 end $$;
 

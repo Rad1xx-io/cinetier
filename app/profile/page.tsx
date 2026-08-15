@@ -73,7 +73,7 @@ export default function ProfilePage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
         <p className="text-sm text-muted">
-          Облачные аккаунты не настроены на этом развёртывании — CineTier работает в гостевом
+          Облачные аккаунты не настроены на этом развёртывании — TierListOnline работает в гостевом
           режиме, профиль недоступен.
         </p>
       </div>

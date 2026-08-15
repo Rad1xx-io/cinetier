@@ -306,7 +306,7 @@ export function CreateBattleModal({
     if (canWebShare()) {
       try {
         await navigator.share({
-          title: "CineTier — Батл вкусов",
+          title: "TierListOnline — Батл вкусов",
           text: "Оцените тот же набор, что и я, и посмотрим, насколько сойдёмся:",
           url: link,
         });

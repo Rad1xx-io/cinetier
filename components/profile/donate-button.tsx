@@ -23,7 +23,7 @@ interface DonateButtonProps {
 /**
  * Sends a visitor to wherever the author collects support.
  *
- * CineTier handles no money and sees no payment: this is a link out to Boosty,
+ * TierListOnline handles no money and sees no payment: this is a link out to Boosty,
  * CloudTips, Patreon or similar, so the only thing worth measuring here is the
  * click. Rendered as an anchor rather than a button with `window.open` — a real
  * link survives middle-click, cmd-click and a popup blocker, all of which a
@@ -66,7 +66,7 @@ export function DonateButton({
         <div>
           <h2 className="text-base font-semibold">Понравился список?</h2>
           <p className="mt-1 text-sm text-muted">
-            Поддержите {authorName} — CineTier не берёт комиссию и не участвует в переводе.
+            Поддержите {authorName} — TierListOnline не берёт комиссию и не участвует в переводе.
           </p>
         </div>
 
