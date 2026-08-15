@@ -7,6 +7,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { CloudSyncProvider } from "@/components/auth/cloud-sync-provider";
 import { ChromeGate } from "@/components/layout/chrome-gate";
 import { PageViewTracker } from "@/components/analytics/page-view-tracker";
+import { GOOGLE_SITE_VERIFICATION, SITE_URL } from "@/lib/seo/site";
 import { PostHogProvider } from "@/app/providers/PostHogProvider";
 import "./globals.css";
 
@@ -21,8 +22,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  // Resolves every relative URL the app hands to Next — canonicals, Open Graph
+  // images, the sitemap link. Without it those stay relative and are dropped by
+  // the crawlers that need them most.
+  metadataBase: new URL(SITE_URL),
   title: "TierListOnline — мои рейтинги фильмов и сериалов",
   description: "Личный тир-лист для фильмов и сериалов.",
+  // Emitted only once a token exists: a tag with an empty content attribute
+  // looks configured while verifying nothing.
+  ...(GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: GOOGLE_SITE_VERIFICATION } }
+    : {}),
 };
 
 export const viewport: Viewport = {
