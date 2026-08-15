@@ -20,6 +20,7 @@ const FULL_BOARD_CAP = 500;
 import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
 import { avatarInitials, buildTierRows } from "@/lib/feed/post-preview";
 import { TierBoard } from "@/components/feed/tier-board";
+import { DonateButton } from "@/components/profile/donate-button";
 import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
 import type { RankedTitle } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
@@ -191,8 +192,16 @@ export function PostDialog({
               {comments?.length ?? post.commentsCount}
             </span>
 
+            <DonateButton
+              authorId={post.userId}
+              authorName={post.displayName || `@${post.username}`}
+              donationUrl={post.donationUrl}
+              tierListId={post.id}
+              className="ml-auto"
+            />
+
             {post.isPublic && (
-              <Button asChild size="sm" variant="secondary" className="ml-auto">
+              <Button asChild size="sm" variant="secondary">
                 <Link href={`/u/${post.username}`}>
                   <GitFork className="h-3.5 w-3.5" aria-hidden />
                   {post.allowFork ? "Открыть и форкнуть" : "Открыть список"}

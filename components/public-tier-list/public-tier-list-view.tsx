@@ -18,6 +18,7 @@ import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
 import { criteriaAverage, type CriterionScore } from "@/lib/types/criteria";
 import { trackSharedContentViewed } from "@/lib/analytics/events";
 import { ForkButton } from "@/components/public-tier-list/fork-button";
+import { DonateButton } from "@/components/profile/donate-button";
 
 /** One criterion per line, for the badge's native tooltip. */
 function criteriaTooltip(scores: CriterionScore[] | undefined): string {
@@ -112,7 +113,14 @@ export function PublicTierListView({ username }: { username: string }) {
             {category !== "all" && ` · показано ${shown}`}
           </p>
         </div>
-        <ForkButton profile={profile} sourceTitles={titles} sourceChannels={channels} />
+        <div className="flex flex-wrap items-center gap-2">
+          <DonateButton
+            authorId={profile.id}
+            authorName={displayName}
+            donationUrl={profile.donationUrl}
+          />
+          <ForkButton profile={profile} sourceTitles={titles} sourceChannels={channels} />
+        </div>
       </header>
 
       {availableFilters.length > 2 && (

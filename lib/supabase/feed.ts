@@ -2,6 +2,7 @@
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getSessionSnapshot } from "@/lib/supabase/session-store";
+import { safeDonationUrl } from "@/lib/utils/donation-url";
 import type { MediaType, RankedTitle } from "@/lib/types";
 
 /** The categories a post can be filed under. `mixed` is for a board of everything. */
@@ -21,6 +22,8 @@ export interface FeedPost {
   /** Whether the author's board is visible and copyable — drives the fork button. */
   isPublic: boolean;
   allowFork: boolean;
+  /** The author's support link, already vetted. Null when they set none. */
+  donationUrl: string | null;
   createdAt: string;
 }
 
@@ -47,6 +50,7 @@ interface FeedRow {
   comments_count: number;
   is_public: boolean;
   allow_fork: boolean | null;
+  donation_url: string | null;
   created_at: string;
 }
 
@@ -71,6 +75,7 @@ function fromRow(row: FeedRow): FeedPost {
     commentsCount: Number(row.comments_count ?? 0),
     isPublic: row.is_public,
     allowFork: row.allow_fork ?? true,
+    donationUrl: safeDonationUrl(row.donation_url),
     createdAt: row.created_at,
   };
 }
@@ -90,7 +95,7 @@ export async function getFeed(options: { category?: PostCategory; limit?: number
   let query = supabase
     .from("post_feed")
     .select(
-      "id,user_id,username,display_name,title,description,category,views_count,likes_count,comments_count,is_public,allow_fork,created_at"
+      "id,user_id,username,display_name,title,description,category,views_count,likes_count,comments_count,is_public,allow_fork,donation_url,created_at"
     )
     .order("created_at", { ascending: false })
     .limit(options.limit ?? FEED_PAGE_SIZE);
@@ -109,7 +114,7 @@ export async function getPost(postId: string): Promise<FeedPost | null> {
   const { data, error } = await supabase
     .from("post_feed")
     .select(
-      "id,user_id,username,display_name,title,description,category,views_count,likes_count,comments_count,is_public,allow_fork,created_at"
+      "id,user_id,username,display_name,title,description,category,views_count,likes_count,comments_count,is_public,allow_fork,donation_url,created_at"
     )
     .eq("id", postId)
     .maybeSingle();

@@ -139,3 +139,16 @@ export function trackUserRegistered(signupMethod: SignupMethod, entryPoint: stri
     entry_point: entryPoint,
   });
 }
+
+/**
+ * A visitor heading off to support an author.
+ *
+ * The click is all this app can honestly observe: the payment happens on
+ * someone else's site, and nothing reports back. Do not read these as donations.
+ */
+export function trackDonateClicked(recipientId: string, tierListId?: string): void {
+  trackEvent("donate_button_clicked", {
+    recipient_id: recipientId,
+    ...(tierListId ? { tier_list_id: tierListId } : {}),
+  });
+}

@@ -24,6 +24,7 @@ type Status = { kind: "idle" } | { kind: "saving" } | { kind: "error"; message: 
 export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
   const [username, setUsername] = useState(profile?.username ?? "");
   const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
+  const [donationUrl, setDonationUrl] = useState(profile?.donationUrl ?? "");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   const localError = username ? validateUsername(username) : null;
@@ -31,7 +32,7 @@ export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus({ kind: "saving" });
-    const result = await saveProfile({ userId, username, displayName });
+    const result = await saveProfile({ userId, username, displayName, donationUrl });
     if (result.ok) {
       setStatus({ kind: "saved" });
       onSaved(result.profile);
@@ -72,6 +73,24 @@ export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
             aria-label="Отображаемое имя"
             autoComplete="off"
           />
+        </label>
+
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-xs font-medium text-muted">
+            Ссылка для поддержки <span className="font-normal">— необязательно</span>
+          </span>
+          <Input
+            value={donationUrl}
+            onChange={(e) => setDonationUrl(e.target.value)}
+            placeholder="https://boosty.to/…, CloudTips, Patreon"
+            aria-label="Ссылка для поддержки"
+            inputMode="url"
+            autoComplete="off"
+          />
+          <span className="mt-1 block text-xs text-muted">
+            Появится кнопкой «Поддержать» на вашей публичной странице. CineTier не принимает
+            платежи и ничего не удерживает — переход идёт напрямую на ваш сервис.
+          </span>
         </label>
       </div>
 

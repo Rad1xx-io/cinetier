@@ -1,6 +1,7 @@
 "use client";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { safeDonationUrl } from "@/lib/utils/donation-url";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
 import type { CriterionScore } from "@/lib/types/criteria";
@@ -12,6 +13,8 @@ export interface Profile {
   isPublic: boolean;
   /** Whether visitors may copy this list onto their own board. */
   allowFork: boolean;
+  /** Where "support the author" leads. Null when the author set nothing. */
+  donationUrl: string | null;
 }
 
 interface ProfileRow {
@@ -20,6 +23,7 @@ interface ProfileRow {
   display_name: string | null;
   is_public: boolean;
   allow_fork?: boolean | null;
+  donation_url?: string | null;
 }
 
 function fromRow(row: ProfileRow): Profile {
@@ -31,6 +35,9 @@ function fromRow(row: ProfileRow): Profile {
     // Defaulted rather than required: a profile row written before migration 008
     // has no column to read, and forking was allowed for everyone until then.
     allowFork: row.allow_fork ?? true,
+    // Re-validated on the way out, not just on the way in: a row written before
+    // the CHECK constraint existed could still hold something unopenable.
+    donationUrl: safeDonationUrl(row.donation_url),
   };
 }
 
@@ -53,7 +60,7 @@ export async function getMyProfile(userId: string): Promise<Profile | null> {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,username,display_name,is_public,allow_fork")
+    .select("id,username,display_name,is_public,allow_fork,donation_url")
     .eq("id", userId)
     .maybeSingle();
 
@@ -69,6 +76,7 @@ export async function saveProfile(input: {
   userId: string;
   username: string;
   displayName: string;
+  donationUrl?: string;
 }): Promise<SaveProfileResult> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return { ok: false, error: "Облачные аккаунты не настроены." };
@@ -77,6 +85,14 @@ export async function saveProfile(input: {
   const invalid = validateUsername(username);
   if (invalid) return { ok: false, error: invalid };
 
+  // An unusable link is rejected rather than silently dropped — saving without
+  // a word would leave the author believing their support button is up.
+  const rawDonation = input.donationUrl?.trim() ?? "";
+  const donationUrl = rawDonation ? safeDonationUrl(rawDonation) : null;
+  if (rawDonation && !donationUrl) {
+    return { ok: false, error: "Ссылка для поддержки должна начинаться с https:// и вести на сайт." };
+  }
+
   const { data, error } = await supabase
     .from("profiles")
     .upsert(
@@ -84,11 +100,12 @@ export async function saveProfile(input: {
         id: input.userId,
         username,
         display_name: input.displayName.trim() || null,
+        donation_url: donationUrl,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" }
     )
-    .select("id,username,display_name,is_public,allow_fork")
+    .select("id,username,display_name,is_public,allow_fork,donation_url")
     .single();
 
   if (error) {
@@ -187,7 +204,7 @@ export async function getPublicTierList(username: string): Promise<PublicTierLis
 
   const { data: profileRow } = await supabase
     .from("profiles")
-    .select("id,username,display_name,is_public,allow_fork")
+    .select("id,username,display_name,is_public,allow_fork,donation_url")
     .eq("username", username.toLowerCase())
     .maybeSingle();
 
