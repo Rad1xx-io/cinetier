@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const status = error instanceof TMDBError ? error.status : 500;
     return NextResponse.json(
-      { error: "Не удалось загрузить популярные тайтлы. Попробуйте ещё раз." },
+      { error: "Could not load popular titles. Please try again." },
       { status }
     );
   }

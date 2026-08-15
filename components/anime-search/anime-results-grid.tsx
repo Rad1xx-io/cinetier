@@ -23,7 +23,7 @@ export function AnimeResultsGrid({ results, rankedByKey, onAdd, loading }: Anime
   }
 
   if (results.length === 0) {
-    return <p className="py-10 text-center text-sm text-muted">По этим фильтрам аниме не найдено.</p>;
+    return <p className="py-10 text-center text-sm text-muted">No anime match these filters.</p>;
   }
 
   return (

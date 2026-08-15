@@ -67,7 +67,7 @@ export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
         <Link
           href="/anime"
           className="absolute left-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-background/70 backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:left-6"
-          aria-label="Назад к поиску"
+          aria-label="Back to search"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
         </Link>
@@ -89,7 +89,7 @@ export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
               {details.year && <span>{details.year}</span>}
               {seasonLabel(details.season) && <span>{seasonLabel(details.season)}</span>}
               <span>{formatEpisodes(details.episodes)}</span>
-              {details.duration && <span>{details.duration} мин/эп</span>}
+              {details.duration && <span>{details.duration} min/ep</span>}
               {statusLabel(details.status) && <Badge variant="outline">{statusLabel(details.status)}</Badge>}
               <span className="flex items-center gap-1">
                 <Star className="h-3.5 w-3.5 fill-accent text-accent" aria-hidden />
@@ -112,31 +112,31 @@ export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
             )}
 
             <p className="mt-4 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-foreground/90">
-              {details.description || "Описание отсутствует."}
+              {details.description || "No description available."}
             </p>
 
             {details.source && (
               <p className="mt-3 text-xs text-muted">
-                Первоисточник: <span className="text-foreground">{details.source}</span>
+                Source material: <span className="text-foreground">{details.source}</span>
               </p>
             )}
 
             <div className="mt-6 space-y-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                Статус:{" "}
+                Status:{" "}
                 <span className="text-foreground">
-                  {!hydrated ? "…" : !ranked ? "Не добавлено" : `Ваш тир — ${tierLabel(ranked.tier)}`}
+                  {!hydrated ? "…" : !ranked ? "Not added" : `Your tier — ${tierLabel(ranked.tier)}`}
                 </span>
               </p>
 
               {!ranked ? (
                 <Button onClick={handleAdd} disabled={!hydrated}>
                   <Plus className="h-4 w-4" aria-hidden />
-                  Добавить в список
+                  Add to my list
                 </Button>
               ) : (
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Изменить тир">
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Change tier">
                     {TIER_ORDER.map((tier) => {
                       const active = ranked.tier === tier;
                       const isUnrated = tier === "Unrated";
@@ -159,7 +159,7 @@ export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
                   </div>
                   <Button variant="destructive" size="sm" onClick={() => remove(details.anilistId, "anime")}>
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                    Удалить
+                    Remove
                   </Button>
                 </div>
               )}
@@ -174,7 +174,7 @@ export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
 
             {details.relations.length > 0 && (
               <div className="mt-8">
-                <h2 className="mb-3 text-sm font-semibold">Связанные тайтлы</h2>
+                <h2 className="mb-3 text-sm font-semibold">Related titles</h2>
                 <div className="scrollbar-thin flex gap-3 overflow-x-auto pb-2">
                   {details.relations.slice(0, 12).map((rel) => (
                     <Link

@@ -13,7 +13,7 @@ export function ChannelResultsGrid({ channels, rankedByKey, onAdd, loading }: Ch
   if (loading) {
     return (
       <div className="space-y-3">
-        <p className="text-sm text-muted">Загрузка каналов…</p>
+        <p className="text-sm text-muted">Loading channels…</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 12 }).map((_, i) => (
             <Skeleton key={i} className="h-40 rounded-2xl" />
@@ -24,7 +24,7 @@ export function ChannelResultsGrid({ channels, rankedByKey, onAdd, loading }: Ch
   }
 
   if (channels.length === 0) {
-    return <p className="py-10 text-center text-sm text-muted">По этим фильтрам каналы не найдены.</p>;
+    return <p className="py-10 text-center text-sm text-muted">No channels match these filters.</p>;
   }
 
   return (

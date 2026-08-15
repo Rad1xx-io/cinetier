@@ -15,14 +15,14 @@ export interface NavItem {
   icon: LucideIcon;
 }
 
-// No "Главная" entry anywhere: the logo is the way home on desktop, and the
+// No "Home" entry anywhere: the logo is the way home on desktop, and the
 // mobile tab bar leads with the tier list instead.
-const MOVIES: NavItem = { href: "/discover", label: "Фильмы", icon: Clapperboard };
-const ANIME: NavItem = { href: "/anime", label: "Аниме", icon: Drama };
+const MOVIES: NavItem = { href: "/discover", label: "Films", icon: Clapperboard };
+const ANIME: NavItem = { href: "/anime", label: "Anime", icon: Drama };
 const YOUTUBE: NavItem = { href: "/youtube", label: "YouTube", icon: SquarePlay };
-const GAMES: NavItem = { href: "/games", label: "Игры", icon: Gamepad2 };
-const FEED: NavItem = { href: "/feed", label: "Лента", icon: MessagesSquare };
-const SETTINGS: NavItem = { href: "/settings", label: "Настройки", icon: Settings };
+const GAMES: NavItem = { href: "/games", label: "Games", icon: Gamepad2 };
+const FEED: NavItem = { href: "/feed", label: "Feed", icon: MessagesSquare };
+const SETTINGS: NavItem = { href: "/settings", label: "Settings", icon: Settings };
 
 /**
  * The tab the whole app exists for. It gets the centre slot of the desktop
@@ -31,7 +31,7 @@ const SETTINGS: NavItem = { href: "/settings", label: "Настройки", icon
  */
 export const TIER_LIST_NAV_ITEM: NavItem = {
   href: "/tier-list",
-  label: "Тир-лист",
+  label: "Tier list",
   icon: ListChecks,
 };
 

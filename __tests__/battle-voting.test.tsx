@@ -15,7 +15,7 @@ function rate(tier: string) {
 }
 
 function skip() {
-  fireEvent.click(screen.getByRole("button", { name: /Пропустить/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Skip/ }));
 }
 
 afterEach(cleanup);
@@ -25,7 +25,7 @@ describe("BattleVoting — navigation", () => {
     render(<BattleVoting items={items} onComplete={vi.fn()} />);
 
     expect(screen.getByRole("heading", { name: "Первый" })).toBeDefined();
-    expect(screen.getByText("Позиция 1 из 3")).toBeDefined();
+    expect(screen.getByText("Entry 1 of 3")).toBeDefined();
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("1");
   });
 
@@ -35,7 +35,7 @@ describe("BattleVoting — navigation", () => {
     rate("S");
 
     expect(screen.getByRole("heading", { name: "Второй" })).toBeDefined();
-    expect(screen.getByText("Позиция 2 из 3")).toBeDefined();
+    expect(screen.getByText("Entry 2 of 3")).toBeDefined();
   });
 
   it("advances on a skip without recording anything", () => {
@@ -45,24 +45,24 @@ describe("BattleVoting — navigation", () => {
     skip();
 
     expect(screen.getByRole("heading", { name: "Второй" })).toBeDefined();
-    expect(screen.getByText("Оценено: 0")).toBeDefined();
+    expect(screen.getByText("Rated: 0")).toBeDefined();
   });
 
   it("steps back to a previous item and shows the choice made there", () => {
     render(<BattleVoting items={items} onComplete={vi.fn()} />);
 
     rate("A");
-    fireEvent.click(screen.getByRole("button", { name: /Назад/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Back/ }));
 
     expect(screen.getByRole("heading", { name: "Первый" })).toBeDefined();
-    expect(screen.getByText("Ваш выбор — A")).toBeDefined();
+    expect(screen.getByText("You picked A")).toBeDefined();
     expect(screen.getByRole("button", { name: /^A —/ }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("cannot step back from the first item", () => {
     render(<BattleVoting items={items} onComplete={vi.fn()} />);
 
-    expect((screen.getByRole("button", { name: /Назад/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /Back/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("renders nothing when the pool is empty", () => {
@@ -90,9 +90,9 @@ describe("BattleVoting — accumulating votes", () => {
   it("counts how many items have been answered", () => {
     render(<BattleVoting items={items} onComplete={vi.fn()} />);
 
-    expect(screen.getByText("Оценено: 0")).toBeDefined();
+    expect(screen.getByText("Rated: 0")).toBeDefined();
     rate("S");
-    expect(screen.getByText("Оценено: 1")).toBeDefined();
+    expect(screen.getByText("Rated: 1")).toBeDefined();
   });
 
   it("replaces an earlier choice instead of adding a second one", () => {
@@ -100,7 +100,7 @@ describe("BattleVoting — accumulating votes", () => {
     render(<BattleVoting items={items} onComplete={onComplete} />);
 
     rate("S");
-    fireEvent.click(screen.getByRole("button", { name: /Назад/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Back/ }));
     rate("D");
     rate("B");
     rate("C");
@@ -124,7 +124,7 @@ describe("BattleVoting — accumulating votes", () => {
     render(<BattleVoting items={items} onComplete={onComplete} />);
 
     rate("S");
-    fireEvent.click(screen.getByRole("button", { name: /Назад/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Back/ }));
     skip();
     rate("B");
     rate("C");

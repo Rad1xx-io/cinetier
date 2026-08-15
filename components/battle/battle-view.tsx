@@ -89,14 +89,14 @@ export function BattleView({ battleId }: { battleId: string }) {
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-24 text-center">
         <TriangleAlert className="h-10 w-10 text-muted" aria-hidden />
-        <h1 className="text-lg font-semibold">Батл не найден</h1>
+        <h1 className="text-lg font-semibold">Battle not found</h1>
         <p className="text-sm text-muted">
-          Ссылка неверна или батл был удалён автором. Попросите новую — или соберите свой.
+          The link is wrong, or the author deleted the battle. Ask for a new one — or build your own.
         </p>
         <Button asChild variant="secondary">
           <Link href="/tier-list">
             <Swords className="h-4 w-4" aria-hidden />
-            К своему тир-листу
+            Go to my tier list
           </Link>
         </Button>
       </div>
@@ -115,8 +115,8 @@ export function BattleView({ battleId }: { battleId: string }) {
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-24 text-center">
         <TriangleAlert className="h-10 w-10 text-muted" aria-hidden />
-        <h1 className="text-lg font-semibold">В этом батле нет позиций</h1>
-        <p className="text-sm text-muted">Автор собрал пустой набор — оценивать нечего.</p>
+        <h1 className="text-lg font-semibold">This battle has no entries</h1>
+        <p className="text-sm text-muted">The author built an empty line-up — there is nothing to rate.</p>
       </div>
     );
   }

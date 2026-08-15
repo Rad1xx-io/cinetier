@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") === "tv" ? "tv" : "movie";
 
   if (!id || !/^\d+$/.test(id)) {
-    return NextResponse.json({ error: "Некорректный идентификатор тайтла." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid title id." }, { status: 400 });
   }
 
   try {
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(mapToDetails(raw, "movie"));
   } catch (error) {
     const status = error instanceof TMDBError ? error.status : 500;
-    const message = status === 404 ? "Тайтл не найден." : "Не удалось загрузить данные о тайтле.";
+    const message = status === 404 ? "Title not found." : "Could not load title details.";
     return NextResponse.json({ error: message }, { status });
   }
 }

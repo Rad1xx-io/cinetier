@@ -64,14 +64,14 @@ function ChannelTierCardImpl({
         <Link
           href={`/youtube/channel/${channel.channelId}`}
           className="absolute inset-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          aria-label={`Открыть «${channel.title}»`}
+          aria-label={`Open “${channel.title}”`}
           draggable={false}
         />
         <button
           type="button"
           onClick={() => onRemove(channel)}
           className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-muted shadow backdrop-blur transition-opacity hover:text-tier-s focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-          aria-label={`Удалить «${channel.title}» из списка`}
+          aria-label={`Remove “${channel.title}” from the list`}
         >
           <X className="h-3.5 w-3.5" aria-hidden />
         </button>
@@ -87,7 +87,7 @@ function ChannelTierCardImpl({
         {channel.title}
       </p>
       <p className="text-[10px] text-muted">
-        {channel.subscriberCount !== undefined ? `${formatCompactCount(channel.subscriberCount)} подп.` : "—"}
+        {channel.subscriberCount !== undefined ? `${formatCompactCount(channel.subscriberCount)} subs` : "—"}
       </p>
     </div>
   );

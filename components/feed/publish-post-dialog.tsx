@@ -15,11 +15,11 @@ import { trackListPublished, trackPostPublished } from "@/lib/analytics/events";
 import { cn } from "@/lib/utils/cn";
 
 const CATEGORY_OPTIONS: { value: PostCategory; label: string }[] = [
-  { value: "mixed", label: "Всё сразу" },
-  { value: "movie", label: "Фильмы" },
-  { value: "tv", label: "Сериалы" },
-  { value: "anime", label: "Аниме" },
-  { value: "game", label: "Игры" },
+  { value: "mixed", label: "Everything" },
+  { value: "movie", label: "Films" },
+  { value: "tv", label: "TV" },
+  { value: "anime", label: "Anime" },
+  { value: "game", label: "Games" },
   { value: "youtube", label: "YouTube" },
 ];
 
@@ -101,16 +101,16 @@ export function PublishPostDialog({
       <form onSubmit={handleSubmit} className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold sm:text-lg">Опубликовать в ленту</h2>
+            <h2 className="text-base font-semibold sm:text-lg">Publish to the feed</h2>
             <p className="mt-1 text-sm text-muted">
-              Пост ведёт на ваш публичный список. Если он закрыт, читатели увидят только заголовок
-              и описание.
+              The post links to your public list. If it is closed, readers see only the title and
+              description.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Закрыть"
+            aria-label="Close"
             className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:text-foreground"
           >
             <X className="h-4 w-4" aria-hidden />
@@ -118,13 +118,13 @@ export function PublishPostDialog({
         </div>
 
         <label htmlFor="post-title" className="mt-4 block text-xs text-muted">
-          Заголовок
+          Title
         </label>
         <Input
           id="post-title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Например: «Мой топ сай-фая за 20 лет»"
+          placeholder="For example: “My top sci-fi of the last 20 years”"
           maxLength={POST_TITLE_MAX}
           autoFocus
           required
@@ -132,20 +132,20 @@ export function PublishPostDialog({
         />
 
         <label htmlFor="post-description" className="mt-3 block text-xs text-muted">
-          Описание <span className="opacity-70">— необязательно</span>
+          Description <span className="opacity-70">— optional</span>
         </label>
         <textarea
           id="post-description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Почему список выглядит именно так?"
+          placeholder="Why does the list look the way it does?"
           rows={4}
           maxLength={POST_DESCRIPTION_MAX}
           className="mt-1 w-full resize-y rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
         />
 
         <fieldset className="mt-3">
-          <legend className="text-xs text-muted">Категория</legend>
+          <legend className="text-xs text-muted">Category</legend>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {CATEGORY_OPTIONS.map((option) => (
               <button
@@ -175,7 +175,7 @@ export function PublishPostDialog({
 
         <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
           <Button type="submit" size="sm" disabled={saving || !validation.ok}>
             {saving ? (
@@ -183,7 +183,7 @@ export function PublishPostDialog({
             ) : (
               <Send className="h-3.5 w-3.5" aria-hidden />
             )}
-            Опубликовать
+            Publish
           </Button>
         </div>
       </form>

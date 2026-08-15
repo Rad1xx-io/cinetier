@@ -21,7 +21,7 @@ import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
 import { avatarInitials, buildTierRows } from "@/lib/feed/post-preview";
 import { TierBoard } from "@/components/feed/tier-board";
 import { DonateButton } from "@/components/profile/donate-button";
-import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
+import { titlesCountLabel } from "@/lib/utils/plural";
 import type { RankedTitle } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 
@@ -39,7 +39,7 @@ function formatWhen(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? ""
-    : date.toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
+    : date.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 }
 
 export function PostDialog({
@@ -133,7 +133,7 @@ export function PostDialog({
             <section className="mb-4 rounded-xl bg-surface-raised p-2">
               <TierBoard rows={rows} variant="full" />
               <p className="mt-2 text-center text-[11px] text-muted">
-                {titlesCountLabel(total)} в {rows.length === 1 ? "одном тире" : `${rows.length} тирах`}
+                {titlesCountLabel(total)} across {rows.length === 1 ? "one tier" : `${rows.length} tiers`}
               </p>
             </section>
           )}
@@ -157,7 +157,7 @@ export function PostDialog({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Закрыть"
+              aria-label="Close"
               className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:text-foreground"
             >
               <X className="h-4 w-4" aria-hidden />
@@ -205,14 +205,14 @@ export function PostDialog({
               <Button asChild size="sm" variant="secondary">
                 <Link href={`/u/${post.username}`}>
                   <GitFork className="h-3.5 w-3.5" aria-hidden />
-                  {post.allowFork ? "Открыть и форкнуть" : "Открыть список"}
+                  {post.allowFork ? "Open and fork" : "Open the list"}
                 </Link>
               </Button>
             )}
           </div>
 
           <section className="mt-5 border-t border-border pt-4">
-            <h3 className="text-sm font-semibold">Комментарии</h3>
+            <h3 className="text-sm font-semibold">Comments</h3>
 
             {comments === null ? (
               <div className="mt-3 space-y-2">
@@ -221,7 +221,7 @@ export function PostDialog({
                 ))}
               </div>
             ) : comments.length === 0 ? (
-              <p className="mt-3 text-sm text-muted">Пока никто не ответил.</p>
+              <p className="mt-3 text-sm text-muted">Nobody has replied yet.</p>
             ) : (
               <ul className="mt-3 space-y-3">
                 {comments.map((comment) => (
@@ -251,10 +251,10 @@ export function PostDialog({
                 <textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Написать комментарий…"
+                  placeholder="Write a comment…"
                   rows={2}
                   maxLength={1000}
-                  aria-label="Текст комментария"
+                  aria-label="Comment text"
                   className="min-h-11 flex-1 resize-y rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 />
                 <Button type="submit" size="sm" disabled={sending || !draft.trim()}>
@@ -263,12 +263,12 @@ export function PostDialog({
                   ) : (
                     <Send className="h-3.5 w-3.5" aria-hidden />
                   )}
-                  Отправить
+                  Send
                 </Button>
               </form>
             ) : (
               <p className="mt-4 rounded-lg border border-border bg-surface-raised px-3 py-2.5 text-xs text-muted">
-                Войдите, чтобы оставить комментарий.
+                Sign in to leave a comment.
               </p>
             )}
           </section>

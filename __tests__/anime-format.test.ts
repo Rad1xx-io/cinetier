@@ -14,7 +14,7 @@ describe("formatScore", () => {
 
 describe("formatEpisodes", () => {
   it("appends the Russian abbreviation", () => {
-    expect(formatEpisodes(25)).toBe("25 эп.");
+    expect(formatEpisodes(25)).toBe("25 ep.");
   });
 
   it("shows a dash when unknown", () => {
@@ -25,16 +25,16 @@ describe("formatEpisodes", () => {
 
 describe("seasonLabel / statusLabel", () => {
   it("translates every season", () => {
-    expect(seasonLabel("WINTER")).toBe("Зима");
-    expect(seasonLabel("SPRING")).toBe("Весна");
-    expect(seasonLabel("SUMMER")).toBe("Лето");
-    expect(seasonLabel("FALL")).toBe("Осень");
+    expect(seasonLabel("WINTER")).toBe("Winter");
+    expect(seasonLabel("SPRING")).toBe("Spring");
+    expect(seasonLabel("SUMMER")).toBe("Summer");
+    expect(seasonLabel("FALL")).toBe("Fall");
     expect(seasonLabel(null)).toBeNull();
   });
 
   it("translates every status", () => {
-    expect(statusLabel("FINISHED")).toBe("Завершён");
-    expect(statusLabel("RELEASING")).toBe("Онгоинг");
+    expect(statusLabel("FINISHED")).toBe("Finished");
+    expect(statusLabel("RELEASING")).toBe("Airing");
     expect(statusLabel(null)).toBeNull();
   });
 });

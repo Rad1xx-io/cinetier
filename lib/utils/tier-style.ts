@@ -6,7 +6,7 @@ export function tierColorVar(tier: TierOrUnrated): string {
   return `var(--tier-${tier.toLowerCase()})`;
 }
 
-/** e.g. "S — Шедевры" / "Не оценено". */
+/** e.g. "S — Masterpiece" / "Unrated". */
 export function tierLabel(tier: TierOrUnrated): string {
   return tier === "Unrated" ? TIER_META.Unrated.name : `${tier} — ${TIER_META[tier].name}`;
 }

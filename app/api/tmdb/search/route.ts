@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const status = error instanceof TMDBError ? error.status : 500;
     return NextResponse.json(
-      { error: "Не удалось выполнить поиск в TMDB. Попробуйте ещё раз." },
+      { error: "The TMDB search failed. Please try again." },
       { status }
     );
   }

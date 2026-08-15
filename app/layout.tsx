@@ -26,8 +26,26 @@ export const metadata: Metadata = {
   // images, the sitemap link. Without it those stay relative and are dropped by
   // the crawlers that need them most.
   metadataBase: new URL(SITE_URL),
-  title: "TierListOnline — мои рейтинги фильмов и сериалов",
-  description: "Личный тир-лист для фильмов и сериалов.",
+  title: "TierListOnline — rank what you watch and play",
+  description: "Build tier lists for films, TV, anime, games and YouTube channels, then share them.",
+  // Spelled out rather than left to Next's defaults: without an explicit block
+  // there is no og:type, no og:locale and no site name, so a shared link shows
+  // a bare URL. Page-level metadata overrides what it needs.
+  openGraph: {
+    type: "website",
+    siteName: "TierListOnline",
+    locale: "en_US",
+    title: "TierListOnline — rank what you watch and play",
+    description:
+      "Build tier lists for films, TV, anime, games and YouTube channels, then share them.",
+    url: SITE_URL,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TierListOnline — rank what you watch and play",
+    description:
+      "Build tier lists for films, TV, anime, games and YouTube channels, then share them.",
+  },
   // Emitted only once a token exists: a tag with an empty content attribute
   // looks configured while verifying nothing.
   ...(GOOGLE_SITE_VERIFICATION
@@ -44,7 +62,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="ru"
+      lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
@@ -58,7 +76,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <main className="flex-1 pb-20 md:pb-0">{children}</main>
         <ChromeGate>
           <footer className="hidden border-t border-border px-6 py-6 text-center text-xs text-muted md:block">
-            Этот продукт использует TMDB API, но не одобрен и не сертифицирован TMDB.
+            This product uses the TMDB API but is not endorsed or certified by TMDB.
           </footer>
           <BottomNav />
         </ChromeGate>

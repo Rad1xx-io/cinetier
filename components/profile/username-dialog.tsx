@@ -63,15 +63,15 @@ export function UsernameDialog({ userId, open, onClose, onSaved }: UsernameDialo
       <form onSubmit={handleSubmit} className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">Придумайте юзернейм</h2>
+            <h2 className="text-lg font-semibold">Choose a username</h2>
             <p className="mt-1 text-sm text-muted">
-              Он станет постоянным адресом вашего тир-листа.
+              It becomes the permanent address of your tier list.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Закрыть"
+            aria-label="Close"
             className="rounded-lg p-1 text-muted transition-colors hover:text-foreground"
           >
             <X className="h-4 w-4" aria-hidden />
@@ -84,7 +84,7 @@ export function UsernameDialog({ userId, open, onClose, onSaved }: UsernameDialo
             value={username}
             onChange={(e) => setUsername(e.target.value.toLowerCase())}
             placeholder="username"
-            aria-label="Юзернейм"
+            aria-label="Username"
             autoComplete="off"
             autoFocus
             required
@@ -92,7 +92,7 @@ export function UsernameDialog({ userId, open, onClose, onSaved }: UsernameDialo
         </div>
 
         {username && !localError && (
-          <p className="mt-2 truncate text-xs text-muted">Ссылка: /u/{username}</p>
+          <p className="mt-2 truncate text-xs text-muted">Link: /u/{username}</p>
         )}
         {(localError || error) && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-tier-s">
@@ -102,17 +102,17 @@ export function UsernameDialog({ userId, open, onClose, onSaved }: UsernameDialo
         )}
 
         <p className="mt-3 rounded-lg border border-border bg-surface-raised px-3 py-2 text-xs leading-relaxed text-muted">
-          После этого тир-лист станет доступен по ссылке любому, у кого она есть. Отключить можно в
-          профиле.
+          Your tier list then becomes readable by anyone holding the link. You can turn this off
+          again in your profile.
         </p>
 
         <div className="mt-4 flex justify-end gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
           <Button type="submit" size="sm" disabled={saving || Boolean(localError) || !username}>
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-            Занять и скопировать ссылку
+            Claim and copy link
           </Button>
         </div>
       </form>

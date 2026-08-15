@@ -23,11 +23,11 @@ import type { ContentType } from "@/lib/utils/content-type";
 type RatingsTab = "all" | ContentType;
 
 const TABS: { value: RatingsTab; label: string }[] = [
-  { value: "all", label: "Все" },
-  { value: "movie", label: "Фильмы" },
-  { value: "tv", label: "Сериалы" },
-  { value: "anime", label: "Аниме" },
-  { value: "game", label: "Игры" },
+  { value: "all", label: "All" },
+  { value: "movie", label: "Films" },
+  { value: "tv", label: "TV" },
+  { value: "anime", label: "Anime" },
+  { value: "game", label: "Games" },
   { value: "youtube", label: "YouTube" },
 ];
 
@@ -73,8 +73,8 @@ export default function ProfilePage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
         <p className="text-sm text-muted">
-          Облачные аккаунты не настроены на этом развёртывании — TierListOnline работает в гостевом
-          режиме, профиль недоступен.
+          Cloud accounts are not configured on this deployment — TierListOnline is running in guest
+          mode, so there is no profile.
         </p>
       </div>
     );
@@ -92,21 +92,21 @@ export default function ProfilePage() {
   if (!user) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
-        <p className="text-sm text-muted">Войдите, чтобы увидеть профиль.</p>
+        <p className="text-sm text-muted">Sign in to see your profile.</p>
         <Button asChild variant="secondary" className="mt-4">
-          <Link href="/settings">Войти</Link>
+          <Link href="/settings">Sign in</Link>
         </Button>
       </div>
     );
   }
 
   const handle = profile ? `@${profile.username}` : null;
-  const heading = profile?.displayName || handle || "Профиль";
+  const heading = profile?.displayName || handle || "Profile";
   const initial = (profile?.displayName ?? profile?.username ?? user.email ?? "?")
     .charAt(0)
     .toUpperCase();
   const memberSince = user.created_at
-    ? new Date(user.created_at).toLocaleDateString("ru-RU", {
+    ? new Date(user.created_at).toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -118,7 +118,7 @@ export default function ProfilePage() {
     const url = `${window.location.origin}/u/${profile.username}`;
     try {
       await navigator.clipboard.writeText(url);
-      notify("Ссылка скопирована!");
+      notify("Link copied");
     } catch {
       notify(url);
     }
@@ -136,17 +136,17 @@ export default function ProfilePage() {
           {handle ? (
             <p className="text-sm text-muted">{handle}</p>
           ) : (
-            <p className="text-sm text-muted">Юзернейм не задан</p>
+            <p className="text-sm text-muted">No username set</p>
           )}
-          {memberSince && <p className="text-xs text-muted">С нами с {memberSince}</p>}
+          {memberSince && <p className="text-xs text-muted">Member since {memberSince}</p>}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard value={counts.movieTv} label="Фильмов и сериалов" />
-        <StatCard value={counts.anime} label="Аниме" />
-        <StatCard value={counts.game} label="Игр" />
-        <StatCard value={counts.youtube} label="YouTube-каналов" />
+        <StatCard value={counts.movieTv} label="Films and TV" />
+        <StatCard value={counts.anime} label="Anime" />
+        <StatCard value={counts.game} label="Games" />
+        <StatCard value={counts.youtube} label="YouTube channels" />
       </div>
 
       <UsernameForm userId={user.id} profile={profile} onSaved={setProfile} />
@@ -155,12 +155,12 @@ export default function ProfilePage() {
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" size="sm" onClick={copyShareLink}>
             <Copy className="h-3.5 w-3.5" aria-hidden />
-            Скопировать ссылку
+            Copy link
           </Button>
           <Button asChild variant="ghost" size="sm">
             <Link href={`/u/${profile.username}`}>
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-              Открыть публичный вид
+              Open public view
             </Link>
           </Button>
         </div>
@@ -168,16 +168,16 @@ export default function ProfilePage() {
 
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-semibold">Мои рейтинги</h2>
+          <h2 className="font-semibold">My rankings</h2>
           <Button asChild variant="ghost" size="sm">
             <Link href="/tier-list">
               <ListChecks className="h-3.5 w-3.5" aria-hidden />
-              Открыть тир-лист
+              Open tier list
             </Link>
           </Button>
         </div>
 
-        <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Фильтр по типу">
+        <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Filter by type">
           {TABS.map((t) => (
             <button
               key={t.value}
@@ -198,7 +198,7 @@ export default function ProfilePage() {
 
         {visibleTitles.length + visibleChannels.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted">
-            Здесь пока пусто.
+            Nothing here yet.
           </p>
         ) : (
           <div className="flex flex-wrap gap-3">
@@ -239,7 +239,7 @@ export default function ProfilePage() {
         <Button asChild variant="ghost" size="sm">
           <Link href="/settings">
             <SettingsIcon className="h-3.5 w-3.5" aria-hidden />
-            Настройки
+            Settings
           </Link>
         </Button>
       </div>

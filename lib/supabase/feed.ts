@@ -181,10 +181,10 @@ export async function publishPost(input: {
   category: PostCategory;
 }): Promise<PublishResult> {
   const supabase = getSupabaseBrowserClient();
-  if (!supabase) return { ok: false, error: "Облачные аккаунты не настроены." };
+  if (!supabase) return { ok: false, error: "Cloud accounts are not configured." };
 
   const userId = currentUserId();
-  if (!userId) return { ok: false, error: "Войдите, чтобы публиковать посты." };
+  if (!userId) return { ok: false, error: "Sign in to publish posts." };
 
   const { data, error } = await supabase
     .from("posts")
@@ -203,8 +203,8 @@ export async function publishPost(input: {
     return {
       ok: false,
       error: error?.code === "23503"
-        ? "Сначала займите юзернейм в настройках — пост подписывается им."
-        : "Не удалось опубликовать пост. Попробуйте ещё раз.",
+        ? "Claim a username in settings first — posts are signed with it."
+        : "Could not publish the post. Please try again.",
     };
   }
   return { ok: true, postId: (data as { id: string }).id };
@@ -276,7 +276,7 @@ export async function getComments(postId: string): Promise<PostComment[]> {
     id: row.id,
     postId: row.post_id,
     userId: row.user_id,
-    username: row.profiles?.username ?? "аноним",
+    username: row.profiles?.username ?? "anonymous",
     displayName: row.profiles?.display_name ?? null,
     text: row.text,
     createdAt: row.created_at,
@@ -308,7 +308,7 @@ export async function addComment(postId: string, text: string): Promise<PostComm
     id: row.id,
     postId: row.post_id,
     userId: row.user_id,
-    username: row.profiles?.username ?? "аноним",
+    username: row.profiles?.username ?? "anonymous",
     displayName: row.profiles?.display_name ?? null,
     text: row.text,
     createdAt: row.created_at,

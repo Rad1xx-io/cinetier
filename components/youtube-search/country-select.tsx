@@ -65,7 +65,7 @@ export function CountrySelect({ value, onChange }: CountrySelectProps) {
     triggerRef.current?.focus();
   }
 
-  const triggerLabel = value ? `${flagEmoji(value)} ${findCountryLabel(value)}` : "Все страны";
+  const triggerLabel = value ? `${flagEmoji(value)} ${findCountryLabel(value)}` : "All countries";
 
   return (
     <div ref={rootRef} className="relative shrink-0">
@@ -84,7 +84,7 @@ export function CountrySelect({ value, onChange }: CountrySelectProps) {
       {open && (
         <div
           role="listbox"
-          aria-label="Выбор страны"
+          aria-label="Choose a country"
           className="absolute left-0 top-full z-30 mt-1 w-64 overflow-hidden rounded-lg border border-border bg-surface-raised shadow-xl"
         >
           <div className="relative border-b border-border p-2">
@@ -93,7 +93,7 @@ export function CountrySelect({ value, onChange }: CountrySelectProps) {
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Поиск страны…"
+              placeholder="Search countries…"
               className="h-8 w-full rounded-md border border-border bg-surface pl-7 pr-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
           </div>
@@ -108,7 +108,7 @@ export function CountrySelect({ value, onChange }: CountrySelectProps) {
                 value === "" && "font-semibold text-accent"
               )}
             >
-              Все страны
+              All countries
             </button>
             {filtered.map((c) => (
               <button
@@ -127,7 +127,7 @@ export function CountrySelect({ value, onChange }: CountrySelectProps) {
               </button>
             ))}
             {filtered.length === 0 && (
-              <p className="px-3 py-2 text-sm text-muted">Страна не найдена.</p>
+              <p className="px-3 py-2 text-sm text-muted">No country found.</p>
             )}
           </div>
         </div>

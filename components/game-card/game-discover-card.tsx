@@ -32,14 +32,14 @@ export function GameDiscoverCard({ game, ranked, onAdd }: GameDiscoverCardProps)
 
       {ranked ? (
         <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-background/85 px-2 py-1 text-xs font-medium backdrop-blur">
-          Добавлено <TierPill tier={ranked.tier} />
+          Added <TierPill tier={ranked.tier} />
         </span>
       ) : (
         <button
           type="button"
           onClick={() => onAdd(game)}
           className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-background/85 text-foreground backdrop-blur transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          aria-label={`Добавить «${game.title}» в список`}
+          aria-label={`Add “${game.title}” to my list`}
         >
           <Plus className="h-4 w-4" aria-hidden />
         </button>
@@ -58,7 +58,7 @@ export function GameDiscoverCard({ game, ranked, onAdd }: GameDiscoverCardProps)
               {game.score.toFixed(1)}
             </span>
           )}
-          <span className="hidden sm:inline">{game.isFree ? "Бесплатно" : game.price ?? ""}</span>
+          <span className="hidden sm:inline">{game.isFree ? "Free" : game.price ?? ""}</span>
         </div>
         {game.genres.length > 0 && (
           <div className="hidden flex-wrap items-center gap-1 sm:flex">

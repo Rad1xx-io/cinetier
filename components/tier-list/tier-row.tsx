@@ -10,7 +10,7 @@ import type { Density } from "@/lib/hooks/use-density";
 import { TIER_META } from "@/lib/tier-meta";
 import { tierColorVar } from "@/lib/utils/tier-style";
 import { boardItemKey, type BoardItem } from "@/lib/utils/board-item";
-import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
+import { titlesCountLabel } from "@/lib/utils/plural";
 import { cn } from "@/lib/utils/cn";
 
 interface TierRowProps {
@@ -72,7 +72,7 @@ function TierRowImpl({
       </div>
       <div
         role="list"
-        aria-label={`Тайтлы в тире «${meta.name}»`}
+        aria-label={`Titles in the ${meta.name} tier`}
         className={cn(
           "flex min-h-28 flex-1 flex-wrap content-start items-start gap-3 p-3 transition-colors sm:min-h-32",
           isOver && "bg-accent/5"
@@ -81,7 +81,7 @@ function TierRowImpl({
         <SortableContext items={itemIds} strategy={rectSortingStrategy}>
           {items.length === 0 && (
             <p className="flex h-24 items-center px-2 text-xs text-muted">
-              {filtersActive ? "Нет совпадений" : draggable ? "Перетащите тайтлы сюда" : "Здесь пока пусто"}
+              {filtersActive ? "No matches" : draggable ? "Drag titles here" : "Nothing here yet"}
             </p>
           )}
           {items.map((item) => (

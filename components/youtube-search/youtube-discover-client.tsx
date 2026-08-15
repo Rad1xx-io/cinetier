@@ -34,7 +34,7 @@ const VALID_SORTS: ChannelSortMode[] = [
 async function fetchJson<T>(url: string, signal: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal });
   const body = await res.json();
-  if (!res.ok) throw new Error((body as ApiErrorBody).error ?? "Что-то пошло не так.");
+  if (!res.ok) throw new Error((body as ApiErrorBody).error ?? "Something went wrong.");
   return body as T;
 }
 
@@ -114,7 +114,7 @@ export function YouTubeDiscoverClient() {
         setVisibleCount(PAGE_SIZE);
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
-        setError((err as Error).message || "Не удалось загрузить каналы. Попробуйте ещё раз.");
+        setError((err as Error).message || "Could not load channels. Please try again.");
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -154,7 +154,7 @@ export function YouTubeDiscoverClient() {
       setNextPageToken(data.nextPageToken);
       setVisibleCount((v) => v + PAGE_SIZE);
     } catch (err) {
-      setError((err as Error).message || "Не удалось загрузить каналы. Попробуйте ещё раз.");
+      setError((err as Error).message || "Could not load channels. Please try again.");
     } finally {
       setLoadingMore(false);
     }
@@ -177,13 +177,13 @@ export function YouTubeDiscoverClient() {
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:px-6 md:py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">YouTube-каналы</h1>
-          <p className="mt-1 text-sm text-muted">Ищите каналы и добавляйте их в свой список.</p>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">YouTube channels</h1>
+          <p className="mt-1 text-sm text-muted">Search for channels and add them to your list.</p>
         </div>
         <Button asChild variant="secondary" size="sm">
           <Link href="/youtube/tier-list">
             <LayoutGrid className="h-4 w-4" aria-hidden />
-            Тир-лист каналов
+            Channel tier list
           </Link>
         </Button>
       </div>
@@ -193,9 +193,9 @@ export function YouTubeDiscoverClient() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск YouTube-каналов по названию…"
+          placeholder="Search YouTube channels by name…"
           className="pl-9"
-          aria-label="Поиск каналов"
+          aria-label="Search channels"
         />
       </div>
 
@@ -210,8 +210,8 @@ export function YouTubeDiscoverClient() {
 
       {filters.country && (
         <p className="text-xs text-muted">
-          Страну канала указывает сам автор — часть каналов её не заполняют и не попадут в этот
-          фильтр, даже если контент им подходит.
+          A channel’s country is set by its owner — some leave it blank and will not appear in this
+          filter even when their content fits.
         </p>
       )}
 
@@ -227,8 +227,8 @@ export function YouTubeDiscoverClient() {
       {!error && !loading && (
         <p className="text-sm text-muted">
           {results.length === 0
-            ? "Каналы не найдены."
-            : `Показано ${Math.min(visibleCount, results.length)} из ${results.length} каналов`}
+            ? "No channels found."
+            : `Showing ${Math.min(visibleCount, results.length)} of ${results.length} channels`}
         </p>
       )}
 
@@ -240,7 +240,7 @@ export function YouTubeDiscoverClient() {
         <div className="flex justify-center pt-2">
           <Button variant="secondary" onClick={handleLoadMore} disabled={loadingMore}>
             {loadingMore && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            Показать ещё
+            Show more
           </Button>
         </div>
       )}

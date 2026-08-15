@@ -47,19 +47,19 @@ export function DiscoverChannelCard({ channel, ranked, onAdd }: DiscoverChannelC
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
         <ContentTypeBadge type="youtube" />
         {channel.subscriberCount !== null && (
-          <span className="flex items-center gap-1" title="Подписчики">
+          <span className="flex items-center gap-1" title="Subscribers">
             <Users className="h-3.5 w-3.5" aria-hidden />
             {formatCompactCount(channel.subscriberCount)}
           </span>
         )}
         {channel.viewCount !== null && (
-          <span className="flex items-center gap-1" title="Просмотры">
+          <span className="flex items-center gap-1" title="Views">
             <Eye className="h-3.5 w-3.5" aria-hidden />
             {formatCompactCount(channel.viewCount)}
           </span>
         )}
         {channel.videoCount !== null && (
-          <span className="flex items-center gap-1" title="Видео">
+          <span className="flex items-center gap-1" title="Videos">
             <PlaySquare className="h-3.5 w-3.5" aria-hidden />
             {formatCompactCount(channel.videoCount)}
           </span>
@@ -78,12 +78,12 @@ export function DiscoverChannelCard({ channel, ranked, onAdd }: DiscoverChannelC
         </a>
         {ranked ? (
           <span className="flex items-center gap-1.5 text-xs text-muted">
-            Тир <TierPill tier={ranked.tier} />
+            Tier <TierPill tier={ranked.tier} />
           </span>
         ) : (
           <Button size="sm" variant="secondary" onClick={() => onAdd(channel)}>
             <Plus className="h-3.5 w-3.5" aria-hidden />
-            Добавить
+            Add
           </Button>
         )}
       </div>

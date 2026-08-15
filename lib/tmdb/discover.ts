@@ -89,7 +89,7 @@ export async function discoverTitles(
 ): Promise<DiscoverTitlesResult> {
   if (params.type !== "all") return discoverOne(params.type, params);
 
-  // "Все" asks both catalogs and interleaves them, so neither type is buried
+  // "All" asks both catalogs and interleaves them, so neither type is buried
   // behind a full page of the other.
   const [movies, tv] = await Promise.all([
     discoverOne("movie", params),

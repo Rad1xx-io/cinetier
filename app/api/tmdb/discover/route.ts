@@ -34,8 +34,8 @@ export async function GET(request: NextRequest) {
     const status = error instanceof TMDBError ? error.status : 500;
     const message =
       status === 429
-        ? "Слишком много запросов к TMDB. Попробуйте через минуту."
-        : "Не удалось загрузить тайтлы. Попробуйте ещё раз.";
+        ? "Too many requests to TMDB. Try again in a minute."
+        : "Could not load titles. Please try again.";
     return NextResponse.json({ error: message }, { status });
   }
 }

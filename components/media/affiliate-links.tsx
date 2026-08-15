@@ -28,7 +28,7 @@ export function AffiliateLinks({ titleId, titleName, links, className }: Affilia
 
   return (
     <section className={cn("mt-4", className)}>
-      <h2 className="text-xs font-medium uppercase tracking-wide text-muted">Где смотреть</h2>
+      <h2 className="text-xs font-medium uppercase tracking-wide text-muted">Where to watch</h2>
 
       <ul className="mt-2 flex flex-wrap gap-2">
         {valid.map((link) => (
@@ -57,7 +57,7 @@ export function AffiliateLinks({ titleId, titleName, links, className }: Affilia
       {/* Required by law in several places TierListOnline is read from, and the honest
           thing to say regardless — the reader is entitled to know the link earns. */}
       <p className="mt-1.5 text-[11px] text-muted">
-        Переходы по этим ссылкам могут приносить TierListOnline комиссию. На цену для вас это не влияет.
+        TierListOnline may earn a commission from these links. It costs you nothing extra.
       </p>
     </section>
   );

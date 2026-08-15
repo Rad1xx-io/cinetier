@@ -159,7 +159,7 @@ export function TierListBoard() {
    * A media tab or a search term only *hides* cards — the ones still on screen
    * keep their real positions, and every drop is resolved against the full
    * list by item id (see handleDragEnd), so dragging on a filtered tab is
-   * exactly as correct as on "Все".
+   * exactly as correct as on "All".
    *
    * A non-manual sort is the one case that genuinely cannot work: the visible
    * order is not the stored order, so "dropped between these two cards" has no
@@ -336,9 +336,9 @@ export function TierListBoard() {
     <div className="mx-auto max-w-[1600px] px-0 pb-6 md:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3 px-4 pt-4 md:px-0 md:pt-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Тир-лист</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Tier list</h1>
           <p className="mt-1 text-sm text-muted">
-            Перетаскивайте тайтлы между тирами, чтобы выстроить свой рейтинг.
+            Drag titles between tiers to build your ranking.
           </p>
         </div>
         <TierListActions

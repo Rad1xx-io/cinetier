@@ -64,9 +64,9 @@ export function DonateButton({
         </span>
 
         <div>
-          <h2 className="text-base font-semibold">Понравился список?</h2>
+          <h2 className="text-base font-semibold">Enjoyed this list?</h2>
           <p className="mt-1 text-sm text-muted">
-            Поддержите {authorName} — TierListOnline не берёт комиссию и не участвует в переводе.
+            Support {authorName} — TierListOnline takes no cut and handles no payment.
           </p>
         </div>
 
@@ -78,12 +78,12 @@ export function DonateButton({
           className="inline-flex h-10 items-center gap-2 rounded-lg bg-tier-s px-5 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tier-s/50"
         >
           <Heart className="h-4 w-4 shrink-0" aria-hidden />
-          Поддержать автора
+          Support the creator
         </a>
 
         {/* Named before the click, not after: a link that earns should say
             where it lands. */}
-        {host && <p className="text-[11px] text-muted">Откроется {host} в новой вкладке</p>}
+        {host && <p className="text-[11px] text-muted">Opens {host} in a new tab</p>}
       </section>
     );
   }
@@ -94,14 +94,14 @@ export function DonateButton({
       target="_blank"
       rel="noopener noreferrer"
       onClick={report}
-      title={host ? `Поддержать ${authorName} — откроется ${host}` : `Поддержать ${authorName}`}
+      title={host ? `Support ${authorName} — opens ${host}` : `Support ${authorName}`}
       className={cn(
         "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted transition-colors hover:text-tier-s focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tier-s/50",
         className
       )}
     >
       <Heart className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      Поддержать
+      Support
     </a>
   );
 }

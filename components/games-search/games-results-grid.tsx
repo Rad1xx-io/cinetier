@@ -23,7 +23,7 @@ export function GamesResultsGrid({ results, rankedByKey, onAdd, loading }: Games
   }
 
   if (results.length === 0) {
-    return <p className="py-10 text-center text-sm text-muted">Игры не найдены.</p>;
+    return <p className="py-10 text-center text-sm text-muted">No games found.</p>;
   }
 
   return (

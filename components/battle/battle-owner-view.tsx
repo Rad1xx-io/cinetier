@@ -26,7 +26,7 @@ function formatDate(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? ""
-    : date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+    : date.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
 /**
@@ -58,8 +58,8 @@ export function BattleOwnerView({ battle }: { battle: Battle }) {
     if (canWebShare()) {
       try {
         await navigator.share({
-          title: "TierListOnline — Батл вкусов",
-          text: "Оцените тот же набор, что и я, и посмотрим, насколько сойдёмся:",
+          title: "TierListOnline — Taste Battle",
+          text: "Rate the same line-up I did and see how close we land:",
           url: link,
         });
         return;
@@ -73,7 +73,7 @@ export function BattleOwnerView({ battle }: { battle: Battle }) {
       trackLinkCopied("battle", battle.id);
       setCopied(true);
     } catch {
-      window.prompt("Скопируйте ссылку:", link);
+      window.prompt("Copy the link:", link);
     }
   }, [battle.id, link]);
 
@@ -83,10 +83,10 @@ export function BattleOwnerView({ battle }: { battle: Battle }) {
     <div className="mx-auto max-w-2xl px-4 py-8 md:py-12">
       <div className="flex flex-col items-center text-center">
         <Swords className="h-8 w-8 text-accent" aria-hidden />
-        <h1 className="mt-3 text-2xl font-bold tracking-tight">Это ваш батл!</h1>
+        <h1 className="mt-3 text-2xl font-bold tracking-tight">This is your battle!</h1>
         <p className="mt-2 max-w-md text-sm text-muted">
-          Своё же сравнение проходить нечего — отправьте ссылку друзьям и смотрите, кто окажется
-          ближе всех к вашим вкусам.
+          There is nothing to compare against yourself — send the link to friends and see who lands
+          closest to your taste.
         </p>
 
         <p className="mt-5 w-full truncate rounded-lg border border-border bg-surface-raised px-3 py-2.5 text-sm">
@@ -102,10 +102,10 @@ export function BattleOwnerView({ battle }: { battle: Battle }) {
             ) : (
               <Copy className="h-4 w-4" aria-hidden />
             )}
-            {copied ? "Ссылка скопирована" : "Поделиться ссылкой"}
+            {copied ? "Link copied" : "Share the link"}
           </Button>
           <Button asChild variant="secondary" className="sm:w-auto">
-            <Link href="/tier-list">К тир-листу</Link>
+            <Link href="/tier-list">Back to my list</Link>
           </Button>
         </div>
       </div>
@@ -113,7 +113,7 @@ export function BattleOwnerView({ battle }: { battle: Battle }) {
       <section className="mt-10">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <Users className="h-4 w-4 text-muted" aria-hidden />
-          Прошли батл
+          Played this battle
           {entries && entries.length > 0 && (
             <span className="text-muted">· {entries.length}</span>
           )}
@@ -127,7 +127,7 @@ export function BattleOwnerView({ battle }: { battle: Battle }) {
           </div>
         ) : entries.length === 0 ? (
           <p className="rounded-xl border border-border bg-surface px-4 py-6 text-center text-sm text-muted">
-            Пока никто не прошёл. Как только друг закончит, его результат появится здесь.
+            Nobody has played it yet. As soon as a friend finishes, their result shows up here.
           </p>
         ) : (
           <ul className="space-y-2">
@@ -151,10 +151,10 @@ export function BattleOwnerView({ battle }: { battle: Battle }) {
                         playable without an account, so most rows have no name to
                         show and saying so beats inventing one. */}
                     <span className="block truncate text-sm font-medium">
-                      {entry.userId ? "Пользователь TierListOnline" : "Гость"}
+                      {entry.userId ? "TierListOnline user" : "Guest"}
                     </span>
                     <span className="block text-xs text-muted">
-                      {entry.itemsRated} поз. · {formatDate(entry.createdAt)}
+                      {entry.itemsRated} rated · {formatDate(entry.createdAt)}
                     </span>
                   </span>
                 </span>
@@ -172,7 +172,7 @@ export function BattleOwnerView({ battle }: { battle: Battle }) {
 
         {best && (
           <p className="mt-3 text-center text-xs text-muted">
-            Лучшее совпадение — {best.matchScore}%.
+            Best match — {best.matchScore}%.
           </p>
         )}
       </section>

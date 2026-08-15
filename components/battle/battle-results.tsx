@@ -39,11 +39,11 @@ function scoreColorVar(percentage: number): string {
 }
 
 function verdict(percentage: number): string {
-  if (percentage >= 90) return "Один и тот же человек";
-  if (percentage >= 75) return "Родственные души";
-  if (percentage >= 55) return "Много общего";
-  if (percentage >= 35) return "Есть о чём поспорить";
-  return "Полярные вкусы";
+  if (percentage >= 90) return "The same person";
+  if (percentage >= 75) return "Kindred spirits";
+  if (percentage >= 55) return "Plenty in common";
+  if (percentage >= 35) return "Room to argue";
+  return "Opposite taste";
 }
 
 export function BattleResults({
@@ -59,13 +59,13 @@ export function BattleResults({
   const handleShare = useCallback(async () => {
     trackShareClicked("battle", battleId);
     const url = `${window.location.origin}/battle/${battleId}`;
-    const text = `Наши вкусы совпали на ${comparison.overallMatchPercentage}%. Проверьте свой результат:`;
+    const text = `Our taste matched ${comparison.overallMatchPercentage}%. See how you do:`;
 
     // Web Share where it exists — on a phone that opens the real share sheet,
     // which beats a clipboard copy the user then has to paste somewhere.
     if (canWebShare()) {
       try {
-        await navigator.share({ title: "TierListOnline — Батл вкусов", text, url });
+        await navigator.share({ title: "TierListOnline — Taste Battle", text, url });
         return;
       } catch {
         // Dismissing the sheet rejects too, so fall through to copying rather
@@ -80,7 +80,7 @@ export function BattleResults({
     } catch {
       // Clipboard can be refused on an insecure origin; showing the address is
       // better than a button that silently does nothing.
-      window.prompt("Скопируйте ссылку:", url);
+      window.prompt("Copy the link:", url);
     }
   }, [battleId, comparison.overallMatchPercentage]);
 
@@ -91,7 +91,7 @@ export function BattleResults({
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:py-12">
       <div className="flex flex-col items-center text-center">
-        <p className="text-xs uppercase tracking-wide text-muted">Результат батла</p>
+        <p className="text-xs uppercase tracking-wide text-muted">Battle result</p>
 
         {hasOverlap ? (
           <>
@@ -130,22 +130,22 @@ export function BattleResults({
                 >
                   {score}%
                 </span>
-                <span className="text-[10px] uppercase tracking-wide text-muted">совпадение</span>
+                <span className="text-[10px] uppercase tracking-wide text-muted">match</span>
               </div>
             </div>
 
             <h1 className="mt-4 text-2xl font-bold tracking-tight">{verdict(score)}</h1>
             <p className="mt-1 text-sm text-muted">
-              Сравнили {sharedItemCount} из {items.length} позиций.
+              Compared {sharedItemCount} of {items.length} entries.
             </p>
           </>
         ) : (
           // 0% here would be a lie: no shared ratings is no evidence, not opposite taste.
           <div className="mt-6 rounded-2xl border border-border bg-surface px-6 py-8">
-            <h1 className="text-xl font-bold tracking-tight">Сравнивать нечего</h1>
+            <h1 className="text-xl font-bold tracking-tight">Nothing to compare</h1>
             <p className="mt-2 text-sm text-muted">
-              Вы пропустили все позиции, поэтому общих оценок не набралось. Процент совпадения
-              появится, если оценить хотя бы одну.
+              You skipped every entry, so there is no overlap to score. Rate at least one and a match
+              percentage appears.
             </p>
           </div>
         )}
@@ -153,7 +153,7 @@ export function BattleResults({
 
       {comparison.topAgreements.length > 0 && (
         <ComparisonList
-          title="Полное согласие"
+          title="Total agreement"
           icon={<ThumbsUp className="h-4 w-4 text-tier-c" aria-hidden />}
           itemIds={comparison.topAgreements}
           itemsById={itemsById}
@@ -164,7 +164,7 @@ export function BattleResults({
 
       {comparison.topDisagreements.length > 0 && (
         <ComparisonList
-          title="Главные споры"
+          title="Biggest disagreements"
           icon={<Zap className="h-4 w-4 text-tier-s" aria-hidden />}
           itemIds={comparison.topDisagreements}
           itemsById={itemsById}
@@ -177,7 +177,7 @@ export function BattleResults({
         <Button asChild>
           <Link href="/tier-list">
             <Swords className="h-4 w-4" aria-hidden />
-            Создать свой батл
+            Create my own battle
           </Link>
         </Button>
         <Button variant="secondary" onClick={handleShare}>
@@ -188,7 +188,7 @@ export function BattleResults({
           ) : (
             <Copy className="h-4 w-4" aria-hidden />
           )}
-          {copied ? "Ссылка скопирована" : "Поделиться результатом"}
+          {copied ? "Link copied" : "Share the result"}
         </Button>
       </div>
     </div>
@@ -240,11 +240,11 @@ function ComparisonList({
                 <span className="line-clamp-2 break-words">{item?.title ?? itemId}</span>
               </p>
               <div className="flex shrink-0 items-center gap-1.5">
-                <TierBadge label="Автор" tier={creatorTier} />
+                <TierBadge label="Author" tier={creatorTier} />
                 <span className="text-xs text-muted" aria-hidden>
                   |
                 </span>
-                <TierBadge label="Вы" tier={yourTier} />
+                <TierBadge label="You" tier={yourTier} />
               </div>
             </li>
           );

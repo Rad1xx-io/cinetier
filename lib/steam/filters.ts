@@ -1,15 +1,15 @@
 /** Filter vocabularies shared by the games API route and the filter UI. */
 
 export const GAME_GENRES = [
-  { value: "Action", label: "Экшен" },
-  { value: "Adventure", label: "Приключения" },
+  { value: "Action", label: "Action" },
+  { value: "Adventure", label: "Adventure" },
   { value: "RPG", label: "RPG" },
-  { value: "Strategy", label: "Стратегии" },
-  { value: "Simulation", label: "Симуляторы" },
-  { value: "Indie", label: "Инди" },
-  { value: "Casual", label: "Казуальные" },
-  { value: "Racing", label: "Гонки" },
-  { value: "Sports", label: "Спорт" },
+  { value: "Strategy", label: "Strategy" },
+  { value: "Simulation", label: "Simulation" },
+  { value: "Indie", label: "Indie" },
+  { value: "Casual", label: "Casual" },
+  { value: "Racing", label: "Racing" },
+  { value: "Sports", label: "Sports" },
   { value: "Massively Multiplayer", label: "MMO" },
 ] as const;
 
@@ -25,16 +25,16 @@ export const GAME_PLATFORMS = [
  * 12% (co-op), which matches Steam's own store facets.
  */
 export const GAME_CATEGORIES = [
-  { value: "2", label: "Одиночная" },
-  { value: "1", label: "Мультиплеер" },
-  { value: "9", label: "Кооператив" },
+  { value: "2", label: "Single-player" },
+  { value: "1", label: "Multiplayer" },
+  { value: "9", label: "Co-op" },
 ] as const;
 
 export const GAME_SORTS = [
-  { value: "popularity", label: "По популярности" },
-  { value: "metacritic", label: "По рейтингу Metacritic" },
-  { value: "released", label: "По дате выхода" },
-  { value: "name", label: "По алфавиту" },
+  { value: "popularity", label: "Most popular" },
+  { value: "metacritic", label: "Metacritic score" },
+  { value: "released", label: "Release date" },
+  { value: "name", label: "A–Z" },
 ] as const;
 
 export type GameGenre = (typeof GAME_GENRES)[number]["value"];

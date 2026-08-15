@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     const httpStatus = error instanceof AniListError ? error.status : 500;
-    const message = httpStatus === 429 ? "Слишком много запросов. Попробуйте позже." : "Не удалось загрузить аниме. Попробуйте ещё раз.";
+    const message = httpStatus === 429 ? "Too many requests. Please try again later." : "Could not load anime. Please try again.";
     return NextResponse.json({ error: message }, { status: httpStatus });
   }
 }

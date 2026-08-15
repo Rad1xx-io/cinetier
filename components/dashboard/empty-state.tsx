@@ -5,9 +5,9 @@ import { CONTENT_TYPE_ACCENTS } from "@/lib/utils/content-type";
 
 /** Every catalog the tier list can draw from, in the order the nav shows them. */
 const SECTIONS = [
-  { href: "/discover", label: "Фильмы", icon: Clapperboard, accent: CONTENT_TYPE_ACCENTS.movie },
-  { href: "/anime", label: "Аниме", icon: Drama, accent: CONTENT_TYPE_ACCENTS.anime },
-  { href: "/games", label: "Игры", icon: Gamepad2, accent: CONTENT_TYPE_ACCENTS.game },
+  { href: "/discover", label: "Films", icon: Clapperboard, accent: CONTENT_TYPE_ACCENTS.movie },
+  { href: "/anime", label: "Anime", icon: Drama, accent: CONTENT_TYPE_ACCENTS.anime },
+  { href: "/games", label: "Games", icon: Gamepad2, accent: CONTENT_TYPE_ACCENTS.game },
   { href: "/youtube", label: "YouTube", icon: SquarePlay, accent: CONTENT_TYPE_ACCENTS.youtube },
 ];
 
@@ -17,9 +17,9 @@ export function EmptyState() {
       <ListChecks className="h-12 w-12 text-accent" aria-hidden />
 
       <div>
-        <h2 className="text-xl font-semibold">Твой тир-лист пока пуст</h2>
+        <h2 className="text-xl font-semibold">Your tier list is empty</h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-          Добавляй фильмы, аниме, игры или видео с YouTube и распределяй их по тирам от S до F.
+          Add films, anime, games or YouTube channels and sort them into tiers from S down to F.
         </p>
       </div>
 

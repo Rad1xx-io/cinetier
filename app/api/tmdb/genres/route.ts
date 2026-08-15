@@ -14,6 +14,6 @@ export async function GET() {
     });
   } catch (error) {
     const status = error instanceof TMDBError ? error.status : 500;
-    return NextResponse.json({ error: "Не удалось загрузить список жанров." }, { status });
+    return NextResponse.json({ error: "Could not load the genre list." }, { status });
   }
 }

@@ -55,28 +55,28 @@ function SignedOutButtons({ compact }: { compact: boolean }) {
     <div ref={rootRef} className="relative flex items-center gap-2">
       {compact ? (
         <Button variant="secondary" size="sm" onClick={() => setOpen((v) => !v)}>
-          Войти
+          Sign in
         </Button>
       ) : (
         <>
           {/* Between md and lg the desktop nav is too tight for two full-width buttons — collapse to one. */}
           <Button variant="secondary" size="sm" className="lg:hidden" onClick={() => setOpen((v) => !v)}>
-            Войти
+            Sign in
           </Button>
           <Button variant="ghost" size="sm" className="hidden lg:inline-flex" onClick={() => setOpen((v) => !v)}>
-            Войти
+            Sign in
           </Button>
           <Button size="sm" className="hidden lg:inline-flex" onClick={() => setOpen((v) => !v)}>
-            Зарегистрироваться
+            Create account
           </Button>
         </>
       )}
 
       {open && (
         <div className="absolute right-0 top-full z-30 mt-2 w-80 max-w-[90vw] rounded-xl border border-border bg-surface-raised p-4 shadow-xl">
-          <h2 className="text-sm font-semibold">Вход в TierListOnline</h2>
+          <h2 className="text-sm font-semibold">Sign in to TierListOnline</h2>
           <p className="mt-1 text-xs text-muted">
-            Если аккаунта ещё нет, он создастся автоматически.
+            If you do not have an account yet, one is created for you.
           </p>
           <div className="mt-3">
             <MagicLinkForm redirectTo="/" />
@@ -121,14 +121,14 @@ function AccountMenu({ email, compact }: { email: string; compact: boolean }) {
       {open && (
         <div
           role="menu"
-          aria-label="Меню аккаунта"
+          aria-label="Account menu"
           className="absolute right-0 top-full z-30 mt-2 w-56 rounded-xl border border-border bg-surface-raised p-1.5 shadow-xl"
         >
           <p className="truncate px-2.5 py-1.5 text-xs text-muted lg:hidden">{email}</p>
-          <MenuLink href="/profile" icon={User} label="Профиль" onClick={() => setOpen(false)} />
-          <MenuLink href="/tier-list" icon={ListChecks} label="Мои рейтинги" onClick={() => setOpen(false)} />
-          <MenuLink href="/settings" icon={SettingsIcon} label="Настройки" onClick={() => setOpen(false)} />
-          <MenuLink href="/settings#export" icon={Download} label="Экспорт данных" onClick={() => setOpen(false)} />
+          <MenuLink href="/profile" icon={User} label="Profile" onClick={() => setOpen(false)} />
+          <MenuLink href="/tier-list" icon={ListChecks} label="My rankings" onClick={() => setOpen(false)} />
+          <MenuLink href="/settings" icon={SettingsIcon} label="Settings" onClick={() => setOpen(false)} />
+          <MenuLink href="/settings#export" icon={Download} label="Export data" onClick={() => setOpen(false)} />
           <div className="my-1 h-px bg-border" />
           <button
             type="button"
@@ -137,7 +137,7 @@ function AccountMenu({ email, compact }: { email: string; compact: boolean }) {
             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-tier-s transition-colors hover:bg-tier-s/10"
           >
             <LogOut className="h-4 w-4" aria-hidden />
-            Выйти
+            Sign out
           </button>
         </div>
       )}

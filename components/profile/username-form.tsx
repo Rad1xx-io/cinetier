@@ -43,21 +43,21 @@ export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="rounded-xl border border-border bg-surface p-4">
-      <h2 className="font-semibold">Публичный профиль</h2>
+      <h2 className="font-semibold">Public profile</h2>
       <p className="mt-1 text-sm text-muted">
-        Юзернейм даёт вашему тир-листу постоянный адрес, которым можно делиться.
+        A username gives your tier list a permanent address you can share.
       </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-muted">Юзернейм</span>
+          <span className="mb-1 block text-xs font-medium text-muted">Username</span>
           <div className="flex items-center gap-1.5">
             <span className="text-sm text-muted">@</span>
             <Input
               value={username}
               onChange={(e) => setUsername(e.target.value.toLowerCase())}
               placeholder="username"
-              aria-label="Юзернейм"
+              aria-label="Username"
               autoComplete="off"
               required
             />
@@ -65,31 +65,31 @@ export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-muted">Отображаемое имя</span>
+          <span className="mb-1 block text-xs font-medium text-muted">Display name</span>
           <Input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Как вас показывать"
-            aria-label="Отображаемое имя"
+            placeholder="How you appear to others"
+            aria-label="Display name"
             autoComplete="off"
           />
         </label>
 
         <label className="block sm:col-span-2">
           <span className="mb-1 block text-xs font-medium text-muted">
-            Ссылка для поддержки <span className="font-normal">— необязательно</span>
+            Support link <span className="font-normal">— optional</span>
           </span>
           <Input
             value={donationUrl}
             onChange={(e) => setDonationUrl(e.target.value)}
             placeholder="https://boosty.to/…, CloudTips, Patreon"
-            aria-label="Ссылка для поддержки"
+            aria-label="Support link"
             inputMode="url"
             autoComplete="off"
           />
           <span className="mt-1 block text-xs text-muted">
-            Появится кнопкой «Поддержать» на вашей публичной странице. TierListOnline не принимает
-            платежи и ничего не удерживает — переход идёт напрямую на ваш сервис.
+            Appears as a “Support” button on your public page. TierListOnline accepts no payments
+            and withholds nothing — the visitor goes straight to your service.
           </span>
         </label>
       </div>
@@ -97,7 +97,7 @@ export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
       {username && !localError && (
         <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
           <Link2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          Ссылка: /u/{username}
+          Link: /u/{username}
         </p>
       )}
       {localError && (
@@ -110,13 +110,13 @@ export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
       <div className="mt-3 flex items-center gap-3">
         <Button type="submit" size="sm" disabled={status.kind === "saving" || Boolean(localError)}>
           {status.kind === "saving" && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-          {profile ? "Сохранить" : "Занять юзернейм"}
+          {profile ? "Save" : "Claim username"}
         </Button>
 
         {status.kind === "saved" && (
           <span className="flex items-center gap-1.5 text-sm text-accent">
             <Check className="h-3.5 w-3.5" aria-hidden />
-            Сохранено
+            Saved
           </span>
         )}
         {status.kind === "error" && (
@@ -146,9 +146,9 @@ export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
             className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
           />
           <label htmlFor="is-public" className="text-xs leading-relaxed text-muted">
-            <span className="font-medium text-foreground">Открыть тир-лист по ссылке.</span> Пока
-            включено, список виден любому, у кого есть адрес — включая посетителей без аккаунта.
-            Снимите галочку, чтобы закрыть доступ, не теряя юзернейм.
+            <span className="font-medium text-foreground">Publish my tier list.</span> While this is
+            on, anyone holding the address can read it — including visitors with no account.
+            Clear it to close access without giving up the username.
           </label>
         </div>
       )}
@@ -168,10 +168,10 @@ export function UsernameForm({ userId, profile, onSaved }: UsernameFormProps) {
           />
           <label htmlFor="allow-fork" className="text-xs leading-relaxed text-muted">
             <span className="font-medium text-foreground">
-              Разрешить другим форкать мой тир-лист.
+              Let other people fork my tier list.
             </span>{" "}
-            Посетители смогут скопировать вашу расстановку себе. Отключение прячет кнопку — но
-            всё, что видно на странице, при желании всё равно можно переписать вручную.
+            Visitors can copy your arrangement onto their own board. Turning this off hides the
+            button — though anything visible on the page can still be retyped by hand.
           </label>
         </div>
       )}

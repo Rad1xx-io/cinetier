@@ -9,17 +9,17 @@ export async function GET(request: NextRequest) {
   const id = idRaw ? Number(idRaw) : NaN;
 
   if (!Number.isFinite(id)) {
-    return NextResponse.json({ error: "Некорректный идентификатор аниме." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid anime id." }, { status: 400 });
   }
 
   try {
     const anime = await getAnimeDetails(id);
     if (!anime) {
-      return NextResponse.json({ error: "Аниме не найдено." }, { status: 404 });
+      return NextResponse.json({ error: "Anime not found." }, { status: 404 });
     }
     return NextResponse.json(anime);
   } catch (error) {
     const status = error instanceof AniListError ? error.status : 500;
-    return NextResponse.json({ error: "Не удалось загрузить данные об аниме." }, { status });
+    return NextResponse.json({ error: "Could not load anime details." }, { status });
   }
 }

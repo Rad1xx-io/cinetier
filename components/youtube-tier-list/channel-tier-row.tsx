@@ -9,7 +9,7 @@ import type { RankedChannel } from "@/lib/types/youtube";
 import type { Density } from "@/lib/hooks/use-density";
 import { TIER_META } from "@/lib/tier-meta";
 import { tierColorVar } from "@/lib/utils/tier-style";
-import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
+import { titlesCountLabel } from "@/lib/utils/plural";
 import { cn } from "@/lib/utils/cn";
 
 interface ChannelTierRowProps {
@@ -65,7 +65,7 @@ function ChannelTierRowImpl({
       </div>
       <div
         role="list"
-        aria-label={`Каналы в тире «${meta.name}»`}
+        aria-label={`Channels in the ${meta.name} tier`}
         className={cn(
           "flex min-h-28 flex-1 flex-wrap content-start items-start gap-4 p-3 transition-colors sm:min-h-32",
           isOver && "bg-accent/5"
@@ -74,7 +74,7 @@ function ChannelTierRowImpl({
         <SortableContext items={itemIds} strategy={rectSortingStrategy}>
           {items.length === 0 && (
             <p className="flex h-24 items-center px-2 text-xs text-muted">
-              {filtersActive ? "Нет совпадений" : draggable ? "Перетащите каналы сюда" : "Здесь пока пусто"}
+              {filtersActive ? "No matches" : draggable ? "Drag channels here" : "Nothing here yet"}
             </p>
           )}
           {items.map((channel) => (

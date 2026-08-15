@@ -24,14 +24,14 @@ export function DiscoverCard({ title, ranked, onAdd }: DiscoverCardProps) {
 
       {ranked ? (
         <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-background/85 px-2 py-1 text-xs font-medium backdrop-blur">
-          Добавлено <TierPill tier={ranked.tier} />
+          Added <TierPill tier={ranked.tier} />
         </span>
       ) : (
         <button
           type="button"
           onClick={() => onAdd(title)}
           className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-background/85 text-foreground backdrop-blur transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          aria-label={`Добавить «${title.title}» в список`}
+          aria-label={`Add “${title.title}” to my list`}
         >
           <Plus className="h-4 w-4" aria-hidden />
         </button>

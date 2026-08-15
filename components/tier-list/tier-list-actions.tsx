@@ -61,7 +61,7 @@ export function TierListActions({
       trackLinkCopied("tier_list", handle);
       try {
         await navigator.clipboard.writeText(url);
-        onNotify("Ссылка скопирована!");
+        onNotify("Link copied");
       } catch {
         // Clipboard access can be refused (insecure origin, denied permission);
         // showing the link is better than failing silently.
@@ -113,13 +113,13 @@ export function TierListActions({
       link.download = `tierlistonline-${new Date().toISOString().slice(0, 10)}.png`;
       link.href = dataUrl;
       link.click();
-      onNotify("Изображение сохранено");
+      onNotify("Image saved");
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       onNotify(
         reason === "export-timeout"
-          ? "Изображение не успело сформироваться. Попробуйте ещё раз."
-          : `Не удалось создать изображение: ${reason.slice(0, 120)}`
+          ? "The image took too long to render. Please try again."
+          : `Could not create the image: ${reason.slice(0, 120)}`
       );
     } finally {
       if (watermark) watermark.style.opacity = "0";
@@ -140,14 +140,14 @@ export function TierListActions({
       setDialogOpen(true);
       return;
     }
-    onNotify("Войдите, чтобы получить ссылку на свой тир-лист");
+    onNotify("Sign in to get a link to your tier list");
   }, [shareHandle, user, copyLink, onNotify]);
 
   const handleStartBattle = useCallback(() => {
     // Same gate as sharing: a battle row is owned by its creator, so there is
     // nothing to insert without a session.
     if (!user) {
-      onNotify("Войдите, чтобы создать батл");
+      onNotify("Sign in to create a battle");
       return;
     }
     setBattleOpen(true);
@@ -157,7 +157,7 @@ export function TierListActions({
     // Same gate as the rest: a post is owned by its author and signed with their
     // handle, so there is nothing to insert without a session.
     if (!user) {
-      onNotify("Войдите, чтобы опубликовать пост");
+      onNotify("Sign in to publish a post");
       return;
     }
     setPublishOpen(true);
@@ -171,17 +171,17 @@ export function TierListActions({
         ) : (
           <Download className="h-3.5 w-3.5" aria-hidden />
         )}
-        Скачать PNG
+        Download PNG
       </Button>
 
       <Button variant="secondary" size="sm" onClick={handleShare}>
         <Share2 className="h-3.5 w-3.5" aria-hidden />
-        Скопировать ссылку
+        Copy link
       </Button>
 
       <Button variant="secondary" size="sm" onClick={handlePublish}>
         <Send className="h-3.5 w-3.5" aria-hidden />
-        Опубликовать
+        Publish
       </Button>
 
       {/* Only offered once the board is public: the widget reads the same page
@@ -189,13 +189,13 @@ export function TierListActions({
       {shareHandle && (
         <Button variant="secondary" size="sm" onClick={() => setWidgetOpen(true)}>
           <MonitorPlay className="h-3.5 w-3.5" aria-hidden />
-          Виджет для OBS
+          OBS widget
         </Button>
       )}
 
       <Button size="sm" onClick={handleStartBattle} className="relative">
         <Swords className="h-3.5 w-3.5" aria-hidden />
-        Батл вкусов
+        Taste Battle
         {/* The one action here that brings other people in, so it gets the only
             accent button and a marker drawing the eye to it. */}
         <span className="absolute -right-1 -top-1 rounded-full bg-tier-s px-1 py-px text-[9px] font-bold uppercase leading-tight text-white">

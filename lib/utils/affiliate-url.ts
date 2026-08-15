@@ -40,7 +40,7 @@ export const AFFILIATE_PROVIDERS: AffiliateProvider[] = [
   // a partner feed. Kept because that is exactly what the stored field is for.
   {
     id: "kinopoisk",
-    label: "Кинопоиск",
+    label: "Kinopoisk",
     hosts: ["kinopoisk.ru"],
     searchUrl: (q) => `https://www.kinopoisk.ru/index.php?kp_query=${encodeURIComponent(q)}`,
     affiliateParam: "partner",
@@ -118,7 +118,7 @@ export const AFFILIATE_PROVIDERS: AffiliateProvider[] = [
   },
   {
     id: "tmdb",
-    label: "Где смотреть (TMDB)",
+    label: "Where to watch (TMDB)",
     hosts: ["themoviedb.org"],
   },
 ];

@@ -80,7 +80,7 @@ export function WidgetTierList({ listId, params }: WidgetTierListProps) {
   if (data === "missing") {
     return (
       <div data-widget-root className="p-3 text-xs text-white/70">
-        Список недоступен
+        List unavailable
       </div>
     );
   }

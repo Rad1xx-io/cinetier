@@ -22,28 +22,28 @@ export interface ContentTypeAccent {
  */
 export const CONTENT_TYPE_ACCENTS: Record<ContentType, ContentTypeAccent> = {
   movie: {
-    label: "Фильм",
+    label: "Film",
     badge: "border-amber-500/30 bg-amber-500/15 text-amber-300",
     text: "text-amber-400",
     hoverBorder: "hover:border-amber-500/40",
     hoverBg: "hover:bg-amber-500/10",
   },
   tv: {
-    label: "Сериал",
+    label: "TV",
     badge: "border-amber-500/30 bg-amber-500/15 text-amber-300",
     text: "text-amber-400",
     hoverBorder: "hover:border-amber-500/40",
     hoverBg: "hover:bg-amber-500/10",
   },
   anime: {
-    label: "Аниме",
+    label: "Anime",
     badge: "border-purple-500/30 bg-purple-500/15 text-purple-300",
     text: "text-purple-400",
     hoverBorder: "hover:border-purple-500/40",
     hoverBg: "hover:bg-purple-500/10",
   },
   game: {
-    label: "Игра",
+    label: "Game",
     badge: "border-emerald-500/30 bg-emerald-500/15 text-emerald-300",
     text: "text-emerald-400",
     hoverBorder: "hover:border-emerald-500/40",
@@ -66,10 +66,10 @@ export function contentTypeAccent(type: ContentType): ContentTypeAccent {
 export type CategoryFilter = "all" | ContentType;
 
 export const CATEGORY_FILTERS: { value: CategoryFilter; label: string }[] = [
-  { value: "all", label: "Все" },
-  { value: "movie", label: "Фильмы" },
-  { value: "tv", label: "Сериалы" },
-  { value: "anime", label: "Аниме" },
-  { value: "game", label: "Игры" },
+  { value: "all", label: "All" },
+  { value: "movie", label: "Films" },
+  { value: "tv", label: "TV" },
+  { value: "anime", label: "Anime" },
+  { value: "game", label: "Games" },
   { value: "youtube", label: "YouTube" },
 ];

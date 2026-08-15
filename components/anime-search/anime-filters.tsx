@@ -39,18 +39,18 @@ const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: CURRENT_YEAR + 1 - 1960 + 1 }, (_, i) => CURRENT_YEAR + 1 - i);
 
 const SEASONS: { value: AnimeSeason; label: string }[] = [
-  { value: "WINTER", label: "Зима" },
-  { value: "SPRING", label: "Весна" },
-  { value: "SUMMER", label: "Лето" },
-  { value: "FALL", label: "Осень" },
+  { value: "WINTER", label: "Winter" },
+  { value: "SPRING", label: "Spring" },
+  { value: "SUMMER", label: "Summer" },
+  { value: "FALL", label: "Fall" },
 ];
 
 const STATUSES: { value: AnimeStatus; label: string }[] = [
-  { value: "RELEASING", label: "Онгоинг" },
-  { value: "FINISHED", label: "Завершён" },
-  { value: "NOT_YET_RELEASED", label: "Анонс" },
-  { value: "HIATUS", label: "Приостановлен" },
-  { value: "CANCELLED", label: "Отменён" },
+  { value: "RELEASING", label: "Airing" },
+  { value: "FINISHED", label: "Finished" },
+  { value: "NOT_YET_RELEASED", label: "Announced" },
+  { value: "HIATUS", label: "On hiatus" },
+  { value: "CANCELLED", label: "Cancelled" },
 ];
 
 interface AnimeFiltersProps {
@@ -68,9 +68,9 @@ export function AnimeFilters({ value, onChange, genres, canReset, onReset }: Ani
         value={value.genre}
         onChange={(e) => onChange({ ...value, genre: e.target.value })}
         className={FILTER_SELECT_CLASS}
-        aria-label="Жанр"
+        aria-label="Genre"
       >
-        <option value="">Все жанры</option>
+        <option value="">All genres</option>
         {genres.map((g) => (
           <option key={g} value={g}>
             {g}
@@ -84,9 +84,9 @@ export function AnimeFilters({ value, onChange, genres, canReset, onReset }: Ani
           onChange({ ...value, season: e.target.value ? (e.target.value as AnimeSeason) : undefined })
         }
         className={FILTER_SELECT_CLASS}
-        aria-label="Сезон"
+        aria-label="Season"
       >
-        <option value="">Все сезоны</option>
+        <option value="">All seasons</option>
         {SEASONS.map((s) => (
           <option key={s.value} value={s.value}>
             {s.label}
@@ -100,9 +100,9 @@ export function AnimeFilters({ value, onChange, genres, canReset, onReset }: Ani
           onChange({ ...value, year: e.target.value ? Number(e.target.value) : undefined })
         }
         className={FILTER_SELECT_CLASS}
-        aria-label="Год выхода"
+        aria-label="Release year"
       >
-        <option value="">Все годы</option>
+        <option value="">All years</option>
         {YEARS.map((y) => (
           <option key={y} value={y}>
             {y}
@@ -116,9 +116,9 @@ export function AnimeFilters({ value, onChange, genres, canReset, onReset }: Ani
           onChange({ ...value, format: e.target.value ? (e.target.value as AnimeFormat) : undefined })
         }
         className={FILTER_SELECT_CLASS}
-        aria-label="Формат"
+        aria-label="Format"
       >
-        <option value="">Любой формат</option>
+        <option value="">Any format</option>
         {ANIME_FORMATS.map((f) => (
           <option key={f.value} value={f.value}>
             {f.label}
@@ -132,9 +132,9 @@ export function AnimeFilters({ value, onChange, genres, canReset, onReset }: Ani
           onChange({ ...value, status: e.target.value ? (e.target.value as AnimeStatus) : undefined })
         }
         className={FILTER_SELECT_CLASS}
-        aria-label="Статус"
+        aria-label="Status"
       >
-        <option value="">Любой статус</option>
+        <option value="">Any status</option>
         {STATUSES.map((s) => (
           <option key={s.value} value={s.value}>
             {s.label}
@@ -146,7 +146,7 @@ export function AnimeFilters({ value, onChange, genres, canReset, onReset }: Ani
         value={value.sort}
         onChange={(e) => onChange({ ...value, sort: e.target.value as AnimeSortMode })}
         className={FILTER_SELECT_CLASS}
-        aria-label="Сортировка"
+        aria-label="Sort"
       >
         {ANIME_SORTS.map((s) => (
           <option key={s.value} value={s.value}>
@@ -157,7 +157,7 @@ export function AnimeFilters({ value, onChange, genres, canReset, onReset }: Ani
 
       <Button variant="ghost" size="sm" onClick={onReset} disabled={!canReset}>
         <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-        Сбросить
+        Reset
       </Button>
     </div>
   );

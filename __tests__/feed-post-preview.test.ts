@@ -252,7 +252,7 @@ describe("validatePost", () => {
   });
 
   it("rejects a title that is only whitespace", () => {
-    expect(validatePost("   ", "")).toEqual({ ok: false, error: "Заголовок слишком короткий." });
+    expect(validatePost("   ", "")).toEqual({ ok: false, error: "The title is too short." });
   });
 
   it("rejects a title under the minimum", () => {

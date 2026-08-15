@@ -56,7 +56,7 @@ export function QuickTierMenu({ currentTier, onSelect, label }: QuickTierMenuPro
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="true"
         aria-expanded={open}
-        aria-label={`Изменить тир для «${label}» (сейчас: ${TIER_META[currentTier].name})`}
+        aria-label={`Change tier for “${label}” (currently ${TIER_META[currentTier].name})`}
         className="flex h-7 min-w-7 touch-none items-center justify-center rounded-md px-1.5 text-[11px] font-bold shadow backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         style={{
           backgroundColor: isUnrated ? "var(--surface-raised)" : tierColorVar(currentTier),
@@ -69,7 +69,7 @@ export function QuickTierMenu({ currentTier, onSelect, label }: QuickTierMenuPro
       {open && (
         <div
           role="menu"
-          aria-label="Выбор тира"
+          aria-label="Pick a tier"
           className="absolute left-1/2 top-full z-30 mt-1 flex -translate-x-1/2 gap-0.5 rounded-lg border border-border bg-surface-raised p-1 shadow-xl"
         >
           {TIER_ORDER.map((tier) => {

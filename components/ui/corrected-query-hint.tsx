@@ -20,7 +20,7 @@ export function CorrectedQueryHint({ correctedQuery }: CorrectedQueryHintProps) 
     <p className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted">
       <Lightbulb className="h-4 w-4 shrink-0 text-accent" aria-hidden />
       <span>
-        Возможно, вы искали:{" "}
+        Did you mean:{" "}
         <span className="font-medium text-foreground">{correctedQuery}</span>
       </span>
     </p>

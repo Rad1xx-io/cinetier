@@ -1,7 +1,7 @@
 import { ChannelTierListBoard } from "@/components/youtube-tier-list/channel-tier-list-board";
 
 export const metadata = {
-  title: "Тир-лист каналов — TierListOnline",
+  title: "Channel tier list — TierListOnline",
 };
 
 export default function YouTubeTierListPage() {

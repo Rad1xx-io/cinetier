@@ -30,7 +30,7 @@ const VALID_STATUSES: AnimeStatus[] = ["FINISHED", "RELEASING", "NOT_YET_RELEASE
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal });
   const body = await res.json();
-  if (!res.ok) throw new Error((body as ApiErrorBody).error ?? "Что-то пошло не так.");
+  if (!res.ok) throw new Error((body as ApiErrorBody).error ?? "Something went wrong.");
   return body as T;
 }
 
@@ -127,7 +127,7 @@ export function AnimeDiscoverClient() {
         setPage(1);
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
-        setError((err as Error).message || "Не удалось загрузить аниме. Попробуйте ещё раз.");
+        setError((err as Error).message || "Could not load anime. Please try again.");
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -156,7 +156,7 @@ export function AnimeDiscoverClient() {
       setHasNextPage(data.hasNextPage);
       setPage(nextPage);
     } catch (err) {
-      setError((err as Error).message || "Не удалось загрузить аниме. Попробуйте ещё раз.");
+      setError((err as Error).message || "Could not load anime. Please try again.");
     } finally {
       setLoadingMore(false);
     }
@@ -178,13 +178,13 @@ export function AnimeDiscoverClient() {
     <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 md:px-6 md:py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Аниме</h1>
-          <p className="mt-1 text-sm text-muted">Ищите аниме и добавляйте их в свой список.</p>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Anime</h1>
+          <p className="mt-1 text-sm text-muted">Search for anime and add them to your list.</p>
         </div>
         <Button asChild variant="secondary" size="sm">
           <Link href="/tier-list">
             <LayoutGrid className="h-4 w-4" aria-hidden />
-            Тир-лист
+            Tier list
           </Link>
         </Button>
       </div>
@@ -194,9 +194,9 @@ export function AnimeDiscoverClient() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск аниме по названию…"
+          placeholder="Search anime by title…"
           className="pl-9"
-          aria-label="Поиск аниме"
+          aria-label="Search anime"
         />
       </div>
 
@@ -219,13 +219,13 @@ export function AnimeDiscoverClient() {
         </div>
       )}
 
-      {loading && <p className="text-sm text-muted">Загрузка аниме…</p>}
+      {loading && <p className="text-sm text-muted">Loading anime…</p>}
 
       {!loading && !error && (
         <p className="text-sm text-muted">
           {results.length === 0
-            ? "Аниме не найдено."
-            : `Результаты: ${results.length}${hasNextPage ? "+" : ""}`}
+            ? "No anime found."
+            : `${results.length}${hasNextPage ? "+" : ""} results`}
         </p>
       )}
 
@@ -240,7 +240,7 @@ export function AnimeDiscoverClient() {
         <div className="flex justify-center pt-2">
           <Button variant="secondary" onClick={handleLoadMore} disabled={loadingMore}>
             {loadingMore && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            Показать ещё
+            Show more
           </Button>
         </div>
       )}

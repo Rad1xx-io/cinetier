@@ -22,8 +22,8 @@ const { CriteriaSection } = await import("@/components/criteria/criteria-section
 const { resetLazyCriteriaCache } = await import("@/lib/hooks/use-lazy-criteria");
 
 const scores: CriterionScore[] = [
-  { criterionId: "story", name: "Сюжет", score: 9 },
-  { criterionId: "sound", name: "Звук", score: 8 },
+  { criterionId: "story", name: "Story", score: 9 },
+  { criterionId: "sound", name: "Sound", score: 8 },
 ];
 
 beforeEach(() => {
@@ -41,19 +41,19 @@ describe("CriteriaSection — owner", () => {
     render(
       <CriteriaSection tmdbId={1} mediaType="movie" isRanked criteriaScores={undefined} />
     );
-    expect(screen.getByRole("button", { name: /Добавить критерии/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Add criteria/ })).toBeTruthy();
   });
 
   it("switches the control to editing once scores exist", () => {
     render(<CriteriaSection tmdbId={1} mediaType="movie" isRanked criteriaScores={scores} />);
-    expect(screen.getByRole("button", { name: /Изменить критерии/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Edit criteria/ })).toBeTruthy();
   });
 
   it("shows the derived average and the chips", () => {
     render(<CriteriaSection tmdbId={1} mediaType="movie" isRanked criteriaScores={scores} />);
     expect(screen.getByText("8.5")).toBeTruthy();
-    expect(screen.getByText(/Сюжет/)).toBeTruthy();
-    expect(screen.getByText(/Звук/)).toBeTruthy();
+    expect(screen.getByText(/Story/)).toBeTruthy();
+    expect(screen.getByText(/Sound/)).toBeTruthy();
   });
 
   it("renders nothing for a title the user has not ranked", () => {
@@ -69,7 +69,7 @@ describe("CriteriaSection — read-only", () => {
     render(
       <CriteriaSection tmdbId={1} mediaType="movie" isRanked criteriaScores={scores} readOnly />
     );
-    expect(screen.queryByRole("button", { name: /критерии/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /criteria/ })).toBeNull();
     // The drawer must not be mounted either — a visitor should have no way in.
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -79,15 +79,15 @@ describe("CriteriaSection — read-only", () => {
       <CriteriaSection tmdbId={1} mediaType="movie" isRanked criteriaScores={scores} readOnly />
     );
     expect(screen.getByText("8.5")).toBeTruthy();
-    expect(screen.getByText(/Сюжет/)).toBeTruthy();
+    expect(screen.getByText(/Story/)).toBeTruthy();
   });
 
-  it("labels the score as someone else's rather than 'своя'", () => {
+  it("labels the score as someone else's rather than the viewer's own", () => {
     render(
       <CriteriaSection tmdbId={1} mediaType="movie" isRanked criteriaScores={scores} readOnly />
     );
-    expect(screen.getByText(/Оценка по критериям/)).toBeTruthy();
-    expect(screen.queryByText(/Своя оценка/)).toBeNull();
+    expect(screen.getByText(/Criteria score/)).toBeTruthy();
+    expect(screen.queryByText(/Your rating/)).toBeNull();
   });
 
   it("renders nothing when the owner scored no criteria", () => {

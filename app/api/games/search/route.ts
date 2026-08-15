@@ -38,12 +38,12 @@ export async function GET(request: NextRequest) {
     const status =
       error instanceof IGDBError || error instanceof SteamError ? error.status : 500;
 
-    let message = "Не удалось загрузить игры. Попробуйте ещё раз.";
+    let message = "Could not load games. Please try again.";
     if (status === 429) {
-      message = "Каталог временно ограничил доступ. Попробуйте через несколько минут.";
+      message = "The catalogue is rate-limiting us. Try again in a few minutes.";
     } else if (error instanceof IGDBError && (status === 401 || status === 503)) {
       // A credential problem is fixed in .env.local, not by retrying.
-      message = "Каталог игр IGDB не настроен: проверьте TWITCH_CLIENT_ID и TWITCH_CLIENT_SECRET.";
+      message = "The IGDB game catalogue is not configured: check TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET.";
     }
 
     return NextResponse.json({ error: message }, { status });

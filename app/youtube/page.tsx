@@ -3,7 +3,7 @@ import { YouTubeDiscoverClient } from "@/components/youtube-search/youtube-disco
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata = {
-  title: "YouTube-каналы — TierListOnline",
+  title: "YouTube channels — TierListOnline",
 };
 
 export default function YouTubePage() {

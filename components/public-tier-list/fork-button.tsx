@@ -13,7 +13,7 @@ import { pushCloudChannels } from "@/lib/storage/youtube/cloud-sync";
 import { forkChannels, forkTitles, type ForkStrategy } from "@/lib/storage/fork";
 import { armForkInteraction, dominantCategory, setForkToast } from "@/lib/storage/fork-handoff";
 import { trackForkClicked, trackForkCreated } from "@/lib/analytics/events";
-import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
+import { titlesCountLabel } from "@/lib/utils/plural";
 import type { RankedTitle } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
 import type { Profile } from "@/lib/supabase/profiles";
@@ -82,8 +82,8 @@ export function ForkButton({ profile, sourceTitles, sourceChannels }: ForkButton
     const kept = forkedTitles.kept + forkedChannels.kept;
     setForkToast(
       strategy === "replace"
-        ? `Скопировано: ${titlesCountLabel(added)}`
-        : `Добавлено ${added}, ваши ${kept} сохранены`
+        ? `Copied ${titlesCountLabel(added)}`
+        : `Added ${added}, kept your ${kept}`
     );
 
     router.push("/tier-list");
@@ -95,9 +95,9 @@ export function ForkButton({ profile, sourceTitles, sourceChannels }: ForkButton
   // disabled one with a reason tells the visitor the author made a choice.
   if (!profile.allowFork) {
     return (
-      <Button variant="secondary" disabled title="Автор запретил форк своего списка">
+      <Button variant="secondary" disabled title="The author has turned forking off">
         <Lock className="h-4 w-4" aria-hidden />
-        Форк отключён автором
+        Forking is off
       </Button>
     );
   }
@@ -113,7 +113,7 @@ export function ForkButton({ profile, sourceTitles, sourceChannels }: ForkButton
         ) : (
           <GitFork className="h-4 w-4" aria-hidden />
         )}
-        Форкнуть тир-лист
+        Fork this tier list
       </Button>
 
       <ForkConflictDialog

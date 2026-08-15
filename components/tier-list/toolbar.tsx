@@ -47,16 +47,16 @@ export function Toolbar({
           <Input
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Поиск в моём списке…"
+            placeholder="Search my list…"
             className="pl-9 pr-9"
-            aria-label="Поиск в моём списке"
+            aria-label="Search my list"
           />
           {search && (
             <button
               type="button"
               onClick={() => onSearchChange("")}
               className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              aria-label="Очистить поиск"
+              aria-label="Clear search"
             >
               <X className="h-3.5 w-3.5" aria-hidden />
             </button>
@@ -70,7 +70,7 @@ export function Toolbar({
           <div
             className="flex flex-wrap rounded-lg border border-border p-0.5"
             role="group"
-            aria-label="Фильтр по типу"
+            aria-label="Filter by type"
           >
             {MEDIA_OPTIONS.map((opt) => (
               <button
@@ -88,7 +88,7 @@ export function Toolbar({
             ))}
           </div>
 
-          <div className="flex rounded-lg border border-border p-0.5" role="group" aria-label="Плотность отображения">
+          <div className="flex rounded-lg border border-border p-0.5" role="group" aria-label="Display density">
             <button
               type="button"
               onClick={() => onDensityChange("comfortable")}
@@ -97,10 +97,10 @@ export function Toolbar({
                 density === "comfortable" ? "bg-accent text-accent-foreground" : "text-muted hover:text-foreground"
               )}
               aria-pressed={density === "comfortable"}
-              title="Комфортный режим"
+              title="Comfortable layout"
             >
               <Rows3 className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden sm:inline">Комфортно</span>
+              <span className="hidden sm:inline">Comfortable</span>
             </button>
             <button
               type="button"
@@ -110,10 +110,10 @@ export function Toolbar({
                 density === "compact" ? "bg-accent text-accent-foreground" : "text-muted hover:text-foreground"
               )}
               aria-pressed={density === "compact"}
-              title="Компактный режим"
+              title="Compact layout"
             >
               <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden sm:inline">Компактно</span>
+              <span className="hidden sm:inline">Compact</span>
             </button>
           </div>
 
@@ -121,18 +121,18 @@ export function Toolbar({
             value={sort}
             onChange={(e) => onSortChange(e.target.value as SortMode)}
             className="h-9 rounded-lg border border-border bg-surface px-2 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            aria-label="Сортировка"
+            aria-label="Sort"
           >
-            <option value="manual">Ручной порядок</option>
-            <option value="newest">Недавно добавленные</option>
-            <option value="title">Название А-Я</option>
-            <option value="year">Год выпуска</option>
-            <option value="rating">Рейтинг</option>
+            <option value="manual">Manual order</option>
+            <option value="newest">Recently added</option>
+            <option value="title">Title A–Z</option>
+            <option value="year">Release year</option>
+            <option value="rating">Rating</option>
           </select>
 
           <Button variant="ghost" size="sm" onClick={onReset} disabled={isDefault}>
             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-            Сбросить фильтры
+            Reset filters
           </Button>
 
           <span
@@ -143,13 +143,13 @@ export function Toolbar({
             aria-live="polite"
           >
             <Check className="h-3.5 w-3.5 text-accent" aria-hidden />
-            Сохранено
+            Saved
           </span>
         </div>
       </div>
       {sort !== "manual" && (
         <p className="mt-2 text-xs text-muted">
-          Перетаскивание доступно при сортировке «Ручной порядок».
+          Drag and drop only works while sorting is set to “Manual order”.
         </p>
       )}
     </div>

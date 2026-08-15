@@ -56,7 +56,7 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
         <Link
           href="/games"
           className="absolute left-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-background/70 backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:left-6"
-          aria-label="Назад к поиску"
+          aria-label="Back to search"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
         </Link>
@@ -84,7 +84,7 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
                 </span>
               )}
               {details.platforms.length > 0 && <span>{details.platforms.join(" · ")}</span>}
-              <Badge variant="outline">{details.isFree ? "Бесплатно" : details.price ?? "—"}</Badge>
+              <Badge variant="outline">{details.isFree ? "Free" : details.price ?? "—"}</Badge>
             </div>
 
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{details.title}</h1>
@@ -101,7 +101,7 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
             )}
 
             <p className="mt-4 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-foreground/90">
-              {details.shortDescription || "Описание отсутствует."}
+              {details.shortDescription || "No description available."}
             </p>
 
             <a
@@ -111,25 +111,25 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
               className="mt-3 inline-flex items-center gap-1 text-xs text-muted hover:text-accent"
             >
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-              Открыть в Steam
+              Open on Steam
             </a>
 
             <div className="mt-6 space-y-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                Статус:{" "}
+                Status:{" "}
                 <span className="text-foreground">
-                  {!hydrated ? "…" : !ranked ? "Не добавлено" : `Ваш тир — ${tierLabel(ranked.tier)}`}
+                  {!hydrated ? "…" : !ranked ? "Not added" : `Your tier — ${tierLabel(ranked.tier)}`}
                 </span>
               </p>
 
               {!ranked ? (
                 <Button onClick={handleAdd} disabled={!hydrated}>
                   <Plus className="h-4 w-4" aria-hidden />
-                  Добавить в список
+                  Add to my list
                 </Button>
               ) : (
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Изменить тир">
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Change tier">
                     {TIER_ORDER.map((tier) => {
                       const active = ranked.tier === tier;
                       const isUnrated = tier === "Unrated";
@@ -158,7 +158,7 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
                   </div>
                   <Button variant="destructive" size="sm" onClick={() => remove(details.appId, "game")}>
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                    Удалить
+                    Remove
                   </Button>
                 </div>
               )}

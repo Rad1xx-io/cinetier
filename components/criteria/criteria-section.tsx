@@ -98,15 +98,15 @@ export function CriteriaSection({
         {!readOnly && (
           <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
             <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
-            {count > 0 ? "Изменить критерии" : "Добавить критерии"}
+            {count > 0 ? "Edit criteria" : "Add criteria"}
           </Button>
         )}
 
         {average !== null && (
           <p className="text-sm text-muted">
-            {readOnly ? "Оценка по критериям:" : "Своя оценка:"}{" "}
+            {readOnly ? "Criteria score:" : "Your rating:"}{" "}
             <span className="font-semibold text-accent">{average.toFixed(1)}</span>
-            <span className="text-muted"> · {count} крит.</span>
+            <span className="text-muted"> · {count} criteria</span>
           </p>
         )}
       </div>

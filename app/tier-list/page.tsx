@@ -1,7 +1,7 @@
 import { TierListBoard } from "@/components/tier-list/tier-list-board";
 
 export const metadata = {
-  title: "Тир-лист — TierListOnline",
+  title: "Tier list — TierListOnline",
 };
 
 export default function TierListPage() {

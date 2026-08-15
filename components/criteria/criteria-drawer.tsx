@@ -83,7 +83,7 @@ export function CriteriaDrawer({
     // Guards on both id and name: a preset could share a name with something
     // the user already typed by hand, and that is still a duplicate.
     if (activeIds.has(criterionId) || activeNames.has(normalizeCriterionName(name))) {
-      setError(`«${name}» уже в списке.`);
+      setError(`“${name}” is already on the list.`);
       return;
     }
     setScores((prev) => [...prev, { criterionId, name, score: SCORE_DEFAULT }]);
@@ -96,11 +96,11 @@ export function CriteriaDrawer({
     const name = draftName.trim();
 
     if (!name) {
-      setError("Введите название критерия.");
+      setError("Enter a name for the criterion.");
       return;
     }
     if (activeNames.has(normalizeCriterionName(name))) {
-      setError(`«${name}» уже в списке.`);
+      setError(`“${name}” is already on the list.`);
       return;
     }
 
@@ -128,7 +128,7 @@ export function CriteriaDrawer({
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="criteria-drawer-title">
       <button
         type="button"
-        aria-label="Закрыть панель критериев"
+        aria-label="Close the criteria panel"
         onClick={onClose}
         className="absolute inset-0 bg-background/70 backdrop-blur-sm"
       />
@@ -137,16 +137,16 @@ export function CriteriaDrawer({
         <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div>
             <h2 id="criteria-drawer-title" className="text-lg font-semibold">
-              Критерии оценки
+              Rating criteria
             </h2>
             <p className="mt-0.5 text-xs text-muted">
-              Разложите оценку на составляющие — от 1 до 10 с шагом 0,1.
+              Break a rating into parts — 1 to 10, in steps of 0.1.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Закрыть"
+            aria-label="Close"
             className="rounded-lg p-1.5 text-muted transition-colors hover:bg-surface-raised hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <X className="h-4 w-4" aria-hidden />
@@ -156,12 +156,12 @@ export function CriteriaDrawer({
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
           <section>
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted">
-              Активные критерии
+              Active criteria
             </h3>
 
             {scores.length === 0 ? (
               <p className="mt-3 rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted">
-                Пока ничего не выбрано. Добавьте из готовых ниже или впишите своё.
+                Nothing chosen yet. Add one from the presets below, or write your own.
               </p>
             ) : (
               <ul className="mt-3 space-y-4">
@@ -177,7 +177,7 @@ export function CriteriaDrawer({
                       <button
                         type="button"
                         onClick={() => removeCriterion(criterion.criterionId)}
-                        aria-label={`Удалить критерий «${criterion.name}»`}
+                        aria-label={`Remove the “${criterion.name}” criterion`}
                         className="shrink-0 rounded-md p-1.5 text-muted transition-colors hover:bg-tier-s/10 hover:text-tier-s focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                       >
                         <Trash2 className="h-3.5 w-3.5" aria-hidden />
@@ -190,7 +190,7 @@ export function CriteriaDrawer({
                       step={SCORE_STEP}
                       value={criterion.score}
                       onChange={(e) => updateScore(criterion.criterionId, Number(e.target.value))}
-                      aria-label={`Оценка «${criterion.name}»`}
+                      aria-label={`“${criterion.name}” score`}
                       className="mt-2 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                       style={{ accentColor: "var(--accent)" }}
                     />
@@ -201,7 +201,7 @@ export function CriteriaDrawer({
           </section>
 
           <section>
-            <h3 className="text-xs font-medium uppercase tracking-wide text-muted">Готовые наборы</h3>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted">Preset sets</h3>
             <div className="mt-3 space-y-3">
               {DEFAULT_PRESETS.map((group) => (
                 <div key={group.id}>
@@ -237,7 +237,7 @@ export function CriteriaDrawer({
           </section>
 
           <section>
-            <h3 className="text-xs font-medium uppercase tracking-wide text-muted">Свой критерий</h3>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted">Your own criterion</h3>
             <form onSubmit={handleAddCustom} className="mt-3 flex gap-2">
               <Input
                 ref={nameInputRef}
@@ -246,13 +246,13 @@ export function CriteriaDrawer({
                   setDraftName(e.target.value);
                   if (error) setError(null);
                 }}
-                placeholder="Например, «Химия актёров»"
-                aria-label="Название критерия"
+                placeholder="For example, “Cast chemistry”"
+                aria-label="Criterion name"
                 maxLength={40}
               />
               <Button type="submit" variant="secondary" disabled={!draftName.trim()}>
                 <Plus className="h-4 w-4" aria-hidden />
-                Добавить
+                Add
               </Button>
             </form>
             {error && (
@@ -265,7 +265,7 @@ export function CriteriaDrawer({
 
         <footer className="border-t border-border px-5 py-4">
           <Button className="w-full justify-center" onClick={() => onSave(scores)}>
-            Сохранить критерии
+            Save criteria
             {scores.length > 0 && ` (${scores.length})`}
           </Button>
         </footer>

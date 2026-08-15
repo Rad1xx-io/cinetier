@@ -3,7 +3,7 @@ import { DiscoverClient } from "@/components/search/discover-client";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata = {
-  title: "Фильмы и сериалы — TierListOnline",
+  title: "Films and TV — TierListOnline",
 };
 
 export default function DiscoverPage() {

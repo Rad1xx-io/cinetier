@@ -5,7 +5,7 @@ import { Check, Download, TriangleAlert, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRankedTitles } from "@/lib/hooks/use-ranked-titles";
 import { useDensity, isDensity } from "@/lib/hooks/use-density";
-import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
+import { titlesCountLabel } from "@/lib/utils/plural";
 
 type Notice = { kind: "success" | "error"; message: string } | null;
 
@@ -35,7 +35,7 @@ export function ImportExportPanel() {
     const bundle = { ...JSON.parse(exportRatings()), displayDensity: density };
     const date = new Date().toISOString().slice(0, 10);
     downloadJson(`tierlistonline-export-${date}.json`, JSON.stringify(bundle, null, 2));
-    setNotice({ kind: "success", message: "Ваши рейтинги были экспортированы." });
+    setNotice({ kind: "success", message: "Your rankings have been exported." });
   }
 
   function handleImportClick() {
@@ -62,12 +62,12 @@ export function ImportExportPanel() {
 
       setNotice({
         kind: "success",
-        message: `Импортировано ${titlesCountLabel(result.imported)}.`,
+        message: `Imported ${titlesCountLabel(result.imported)}.`,
       });
     } catch {
       setNotice({
         kind: "error",
-        message: "Этот файл не похож на корректный экспорт TierListOnline. Ничего не изменено.",
+        message: "That file does not look like a TierListOnline export. Nothing was changed.",
       });
     }
   }
@@ -79,25 +79,25 @@ export function ImportExportPanel() {
     }
     clearAll();
     setConfirmingClear(false);
-    setNotice({ kind: "success", message: "Ваши рейтинги были очищены." });
+    setNotice({ kind: "success", message: "Your rankings have been cleared." });
   }
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-surface p-4">
-        <h2 className="font-semibold">Резервное копирование</h2>
+        <h2 className="font-semibold">Backups</h2>
         <p className="mt-1 text-sm text-muted">
-          {titlesCountLabel(titles.length)} хранится только в локальном хранилище этого браузера.
-          Экспортируйте список регулярно, чтобы иметь резервную копию.
+          {titlesCountLabel(titles.length)} stored only in this browser’s local storage. Export the
+          list from time to time so you have a copy.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Button onClick={handleExport} variant="secondary">
             <Download className="h-4 w-4" aria-hidden />
-            Экспортировать рейтинги
+            Export rankings
           </Button>
           <Button onClick={handleImportClick} variant="secondary">
             <Upload className="h-4 w-4" aria-hidden />
-            Импортировать рейтинги
+            Import rankings
           </Button>
           <input
             ref={fileInputRef}
@@ -111,10 +111,10 @@ export function ImportExportPanel() {
       </div>
 
       <div className="rounded-xl border border-tier-s/30 bg-tier-s/5 p-4">
-        <h2 className="font-semibold text-tier-s">Опасная зона</h2>
+        <h2 className="font-semibold text-tier-s">Danger zone</h2>
         <p className="mt-1 text-sm text-muted">
-          Полностью удалить все тайтлы из вашего тир-листа. Это действие необратимо, если вы не
-          экспортировали резервную копию.
+          Delete every title from your tier list. There is no undo unless you exported a backup
+          first.
         </p>
         <Button
           onClick={handleClearAll}
@@ -124,7 +124,7 @@ export function ImportExportPanel() {
           onBlur={() => setConfirmingClear(false)}
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden />
-          {confirmingClear ? "Нажмите ещё раз для подтверждения" : "Очистить все рейтинги"}
+          {confirmingClear ? "Press again to confirm" : "Clear all rankings"}
         </Button>
       </div>
 

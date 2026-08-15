@@ -98,7 +98,7 @@ export function forkItems<T extends Rankable>(
  * The author's per-criterion breakdown is deliberately dropped. It is their
  * private judgement of *why* a title sits where it does, not part of the
  * arrangement being copied — carrying it across would put a stranger's numbers
- * under "Своя оценка" on the forker's card, which is worse than showing none.
+ * under "Your rating" on the forker's card, which is worse than showing none.
  * The tier itself is copied, because the tier is the thing being forked.
  */
 export function forkTitles(

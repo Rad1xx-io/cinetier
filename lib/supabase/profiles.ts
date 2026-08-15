@@ -46,10 +46,10 @@ export const USERNAME_PATTERN = /^[a-z0-9_-]{3,20}$/;
 
 export function validateUsername(raw: string): string | null {
   const value = raw.trim().toLowerCase();
-  if (value.length < 3) return "Минимум 3 символа.";
-  if (value.length > 20) return "Максимум 20 символов.";
+  if (value.length < 3) return "At least 3 characters.";
+  if (value.length > 20) return "At most 20 characters.";
   if (!USERNAME_PATTERN.test(value)) {
-    return "Только латинские буквы, цифры, дефис и подчёркивание.";
+    return "Latin letters, digits, hyphen and underscore only.";
   }
   return null;
 }
@@ -79,7 +79,7 @@ export async function saveProfile(input: {
   donationUrl?: string;
 }): Promise<SaveProfileResult> {
   const supabase = getSupabaseBrowserClient();
-  if (!supabase) return { ok: false, error: "Облачные аккаунты не настроены." };
+  if (!supabase) return { ok: false, error: "Cloud accounts are not configured." };
 
   const username = input.username.trim().toLowerCase();
   const invalid = validateUsername(username);
@@ -90,7 +90,7 @@ export async function saveProfile(input: {
   const rawDonation = input.donationUrl?.trim() ?? "";
   const donationUrl = rawDonation ? safeDonationUrl(rawDonation) : null;
   if (rawDonation && !donationUrl) {
-    return { ok: false, error: "Ссылка для поддержки должна начинаться с https:// и вести на сайт." };
+    return { ok: false, error: "The support link must start with https:// and point at a website." };
   }
 
   const { data, error } = await supabase
@@ -113,7 +113,7 @@ export async function saveProfile(input: {
     const taken = error.code === "23505" || /duplicate key/i.test(error.message);
     return {
       ok: false,
-      error: taken ? "Этот юзернейм уже занят." : "Не удалось сохранить профиль.",
+      error: taken ? "That username is taken." : "Could not save the profile.",
     };
   }
 

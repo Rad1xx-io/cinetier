@@ -26,7 +26,7 @@ export function ChannelThumbnail({
         )}
       >
         <SquarePlay className="h-1/2 w-1/2" aria-hidden />
-        <span className="sr-only">{title} (аватар недоступен)</span>
+        <span className="sr-only">{title} (avatar unavailable)</span>
       </div>
     );
   }
@@ -35,7 +35,7 @@ export function ChannelThumbnail({
     <div className={cn("relative aspect-square overflow-hidden rounded-full bg-surface-raised", className)}>
       <Image
         src={thumbnailUrl}
-        alt={`${title} — аватар канала`}
+        alt={`${title} channel avatar`}
         fill
         sizes={sizes ?? "(max-width: 640px) 33vw, 120px"}
         className="object-cover"

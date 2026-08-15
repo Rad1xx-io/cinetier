@@ -30,7 +30,7 @@ import type { ApiErrorBody, RankedTitle } from "@/lib/types";
 async function fetchJson<T>(url: string, signal: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal });
   const body = await res.json();
-  if (!res.ok) throw new Error((body as ApiErrorBody).error ?? "Что-то пошло не так.");
+  if (!res.ok) throw new Error((body as ApiErrorBody).error ?? "Something went wrong.");
   return body as T;
 }
 
@@ -120,7 +120,7 @@ export function GamesDiscoverClient() {
         if ((err as Error).name === "AbortError") return;
         // Deliberately keeps whatever is already on screen: a failed request
         // mid-typing should not wipe the results the user was looking at.
-        setError((err as Error).message || "Не удалось загрузить игры. Попробуйте ещё раз.");
+        setError((err as Error).message || "Could not load games. Please try again.");
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -153,7 +153,7 @@ export function GamesDiscoverClient() {
       setHasMore(data.hasMore);
       setPage(nextPage);
     } catch (err) {
-      setError((err as Error).message || "Не удалось загрузить игры. Попробуйте ещё раз.");
+      setError((err as Error).message || "Could not load games. Please try again.");
     } finally {
       setLoadingMore(false);
     }
@@ -182,13 +182,13 @@ export function GamesDiscoverClient() {
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:px-6 md:py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Игры</h1>
-          <p className="mt-1 text-sm text-muted">Ищите игры и добавляйте их в свой список.</p>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Games</h1>
+          <p className="mt-1 text-sm text-muted">Search for games and add them to your list.</p>
         </div>
         <Button asChild variant="secondary" size="sm">
           <Link href="/tier-list">
             <LayoutGrid className="h-4 w-4" aria-hidden />
-            Тир-лист
+            Tier list
           </Link>
         </Button>
       </div>
@@ -201,9 +201,9 @@ export function GamesDiscoverClient() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск игр по названию…"
+          placeholder="Search games by title…"
           className="pl-9"
-          aria-label="Поиск игр"
+          aria-label="Search games"
         />
       </div>
 
@@ -221,7 +221,7 @@ export function GamesDiscoverClient() {
           <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
           <span>
             {error}
-            {results.length > 0 && " Ниже — последние загруженные игры."}
+            {results.length > 0 && " The games below are the last ones loaded."}
           </span>
         </div>
       )}
@@ -229,17 +229,17 @@ export function GamesDiscoverClient() {
       {!error && stale && (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
           <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
-          Каталог сейчас недоступен — показаны сохранённые результаты.
+          The catalogue is unavailable right now — these are cached results.
         </div>
       )}
 
-      {loading && <p className="text-sm text-muted">Загрузка игр…</p>}
+      {loading && <p className="text-sm text-muted">Loading games…</p>}
 
       {!loading && !error && (
         <p className="text-sm text-muted">
           {results.length === 0
-            ? "По этим фильтрам игры не найдены."
-            : `Найдено: ${results.length}`}
+            ? "No games match these filters."
+            : `${results.length} found`}
         </p>
       )}
 
@@ -256,7 +256,7 @@ export function GamesDiscoverClient() {
         <div className="flex justify-center pt-2">
           <Button variant="secondary" onClick={handleLoadMore} disabled={loadingMore}>
             {loadingMore && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            Загрузить ещё
+            Load more
           </Button>
         </div>
       )}

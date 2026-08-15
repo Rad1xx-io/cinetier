@@ -40,9 +40,9 @@ import { tierColorVar } from "@/lib/utils/tier-style";
 import { cn } from "@/lib/utils/cn";
 
 const CATEGORY_LABELS: Record<BattleCategory, string> = {
-  cinema: "Кино",
-  anime: "Аниме",
-  games: "Игры",
+  cinema: "Film",
+  anime: "Anime",
+  games: "Games",
   youtube: "YouTube",
 };
 
@@ -263,7 +263,7 @@ export function CreateBattleModal({
       // Skipping is allowed during the pass, so it can end below the floor.
       // What was rated is kept — the author only has to fill the gap.
       setError(
-        `Оценено ${finalSelection.length} из ${MIN_POOL_SIZE} нужных. Оцените ещё немного — пропущенные позиции в батл не попадут.`
+        `${finalSelection.length} of the ${MIN_POOL_SIZE} needed are rated. Rate a few more — skipped entries do not go into the battle.`
       );
       return;
     }
@@ -283,7 +283,7 @@ export function CreateBattleModal({
 
     setCreating(false);
     if (!id) {
-      setError("Не удалось создать батл. Проверьте соединение и попробуйте ещё раз.");
+      setError("Could not create the battle. Check your connection and try again.");
       return;
     }
 
@@ -306,8 +306,8 @@ export function CreateBattleModal({
     if (canWebShare()) {
       try {
         await navigator.share({
-          title: "TierListOnline — Батл вкусов",
-          text: "Оцените тот же набор, что и я, и посмотрим, насколько сойдёмся:",
+          title: "TierListOnline — Taste Battle",
+          text: "Rate the same line-up I did and see how close we land:",
           url: link,
         });
         return;
@@ -322,7 +322,7 @@ export function CreateBattleModal({
       trackLinkCopied("battle", battleId);
       setCopied(true);
     } catch {
-      window.prompt("Скопируйте ссылку:", link);
+      window.prompt("Copy the link:", link);
     }
   }
 
@@ -343,23 +343,23 @@ export function CreateBattleModal({
             <h2 className="flex items-center gap-2 text-base font-semibold sm:text-lg">
               <Swords className="h-4 w-4 shrink-0 text-accent" aria-hidden />
               {step === "rating"
-                ? "Сначала оцените сами"
+                ? "Rate them yourself first"
                 : battleId
-                  ? "Ссылка готова!"
-                  : "Батл вкусов"}
+                  ? "Link ready"
+                  : "Taste Battle"}
             </h2>
             <p className="mt-1 text-sm text-muted">
               {step === "rating"
-                ? `${unrated.length} поз. вслепую — потом сразу получите ссылку.`
+                ? `${unrated.length} to rate blind — then you get the link.`
                 : battleId
-                  ? "Отправьте её другу — он оценит тот же набор, и вы увидите процент совпадения."
-                  : "Друг оценит ваш набор вслепую, а мы посчитаем, насколько сошлись вкусы."}
+                  ? "Send it to a friend — they rate the same line-up and you see how closely you match."
+                  : "A friend rates your line-up blind, and we work out how closely your taste matches."}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Закрыть"
+            aria-label="Close"
             className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:text-foreground"
           >
             <X className="h-4 w-4" aria-hidden />
@@ -369,8 +369,8 @@ export function CreateBattleModal({
         {step === "rating" ? (
           <div className="mt-2">
             <p className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-xs text-muted">
-              Оцените позиции, которых нет в вашем списке. Друг пройдёт тот же набор, и мы сравним
-              ответы — поэтому оценивайте так же честно, как оценивали бы у себя на доске.
+              Rate the entries that are not on your board. A friend plays the same line-up and we
+              compare the answers — so rate them as honestly as you would your own.
             </p>
             {/* The same component the friend will play, so the author's answers
                 are produced exactly the way the answers they are compared against
@@ -387,7 +387,7 @@ export function CreateBattleModal({
             />
             <div className="mt-2 flex justify-start">
               <Button variant="ghost" size="sm" onClick={() => setStep("setup")} disabled={creating}>
-                Вернуться к набору
+                Back to the line-up
               </Button>
             </div>
           </div>
@@ -405,10 +405,10 @@ export function CreateBattleModal({
                 ) : (
                   <Copy className="h-4 w-4" aria-hidden />
                 )}
-                {copied ? "Ссылка скопирована" : "Поделиться ссылкой"}
+                {copied ? "Link copied" : "Share the link"}
               </Button>
               <Button variant="secondary" onClick={onClose} className="sm:w-auto">
-                Готово
+                Done
               </Button>
             </div>
           </div>
@@ -417,12 +417,12 @@ export function CreateBattleModal({
             <div
               className="mt-4 grid grid-cols-2 gap-1 rounded-lg border border-border p-0.5"
               role="group"
-              aria-label="Источник набора"
+              aria-label="Line-up source"
             >
               {(
                 [
-                  ["list", "Мой тир-лист"],
-                  ["preset", "Подборки"],
+                  ["list", "My tier list"],
+                  ["preset", "Presets"],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -451,7 +451,7 @@ export function CreateBattleModal({
                 <div
                   className="mt-3 flex flex-wrap gap-1 rounded-lg border border-border p-0.5"
                   role="group"
-                  aria-label="Категория батла"
+                  aria-label="Battle category"
                 >
                   {(Object.keys(CATEGORY_LABELS) as BattleCategory[]).map((value) => (
                     <button
@@ -480,7 +480,7 @@ export function CreateBattleModal({
 
                 <fieldset className="mt-3">
                   <legend className="text-xs text-muted">
-                    Тиры в батле — можно собрать и «худшее из худшего»
+                    Tiers to include — build a “worst of the worst” if you like
                   </legend>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {TIERS.map((tier) => {
@@ -513,11 +513,11 @@ export function CreateBattleModal({
               <div className="mt-3 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-muted">
-                    {preset ? `${preset.items.length} позиций в пуле` : "Выберите подборку"}
+                    {preset ? `${preset.items.length} in the pool` : "Pick a preset"}
                   </p>
                   <Button variant="secondary" size="sm" onClick={() => setPresetSeed((s) => s + 1)}>
                     <Dices className="h-3.5 w-3.5" aria-hidden />
-                    Перемешать
+                    Shuffle
                   </Button>
                 </div>
                 {BATTLE_PRESETS.map((item) => (
@@ -548,7 +548,7 @@ export function CreateBattleModal({
 
             <div className="mt-4">
               <label htmlFor="battle-size" className="flex items-baseline justify-between text-xs">
-                <span className="text-muted">Максимум позиций</span>
+                <span className="text-muted">Maximum entries</span>
                 <span className="font-semibold tabular-nums">{limit}</span>
               </label>
               <input
@@ -562,8 +562,7 @@ export function CreateBattleModal({
                 className="mt-1.5 h-9 w-full accent-[var(--accent)]"
               />
               <p className="text-[11px] text-muted">
-                Участник оценивает каждую позицию вручную — чем длиннее набор, тем реже его
-                дойдут до конца.
+                Every entry is rated by hand — the longer the line-up, the fewer people finish it.
               </p>
             </div>
 
@@ -587,15 +586,15 @@ export function CreateBattleModal({
               <p className="mt-3 flex items-start gap-1.5 text-xs text-muted">
                 <Swords className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
                 {unrated.length === presetRows.filter((r) => !excluded.has(r.id)).length
-                  ? `Вы ещё не оценивали эти позиции — сначала пройдёте набор сами, вслепую, потом получите ссылку для друга.`
-                  : `${unrated.length} поз. без вашей оценки. Пройдёте их сами перед тем, как отправлять ссылку.`}
+                  ? `You have not rated any of these — you play the line-up blind first, then get a link to send.`
+                  : `${unrated.length} have no rating from you. You rate those before sending the link.`}
               </p>
             ) : (
               !enough && (
                 <p className="mt-3 flex items-start gap-1.5 text-xs text-muted">
                   <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                  Нужно минимум {MIN_POOL_SIZE} позиций — иначе процент совпадения ничего не
-                  значит.
+                  At least {MIN_POOL_SIZE} entries are needed — below that the match percentage means
+                  nothing.
                 </p>
               )
             )}
@@ -609,7 +608,7 @@ export function CreateBattleModal({
 
             <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="ghost" size="sm" onClick={onClose}>
-                Отмена
+                Cancel
               </Button>
               <Button
                 size="sm"
@@ -617,7 +616,7 @@ export function CreateBattleModal({
                 disabled={creating || (!enough && !needsOwnPass)}
               >
                 {creating && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-                {needsOwnPass ? "Оценить и создать" : "Создать батл"}
+                {needsOwnPass ? "Rate and create" : "Create battle"}
               </Button>
             </div>
           </>
@@ -652,7 +651,7 @@ function BattleItemList({
   if (rows.length === 0) {
     return (
       <p className="mt-4 rounded-lg border border-border bg-surface-raised px-3 py-3 text-sm text-muted">
-        Здесь пока нет подходящих позиций. Расставьте тиры — и возвращайтесь.
+        Nothing here fits yet. Put some things in tiers and come back.
       </p>
     );
   }
@@ -660,7 +659,7 @@ function BattleItemList({
   return (
     <>
       <p className="mt-4 text-xs text-muted">
-        Выбрано {selectedCount} из {rows.length}. Снимите отметку с того, что не хотите включать.
+        {selectedCount} of {rows.length} selected. Untick anything you would rather leave out.
       </p>
 
       <ul className="mt-2 max-h-52 space-y-1.5 overflow-y-auto overscroll-contain pr-1 scrollbar-thin sm:max-h-64">
@@ -709,7 +708,7 @@ function BattleItemList({
                   onRate && (
                     // No tier of the creator's own, so there is nothing to compare
                     // a guest against until they give one here.
-                    <span className="flex shrink-0 gap-0.5" role="group" aria-label={`Оценить «${row.title}»`}>
+                    <span className="flex shrink-0 gap-0.5" role="group" aria-label={`Rate “${row.title}”`}>
                       {TIERS.map((tier) => (
                         <button
                           key={tier}

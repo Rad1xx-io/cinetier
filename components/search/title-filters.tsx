@@ -45,9 +45,9 @@ export function TitleFilters({ value, onChange, genres, canReset, onReset }: Tit
         value={value.genre}
         onChange={(e) => onChange({ ...value, genre: e.target.value })}
         className={FILTER_SELECT_CLASS}
-        aria-label="Жанр"
+        aria-label="Genre"
       >
-        <option value="">Все жанры</option>
+        <option value="">All genres</option>
         {genres.map((g) => (
           <option key={g.slug} value={g.slug}>
             {g.label}
@@ -59,9 +59,9 @@ export function TitleFilters({ value, onChange, genres, canReset, onReset }: Tit
         value={value.year ?? ""}
         onChange={(e) => onChange({ ...value, year: e.target.value ? Number(e.target.value) : undefined })}
         className={FILTER_SELECT_CLASS}
-        aria-label="Год выхода"
+        aria-label="Release year"
       >
-        <option value="">Все годы</option>
+        <option value="">All years</option>
         {YEARS.map((y) => (
           <option key={y} value={y}>
             {y}
@@ -73,12 +73,12 @@ export function TitleFilters({ value, onChange, genres, canReset, onReset }: Tit
         value={value.minRating}
         onChange={(e) => onChange({ ...value, minRating: Number(e.target.value) })}
         className={FILTER_SELECT_CLASS}
-        aria-label="Минимальный рейтинг"
+        aria-label="Minimum rating"
       >
-        <option value={0}>Любой рейтинг</option>
+        <option value={0}>Any rating</option>
         {RATINGS.map((r) => (
           <option key={r} value={r}>
-            От {String(r).replace(".", ",")}
+            {r}+
           </option>
         ))}
       </select>
@@ -87,7 +87,7 @@ export function TitleFilters({ value, onChange, genres, canReset, onReset }: Tit
         value={value.sort}
         onChange={(e) => onChange({ ...value, sort: e.target.value as TitleSort })}
         className={FILTER_SELECT_CLASS}
-        aria-label="Сортировка"
+        aria-label="Sort"
       >
         {TITLE_SORTS.map((s) => (
           <option key={s.value} value={s.value}>
@@ -98,7 +98,7 @@ export function TitleFilters({ value, onChange, genres, canReset, onReset }: Tit
 
       <Button variant="ghost" size="sm" onClick={onReset} disabled={!canReset}>
         <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-        Сбросить
+        Reset
       </Button>
     </div>
   );

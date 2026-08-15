@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
     const status = error instanceof YouTubeError ? error.status : 500;
     const message =
       status === 429
-        ? "Слишком много запросов. Попробуйте позже."
-        : "Не удалось загрузить каналы. Попробуйте ещё раз.";
+        ? "Too many requests. Please try again later."
+        : "Could not load channels. Please try again.";
     return NextResponse.json({ error: message }, { status });
   }
 }

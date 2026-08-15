@@ -22,7 +22,7 @@ export function ResultsGrid({ titles, rankedByKey, onAdd, loading }: ResultsGrid
   }
 
   if (titles.length === 0) {
-    return <p className="py-10 text-center text-sm text-muted">Ничего не найдено.</p>;
+    return <p className="py-10 text-center text-sm text-muted">Nothing found.</p>;
   }
 
   return (

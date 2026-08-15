@@ -27,11 +27,11 @@ function open(props: Partial<Parameters<typeof PublishPostDialog>[0]> = {}) {
 }
 
 function submitButton(): HTMLButtonElement {
-  return screen.getByRole("button", { name: /Опубликовать/ }) as HTMLButtonElement;
+  return screen.getByRole("button", { name: /Publish/ }) as HTMLButtonElement;
 }
 
 function categoryButton(name: RegExp): HTMLButtonElement {
-  const group = screen.getByRole("group", { name: /Категория/ });
+  const group = screen.getByRole("group", { name: /Category/ });
   return within(group).getByRole("button", { name }) as HTMLButtonElement;
 }
 
@@ -60,7 +60,7 @@ describe("PublishPostDialog — the form", () => {
   it("stays disabled for a title below the minimum", () => {
     open();
 
-    fireEvent.change(screen.getByLabelText("Заголовок"), { target: { value: "ок" } });
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "ок" } });
 
     expect(submitButton().disabled).toBe(true);
   });
@@ -68,7 +68,7 @@ describe("PublishPostDialog — the form", () => {
   it("enables once the title is long enough", () => {
     open();
 
-    fireEvent.change(screen.getByLabelText("Заголовок"), { target: { value: "Мой топ" } });
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
 
     expect(submitButton().disabled).toBe(false);
   });
@@ -76,36 +76,36 @@ describe("PublishPostDialog — the form", () => {
   it("caps the title at the length the database accepts", () => {
     open();
 
-    const input = screen.getByLabelText("Заголовок") as HTMLInputElement;
+    const input = screen.getByLabelText("Title") as HTMLInputElement;
     expect(input.maxLength).toBe(POST_TITLE_MAX);
   });
 
   it("opens on the suggested category", () => {
     open({ suggestedCategory: "game" });
 
-    expect(categoryButton(/Игры/).getAttribute("aria-pressed")).toBe("true");
-    expect(categoryButton(/Всё сразу/).getAttribute("aria-pressed")).toBe("false");
+    expect(categoryButton(/Games/).getAttribute("aria-pressed")).toBe("true");
+    expect(categoryButton(/Everything/).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("defaults to mixed when nothing is suggested", () => {
     open();
 
-    expect(categoryButton(/Всё сразу/).getAttribute("aria-pressed")).toBe("true");
+    expect(categoryButton(/Everything/).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("lets the category be changed", () => {
     open();
 
-    fireEvent.click(categoryButton(/Аниме/));
+    fireEvent.click(categoryButton(/Anime/));
 
-    expect(categoryButton(/Аниме/).getAttribute("aria-pressed")).toBe("true");
+    expect(categoryButton(/Anime/).getAttribute("aria-pressed")).toBe("true");
   });
 });
 
 describe("PublishPostDialog — publishing", () => {
   function fill(title = "Мой топ сай-фая", description = "Почему именно так") {
-    fireEvent.change(screen.getByLabelText("Заголовок"), { target: { value: title } });
-    fireEvent.change(screen.getByLabelText(/Описание/), { target: { value: description } });
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: title } });
+    fireEvent.change(screen.getByLabelText(/Description/), { target: { value: description } });
   }
 
   it("sends the title, description and category", async () => {
@@ -136,21 +136,21 @@ describe("PublishPostDialog — publishing", () => {
   });
 
   it("keeps the draft and shows why when the write is refused", async () => {
-    publishPost.mockResolvedValue({ ok: false, error: "Сначала займите юзернейм в настройках." });
+    publishPost.mockResolvedValue({ ok: false, error: "Claim a username in settings first." });
     open();
     fill();
 
     fireEvent.click(submitButton());
 
-    expect(await screen.findByText(/Сначала займите юзернейм/)).toBeDefined();
+    expect(await screen.findByText(/Claim a username/)).toBeDefined();
     // The draft survives, so a retry does not mean retyping it.
-    expect((screen.getByLabelText("Заголовок") as HTMLInputElement).value).toBe("Мой топ сай-фая");
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("Мой топ сай-фая");
     expect(push).not.toHaveBeenCalled();
     expect(trackListPublished).not.toHaveBeenCalled();
   });
 
   it("does not navigate away on a failure", async () => {
-    publishPost.mockResolvedValue({ ok: false, error: "Не удалось опубликовать пост." });
+    publishPost.mockResolvedValue({ ok: false, error: "Could not publish the post." });
     open();
     fill();
 

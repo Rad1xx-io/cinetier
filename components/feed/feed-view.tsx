@@ -21,13 +21,13 @@ import type { RankedTitle } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 
 const CATEGORY_TABS: { value: PostCategory | "all"; label: string }[] = [
-  { value: "all", label: "Все" },
-  { value: "movie", label: "Фильмы" },
-  { value: "tv", label: "Сериалы" },
-  { value: "anime", label: "Аниме" },
-  { value: "game", label: "Игры" },
+  { value: "all", label: "All" },
+  { value: "movie", label: "Films" },
+  { value: "tv", label: "TV" },
+  { value: "anime", label: "Anime" },
+  { value: "game", label: "Games" },
   { value: "youtube", label: "YouTube" },
-  { value: "mixed", label: "Сборные" },
+  { value: "mixed", label: "Mixed" },
 ];
 
 type LoadState = "loading" | "ready" | "unavailable";
@@ -136,16 +136,16 @@ export function FeedView() {
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6 md:px-6 md:py-8">
       <header className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Сообщество</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Community</h1>
         <p className="mt-1 text-sm text-muted">
-          Чужие тир-листы, споры в комментариях и чужие вкусы, которые можно забрать себе.
+          Other people’s tier lists, arguments in the comments, and taste you can take for yourself.
         </p>
       </header>
 
       <div
         className="mb-5 flex flex-wrap gap-1 rounded-lg border border-border p-0.5"
         role="group"
-        aria-label="Категория постов"
+        aria-label="Post category"
       >
         {CATEGORY_TABS.map((tab) => (
           <button
@@ -168,7 +168,7 @@ export function FeedView() {
       {state === "unavailable" && (
         <div className="flex items-center gap-2 rounded-lg border border-tier-s/30 bg-tier-s/10 px-4 py-3 text-sm text-tier-s">
           <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
-          Лента сейчас недоступна. Попробуйте обновить страницу.
+          The feed is unavailable right now. Try reloading the page.
         </div>
       )}
 
@@ -183,12 +183,12 @@ export function FeedView() {
       {state === "ready" && posts.length === 0 && (
         <div className="mx-auto flex max-w-md flex-col items-center gap-4 rounded-2xl border border-border bg-surface px-6 py-12 text-center">
           <MessagesSquare className="h-10 w-10 text-accent" aria-hidden />
-          <h2 className="text-lg font-semibold">Здесь пока пусто</h2>
+          <h2 className="text-lg font-semibold">Nothing here yet</h2>
           <p className="text-sm text-muted">
-            Опубликуйте свой тир-лист первым — кнопка «Опубликовать» на странице тир-листа.
+            Be the first to publish — the “Publish” button lives on your tier list page.
           </p>
           <Button asChild size="sm">
-            <Link href="/tier-list">К своему тир-листу</Link>
+            <Link href="/tier-list">Go to my tier list</Link>
           </Button>
         </div>
       )}

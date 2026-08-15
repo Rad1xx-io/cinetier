@@ -16,17 +16,17 @@ export function StatsGrid({ titles }: { titles: RankedTitle[] }) {
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-        <StatTile label="Всего в списке" value={titles.length} className="col-span-2 sm:col-span-1" />
-        <StatTile label="Оценено" value={rated.length} />
-        <StatTile label="Не оценено" value={unrated} />
-        <StatTile label="Фильмы" value={movies} />
-        <StatTile label="Сериалы" value={tvShows} />
+        <StatTile label="Total on the board" value={titles.length} className="col-span-2 sm:col-span-1" />
+        <StatTile label="Ranked" value={rated.length} />
+        <StatTile label="Unranked" value={unrated} />
+        <StatTile label="Films" value={movies} />
+        <StatTile label="TV" value={tvShows} />
       </div>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
         {tierCounts.map(({ tier, count }) => (
           <StatTile
             key={tier}
-            label={`Тир ${tier}`}
+            label={`Tier ${tier}`}
             title={TIER_META[tier].name}
             value={count}
             accent={tierColorVar(tier)}

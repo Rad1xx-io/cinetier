@@ -60,7 +60,7 @@ export function ChannelDetailsView({ details }: { details: ChannelDetails }) {
         <Link
           href="/youtube"
           className="absolute left-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-background/70 backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:left-6"
-          aria-label="Назад к поиску"
+          aria-label="Back to search"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
         </Link>
@@ -81,11 +81,11 @@ export function ChannelDetailsView({ details }: { details: ChannelDetails }) {
               {details.country && <Badge variant="outline">{findCountryLabel(details.country)}</Badge>}
               <span className="flex items-center gap-1">
                 <Users className="h-3.5 w-3.5" aria-hidden />
-                {formatCompactCount(details.subscriberCount)} подписчиков
+                {formatCompactCount(details.subscriberCount)} subscribers
               </span>
               <span className="flex items-center gap-1">
                 <Video className="h-3.5 w-3.5" aria-hidden />
-                {formatCompactCount(details.videoCount)} видео
+                {formatCompactCount(details.videoCount)} videos
               </span>
             </div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{details.title}</h1>
@@ -93,25 +93,25 @@ export function ChannelDetailsView({ details }: { details: ChannelDetails }) {
         </div>
 
         <p className="mt-6 max-w-2xl whitespace-pre-line text-sm leading-relaxed text-foreground/90">
-          {details.description || "Описание отсутствует."}
+          {details.description || "No description available."}
         </p>
 
         <div className="mt-6 space-y-3">
           <p className="text-xs font-medium uppercase tracking-wide text-muted">
-            Статус:{" "}
+            Status:{" "}
             <span className="text-foreground">
-              {!hydrated ? "…" : !ranked ? "Не добавлено" : tierLabel(ranked.tier)}
+              {!hydrated ? "…" : !ranked ? "Not added" : tierLabel(ranked.tier)}
             </span>
           </p>
 
           {!ranked ? (
             <Button onClick={handleAdd} disabled={!hydrated}>
               <Plus className="h-4 w-4" aria-hidden />
-              Добавить в список
+              Add to my list
             </Button>
           ) : (
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Изменить тир">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Change tier">
                 {TIER_ORDER.map((tier) => {
                   const active = ranked.tier === tier;
                   const isUnrated = tier === "Unrated";
@@ -134,7 +134,7 @@ export function ChannelDetailsView({ details }: { details: ChannelDetails }) {
               </div>
               <Button variant="destructive" size="sm" onClick={() => remove(details.channelId)}>
                 <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                Удалить
+                Remove
               </Button>
             </div>
           )}

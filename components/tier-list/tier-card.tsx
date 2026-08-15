@@ -71,7 +71,7 @@ function TierCardImpl({
         <Link
           href={titleHref(title.mediaType, title.tmdbId)}
           className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          aria-label={`Открыть «${title.title}»`}
+          aria-label={`Open “${title.title}”`}
           draggable={false}
         />
         {draggable && (
@@ -88,7 +88,7 @@ function TierCardImpl({
           type="button"
           onClick={() => onRemove(title)}
           className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-md bg-background/80 text-muted backdrop-blur transition-opacity hover:text-tier-s focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-          aria-label={`Удалить «${title.title}» из списка`}
+          aria-label={`Remove “${title.title}” from the list`}
         >
           <X className="h-4 w-4" aria-hidden />
         </button>

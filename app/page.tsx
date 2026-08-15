@@ -30,8 +30,8 @@ export default function DashboardPage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
         <p className="text-sm text-muted">
-          Локальное хранилище недоступно в этом браузере, поэтому TierListOnline не может сохранить
-          здесь ваши рейтинги. Попробуйте другой браузер или отключите режим инкогнито.
+          Local storage is unavailable in this browser, so TierListOnline cannot keep your rankings
+          here. Try another browser, or leave private browsing.
         </p>
       </div>
     );
@@ -70,12 +70,12 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             My TierList<span className="text-accent">Online</span>
           </h1>
-          <p className="mt-1 text-sm text-muted">Ваш личный рейтинг фильмов и сериалов.</p>
+          <p className="mt-1 text-sm text-muted">Your personal ranking of films and TV.</p>
         </div>
         <Button asChild variant="secondary" size="sm">
           <Link href="/tier-list">
             <ListPlus className="h-4 w-4" aria-hidden />
-            Открыть тир-лист
+            Open tier list
           </Link>
         </Button>
       </div>
@@ -84,32 +84,32 @@ export default function DashboardPage() {
 
       {continueRanking.length > 0 && (
         <TitleShelf
-          title="Продолжить оценивать"
+          title="Keep ranking"
           icon={<ListPlus className="h-4 w-4 text-accent" aria-hidden />}
           titles={continueRanking}
-          emptyLabel="Оценивать больше нечего — отличная работа."
+          emptyLabel="Nothing left to rank — nice work."
         />
       )}
 
       <TitleShelf
-        title="Недавно добавленные"
+        title="Recently added"
         icon={<PlusCircle className="h-4 w-4 text-accent" aria-hidden />}
         titles={recentlyAdded}
-        emptyLabel="Добавьте что-нибудь через Поиск."
+        emptyLabel="Add something from search."
       />
 
       <TitleShelf
-        title="Недавно оценённые"
+        title="Recently ranked"
         icon={<History className="h-4 w-4 text-accent" aria-hidden />}
         titles={recentlyRated}
-        emptyLabel="Оцените тайтл, чтобы увидеть его здесь."
+        emptyLabel="Rank a title and it shows up here."
       />
 
       <TitleShelf
-        title="Топ S-тира"
+        title="Top of the S tier"
         icon={<Sparkles className="h-4 w-4 text-accent" aria-hidden />}
         titles={topSTier}
-        emptyLabel="Тайтлы из S-тира появятся здесь."
+        emptyLabel="Titles you put in S appear here."
       />
     </div>
   );

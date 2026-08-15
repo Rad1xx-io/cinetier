@@ -13,7 +13,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const base = { authorId: "a1", authorName: "Аня" };
+const base = { authorId: "a1", authorName: "Anya" };
 
 describe("DonateButton — nothing to show", () => {
   // An author who set no link should cost the layout nothing, in either
@@ -41,19 +41,19 @@ describe("DonateButton — nothing to show", () => {
 describe("DonateButton — compact", () => {
   it("is the default variant", () => {
     render(<DonateButton {...base} donationUrl="https://boosty.to/anya" />);
-    expect(screen.getByRole("link", { name: "Поддержать" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Support" })).toBeTruthy();
   });
 
   it("keeps its label short, naming the author in the tooltip instead", () => {
     render(<DonateButton {...base} donationUrl="https://boosty.to/anya" variant="compact" />);
-    const link = screen.getByRole("link", { name: "Поддержать" });
-    expect(link.textContent?.trim()).toBe("Поддержать");
-    expect(link.getAttribute("title")).toBe("Поддержать Аня — откроется boosty.to");
+    const link = screen.getByRole("link", { name: "Support" });
+    expect(link.textContent?.trim()).toBe("Support");
+    expect(link.getAttribute("title")).toBe("Support Anya — opens boosty.to");
   });
 
   it("opens in a new tab without leaking the opener", () => {
     render(<DonateButton {...base} donationUrl="https://boosty.to/anya" variant="compact" />);
-    const link = screen.getByRole("link", { name: "Поддержать" });
+    const link = screen.getByRole("link", { name: "Support" });
     expect(link.getAttribute("href")).toBe("https://boosty.to/anya");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
@@ -61,7 +61,7 @@ describe("DonateButton — compact", () => {
 
   it("normalises a link saved without a scheme", () => {
     render(<DonateButton {...base} donationUrl="boosty.to/anya" variant="compact" />);
-    expect(screen.getByRole("link", { name: "Поддержать" }).getAttribute("href")).toBe(
+    expect(screen.getByRole("link", { name: "Support" }).getAttribute("href")).toBe(
       "https://boosty.to/anya"
     );
   });
@@ -70,30 +70,30 @@ describe("DonateButton — compact", () => {
     render(
       <DonateButton {...base} donationUrl="https://boosty.to/anya" className="ml-auto" />
     );
-    expect(screen.getByRole("link", { name: "Поддержать" }).className).toContain("ml-auto");
+    expect(screen.getByRole("link", { name: "Support" }).className).toContain("ml-auto");
   });
 });
 
 describe("DonateButton — card", () => {
   it("asks properly, naming the author", () => {
     render(<DonateButton {...base} donationUrl="https://boosty.to/anya" variant="card" />);
-    expect(screen.getByRole("heading", { name: "Понравился список?" })).toBeTruthy();
-    expect(screen.getByText(/Поддержите Аня/)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Enjoyed this list?" })).toBeTruthy();
+    expect(screen.getByText(/Support Anya/)).toBeTruthy();
   });
 
   it("says TierListOnline takes no cut", () => {
     render(<DonateButton {...base} donationUrl="https://boosty.to/anya" variant="card" />);
-    expect(screen.getByText(/не берёт комиссию/)).toBeTruthy();
+    expect(screen.getByText(/takes no cut/)).toBeTruthy();
   });
 
   it("names the destination before the click", () => {
     render(<DonateButton {...base} donationUrl="https://www.patreon.com/anya" variant="card" />);
-    expect(screen.getByText("Откроется patreon.com в новой вкладке")).toBeTruthy();
+    expect(screen.getByText("Opens patreon.com in a new tab")).toBeTruthy();
   });
 
   it("carries the same link and the same safety attributes", () => {
     render(<DonateButton {...base} donationUrl="https://boosty.to/anya" variant="card" />);
-    const link = screen.getByRole("link", { name: /Поддержать автора/ });
+    const link = screen.getByRole("link", { name: /Support the creator/ });
     expect(link.getAttribute("href")).toBe("https://boosty.to/anya");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
@@ -103,14 +103,14 @@ describe("DonateButton — card", () => {
 describe("DonateButton — reporting", () => {
   it("reports the click with the recipient", () => {
     render(<DonateButton {...base} donationUrl="https://boosty.to/anya" />);
-    screen.getByRole("link", { name: "Поддержать" }).click();
+    screen.getByRole("link", { name: "Support" }).click();
 
     expect(trackEvent).toHaveBeenCalledWith("donate_button_clicked", { recipient_id: "a1" });
   });
 
   it("includes the board when there is one to name", () => {
     render(<DonateButton {...base} donationUrl="https://boosty.to/anya" tierListId="post-7" />);
-    screen.getByRole("link", { name: "Поддержать" }).click();
+    screen.getByRole("link", { name: "Support" }).click();
 
     expect(trackEvent).toHaveBeenCalledWith("donate_button_clicked", {
       recipient_id: "a1",
@@ -122,7 +122,7 @@ describe("DonateButton — reporting", () => {
     render(
       <DonateButton {...base} donationUrl="https://boosty.to/anya" variant="card" tierListId="b2" />
     );
-    screen.getByRole("link", { name: /Поддержать автора/ }).click();
+    screen.getByRole("link", { name: /Support the creator/ }).click();
 
     expect(trackEvent).toHaveBeenCalledWith("donate_button_clicked", {
       recipient_id: "a1",

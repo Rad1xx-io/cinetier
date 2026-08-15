@@ -51,15 +51,15 @@ export function ForkConflictDialog({
       <div className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">У вас уже есть свой тир-лист</h2>
+            <h2 className="text-lg font-semibold">You already have a tier list</h2>
             <p className="mt-1 text-sm text-muted">
-              В нём {currentCount} поз. Список {authorName} добавит ещё {incomingCount}.
+              Yours holds {currentCount}. {authorName}’s list would add {incomingCount} more.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Закрыть"
+            aria-label="Close"
             className="rounded-lg p-1 text-muted transition-colors hover:text-foreground"
           >
             <X className="h-4 w-4" aria-hidden />
@@ -74,9 +74,9 @@ export function ForkConflictDialog({
           >
             <Layers className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
             <span>
-              <span className="block text-sm font-medium">Объединить</span>
+              <span className="block text-sm font-medium">Merge</span>
               <span className="mt-0.5 block text-xs text-muted">
-                Ваши оценки остаются как есть. Добавится только то, чего у вас ещё нет.
+                Your own ratings stay as they are. Only what you do not already have is added.
               </span>
             </span>
           </button>
@@ -88,9 +88,9 @@ export function ForkConflictDialog({
           >
             <Replace className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden />
             <span>
-              <span className="block text-sm font-medium">Заменить</span>
+              <span className="block text-sm font-medium">Replace</span>
               <span className="mt-0.5 block text-xs text-muted">
-                Ваш текущий тир-лист будет стёрт и заменён копией чужого.
+                Your current tier list is erased and replaced with a copy of theirs.
               </span>
             </span>
           </button>
@@ -98,13 +98,13 @@ export function ForkConflictDialog({
 
         <p className="mt-3 flex items-start gap-1.5 text-xs text-muted">
           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-          Замену не отменить. Если хотите подстраховаться, сначала выгрузите резервную копию в
-          настройках.
+          Replacing cannot be undone. If you want a safety net, export a backup from settings
+          first.
         </p>
 
         <div className="mt-4 flex justify-end">
           <Button variant="ghost" size="sm" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
         </div>
       </div>

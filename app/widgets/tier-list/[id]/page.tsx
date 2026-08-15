@@ -7,7 +7,7 @@ import { parseWidgetParams } from "@/lib/widgets/params";
  * result pointing at a chromeless overlay helps nobody.
  */
 export const metadata: Metadata = {
-  title: "Виджет тир-листа — TierListOnline",
+  title: "Tier list widget — TierListOnline",
   robots: { index: false, follow: false },
 };
 

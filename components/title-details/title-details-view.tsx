@@ -14,7 +14,7 @@ import { TIER_ORDER } from "@/lib/types";
 import { backdropUrl } from "@/lib/utils/tmdb-image";
 import { formatRating, mediaTypeLabel, releaseYear } from "@/lib/utils/format";
 import { tierColorVar, tierLabel } from "@/lib/utils/tier-style";
-import { pluralizeRu } from "@/lib/utils/pluralize-ru";
+import { plural } from "@/lib/utils/plural";
 import { cn } from "@/lib/utils/cn";
 import { trackItemAdded, trackItemRanked } from "@/lib/analytics/events";
 
@@ -72,7 +72,7 @@ export function TitleDetailsView({
         <Link
           href="/discover"
           className="absolute left-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-background/70 backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:left-6"
-          aria-label="Назад к поиску"
+          aria-label="Back to search"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
         </Link>
@@ -93,11 +93,11 @@ export function TitleDetailsView({
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
               <Badge variant="outline">{mediaTypeLabel(details.mediaType)}</Badge>
               <span>{releaseYear(details.releaseDate)}</span>
-              {details.runtime ? <span>{details.runtime} мин</span> : null}
+              {details.runtime ? <span>{details.runtime} min</span> : null}
               {details.numberOfSeasons ? (
                 <span>
                   {details.numberOfSeasons}{" "}
-                  {pluralizeRu(details.numberOfSeasons, "сезон", "сезона", "сезонов")}
+                  {plural(details.numberOfSeasons, "season")}
                 </span>
               ) : null}
               <span className="flex items-center gap-1">
@@ -108,7 +108,7 @@ export function TitleDetailsView({
 
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{details.title}</h1>
             {details.originalTitle !== details.title && (
-              <p className="mt-0.5 text-sm text-muted">Оригинальное название: {details.originalTitle}</p>
+              <p className="mt-0.5 text-sm text-muted">Original title: {details.originalTitle}</p>
             )}
 
             {details.genres.length > 0 && (
@@ -120,25 +120,25 @@ export function TitleDetailsView({
             )}
 
             <p className="mt-4 max-w-2xl text-sm leading-relaxed text-foreground/90">
-              {details.overview || "Описание отсутствует."}
+              {details.overview || "No description available."}
             </p>
 
             <div className="mt-6 space-y-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                Статус:{" "}
+                Status:{" "}
                 <span className="text-foreground">
-                  {!hydrated ? "…" : !ranked ? "Не добавлено" : tierLabel(ranked.tier)}
+                  {!hydrated ? "…" : !ranked ? "Not added" : tierLabel(ranked.tier)}
                 </span>
               </p>
 
               {!ranked ? (
                 <Button onClick={handleAdd} disabled={!hydrated}>
                   <Plus className="h-4 w-4" aria-hidden />
-                  Добавить в список
+                  Add to my list
                 </Button>
               ) : (
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Изменить тир">
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Change tier">
                     {TIER_ORDER.map((tier) => {
                       const active = ranked.tier === tier;
                       const isUnrated = tier === "Unrated";
@@ -165,7 +165,7 @@ export function TitleDetailsView({
                     onClick={() => remove(details.tmdbId, details.mediaType)}
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                    Удалить
+                    Remove
                   </Button>
                 </div>
               )}

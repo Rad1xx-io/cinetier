@@ -38,7 +38,7 @@ describe("AffiliateLinks", () => {
         links={{ kinopoisk: "https://kinopoisk.ru/film/1", okko: "https://okko.tv/movie/1" }}
       />
     );
-    expect(screen.getByRole("link", { name: /Кинопоиск/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Kinopoisk/ })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Okko/ })).toBeTruthy();
   });
 
@@ -49,7 +49,7 @@ describe("AffiliateLinks", () => {
         links={{ kinopoisk: "https://kinopoisk.ru/film/1", netflix: "https://evil.com/phish" }}
       />
     );
-    expect(screen.getByRole("link", { name: /Кинопоиск/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Kinopoisk/ })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Netflix/ })).toBeNull();
   });
 
@@ -63,7 +63,7 @@ describe("AffiliateLinks", () => {
 
   it("discloses that the links earn money", () => {
     render(<AffiliateLinks {...props} links={{ ivi: "https://ivi.ru/watch/1" }} />);
-    expect(screen.getByText(/приносить TierListOnline комиссию/)).toBeTruthy();
+    expect(screen.getByText(/may earn a commission/)).toBeTruthy();
   });
 
   it("reports the click with the title and the destination", () => {

@@ -73,9 +73,9 @@ export function BattleVoting({ items, onComplete, submitting = false }: BattleVo
       <div className="mb-5">
         <div className="mb-2 flex items-baseline justify-between text-xs text-muted">
           <span>
-            Позиция {index + 1} из {items.length}
+            Entry {index + 1} of {items.length}
           </span>
-          <span>Оценено: {answered}</span>
+          <span>Rated: {answered}</span>
         </div>
         <div
           className="h-1.5 overflow-hidden rounded-full bg-surface-raised"
@@ -83,7 +83,7 @@ export function BattleVoting({ items, onComplete, submitting = false }: BattleVo
           aria-valuemin={1}
           aria-valuemax={items.length}
           aria-valuenow={index + 1}
-          aria-label="Прогресс батла"
+          aria-label="Battle progress"
         >
           <div
             className="h-full rounded-full bg-accent transition-[width] duration-300 ease-out"
@@ -106,7 +106,7 @@ export function BattleVoting({ items, onComplete, submitting = false }: BattleVo
           {item.title}
         </h1>
         <p className="mt-1 text-xs text-muted">
-          {currentChoice ? `Ваш выбор — ${currentChoice}` : "Выберите тир"}
+          {currentChoice ? `You picked ${currentChoice}` : "Pick a tier"}
         </p>
       </div>
 
@@ -153,18 +153,18 @@ export function BattleVoting({ items, onComplete, submitting = false }: BattleVo
           disabled={index === 0 || submitting}
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-          Назад
+          Back
         </Button>
 
         <Button variant="secondary" size="sm" onClick={handleSkip} disabled={submitting}>
           <SkipForward className="h-3.5 w-3.5" aria-hidden />
-          {isLast ? "Пропустить и завершить" : "Пропустить"}
+          {isLast ? "Skip and finish" : "Skip"}
         </Button>
       </div>
 
       {isLast && (
         <p className="mt-3 text-center text-xs text-muted">
-          Это последняя позиция — выбор тира завершит батл.
+          This is the last entry — picking a tier finishes the battle.
         </p>
       )}
     </div>

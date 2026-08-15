@@ -45,7 +45,7 @@ describe("DEFAULT_PRESETS", () => {
   it("indexes every preset by id", () => {
     const total = DEFAULT_PRESETS.reduce((n, g) => n + g.criteria.length, 0);
     expect(Object.keys(PRESET_BY_ID)).toHaveLength(total);
-    expect(PRESET_BY_ID.gameplay?.name).toBe("Геймплей");
+    expect(PRESET_BY_ID.gameplay?.name).toBe("Gameplay");
   });
 
   it("gives cinema both a craft and an enjoyment group", () => {
@@ -54,7 +54,7 @@ describe("DEFAULT_PRESETS", () => {
   });
 
   it("separates the two sound criteria, which share a label but not a group", () => {
-    // "Звук" appears under both cinema and games; only the ids keep them apart.
+    // "Sound" appears under both cinema and games; only the ids keep them apart.
     expect(PRESET_BY_ID.sound).toBeDefined();
     expect(PRESET_BY_ID["game-sound"]).toBeDefined();
   });

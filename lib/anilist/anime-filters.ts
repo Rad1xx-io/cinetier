@@ -5,11 +5,11 @@
  */
 
 export const ANIME_FORMATS = [
-  { value: "TV", label: "TV-сериал" },
-  { value: "MOVIE", label: "Фильм" },
+  { value: "TV", label: "TV series" },
+  { value: "MOVIE", label: "Film" },
   { value: "OVA", label: "OVA" },
   { value: "ONA", label: "ONA" },
-  { value: "SPECIAL", label: "Спешл" },
+  { value: "SPECIAL", label: "Special" },
 ] as const;
 
 export type AnimeFormat = (typeof ANIME_FORMATS)[number]["value"];
@@ -19,11 +19,11 @@ export function isAnimeFormat(value: string): value is AnimeFormat {
 }
 
 export const ANIME_SORTS = [
-  { value: "popularity", label: "По популярности" },
-  { value: "score", label: "По рейтингу" },
-  { value: "favourites", label: "По подпискам" },
-  { value: "release_date", label: "По дате выхода" },
-  { value: "title", label: "По алфавиту" },
+  { value: "popularity", label: "Most popular" },
+  { value: "score", label: "Highest rated" },
+  { value: "favourites", label: "Most followed" },
+  { value: "release_date", label: "Release date" },
+  { value: "title", label: "A–Z" },
 ] as const;
 
 export type AnimeSortMode = (typeof ANIME_SORTS)[number]["value"];

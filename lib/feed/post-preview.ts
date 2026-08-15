@@ -29,7 +29,7 @@ export interface MiniBoard {
   /**
    * Everything the card does not show — the overflow inside displayed rows plus
    * every entry in the tiers that did not fit. One number, because the card has
-   * room for one line, and "и ещё N" is only honest if N covers all of it.
+   * room for one line, and "N more" is only honest if N covers all of it.
    */
   hiddenCount: number;
 }
@@ -115,12 +115,12 @@ export type PostValidation = { ok: true } | { ok: false; error: string };
  */
 export function validatePost(title: string, description: string): PostValidation {
   const trimmed = title.trim();
-  if (trimmed.length < POST_TITLE_MIN) return { ok: false, error: "Заголовок слишком короткий." };
+  if (trimmed.length < POST_TITLE_MIN) return { ok: false, error: "The title is too short." };
   if (trimmed.length > POST_TITLE_MAX) {
-    return { ok: false, error: `Заголовок длиннее ${POST_TITLE_MAX} символов.` };
+    return { ok: false, error: `The title is longer than ${POST_TITLE_MAX} characters.` };
   }
   if (description.length > POST_DESCRIPTION_MAX) {
-    return { ok: false, error: `Описание длиннее ${POST_DESCRIPTION_MAX} символов.` };
+    return { ok: false, error: `The description is longer than ${POST_DESCRIPTION_MAX} characters.` };
   }
   return { ok: true };
 }

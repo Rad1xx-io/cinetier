@@ -27,10 +27,10 @@ interface QuickResult {
 }
 
 const CATEGORY_LABEL: Record<Category, string> = {
-  movie: "ФИЛЬМ",
-  tv: "СЕРИАЛ",
-  anime: "АНИМЕ",
-  game: "ИГРА",
+  movie: "FILM",
+  tv: "TV",
+  anime: "ANIME",
+  game: "GAME",
   youtube: "YOUTUBE",
 };
 
@@ -162,7 +162,7 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Поиск по TierListOnline"
+        aria-label="Search TierListOnline"
         aria-haspopup="true"
         aria-expanded={open}
         className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-raised hover:text-foreground"
@@ -178,16 +178,16 @@ export function GlobalSearch() {
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Поиск по фильмам, аниме, YouTube…"
+              placeholder="Search films, anime, YouTube…"
               className="pl-9 pr-8"
-              aria-label="Поиск по TierListOnline"
+              aria-label="Search TierListOnline"
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery("")}
                 className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted hover:text-foreground"
-                aria-label="Очистить"
+                aria-label="Clear"
               >
                 <X className="h-3.5 w-3.5" aria-hidden />
               </button>
@@ -198,12 +198,12 @@ export function GlobalSearch() {
             {isLoading && (
               <p className="flex items-center gap-2 px-2 py-6 text-sm text-muted">
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                Ищем…
+                Searching…
               </p>
             )}
 
             {!isLoading && debouncedQuery && visibleResults.length === 0 && (
-              <p className="px-2 py-6 text-center text-sm text-muted">Ничего не найдено.</p>
+              <p className="px-2 py-6 text-center text-sm text-muted">Nothing found.</p>
             )}
 
             {!isLoading &&

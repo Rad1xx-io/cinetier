@@ -80,7 +80,7 @@ export function GoogleSignInButton({ redirectTo = "/" }: GoogleSignInButtonProps
         className="w-full justify-center"
       >
         {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <GoogleMark />}
-        Войти через Google
+        Continue with Google
       </Button>
       {error && <p className="mt-2 text-sm text-tier-s">{error}</p>}
     </div>

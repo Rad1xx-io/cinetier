@@ -6,7 +6,7 @@ import { ContentTypeBadge } from "@/components/ui/content-type-badge";
 import { TierBoard } from "@/components/feed/tier-board";
 import { DonateButton } from "@/components/profile/donate-button";
 import { avatarInitials, buildMiniBoard } from "@/lib/feed/post-preview";
-import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
+import { titlesCountLabel } from "@/lib/utils/plural";
 import type { FeedPost } from "@/lib/supabase/feed";
 import type { RankedTitle } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
@@ -30,7 +30,7 @@ export function PostCard({ post, titles, liked, onOpen, onToggleLike }: PostCard
         type="button"
         onClick={() => onOpen(post)}
         className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        aria-label={`Открыть пост «${post.title}»`}
+        aria-label={`Open the post “${post.title}”`}
       >
         {/* The board itself is the thumbnail. Rendered as real tier rows rather
             than a strip of posters: the coloured plates are what make a tier
@@ -38,7 +38,7 @@ export function PostCard({ post, titles, liked, onOpen, onToggleLike }: PostCard
         <div className="bg-surface-raised p-2">
           {board.rows.length === 0 ? (
             <p className="flex h-24 items-center justify-center text-xs text-muted">
-              Автор ещё не открыл свой список
+              This author has not published their list
             </p>
           ) : (
             <TierBoard rows={board.rows} variant="compact" />
@@ -48,7 +48,7 @@ export function PostCard({ post, titles, liked, onOpen, onToggleLike }: PostCard
             // Inside the button that opens the post, so it reads as the way to
             // see the rest — which is exactly what tapping it does.
             <p className="mt-1 rounded bg-background/60 px-2 py-0.5 text-center text-[10px] text-muted">
-              …и ещё {titlesCountLabel(board.hiddenCount)}
+              …and {titlesCountLabel(board.hiddenCount)} more
             </p>
           )}
         </div>
@@ -83,7 +83,7 @@ export function PostCard({ post, titles, liked, onOpen, onToggleLike }: PostCard
           type="button"
           onClick={() => onToggleLike(post)}
           aria-pressed={liked}
-          aria-label={liked ? "Убрать лайк" : "Поставить лайк"}
+          aria-label={liked ? "Remove like" : "Like"}
           className={cn(
             "flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:text-foreground",
             liked && "text-tier-s"
@@ -97,13 +97,13 @@ export function PostCard({ post, titles, liked, onOpen, onToggleLike }: PostCard
           type="button"
           onClick={() => onOpen(post)}
           className="flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:text-foreground"
-          aria-label="Комментарии"
+          aria-label="Comments"
         >
           <MessageCircle className="h-3.5 w-3.5" aria-hidden />
           {post.commentsCount}
         </button>
 
-        <span className="flex items-center gap-1 px-2 py-1" title="Просмотры">
+        <span className="flex items-center gap-1 px-2 py-1" title="Views">
           <Eye className="h-3.5 w-3.5" aria-hidden />
           {post.viewsCount}
         </span>
@@ -125,10 +125,10 @@ export function PostCard({ post, titles, liked, onOpen, onToggleLike }: PostCard
               "flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:text-accent",
               !post.donationUrl && "ml-auto"
             )}
-            title="Открыть список автора и форкнуть"
+            title="Open the author’s list and fork it"
           >
             <GitFork className="h-3.5 w-3.5" aria-hidden />
-            Форк
+            Fork
           </Link>
         )}
       </div>

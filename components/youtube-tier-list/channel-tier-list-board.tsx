@@ -181,9 +181,9 @@ export function ChannelTierListBoard() {
   return (
     <div className="mx-auto max-w-[1600px] px-0 pb-6 md:px-6">
       <div className="px-4 pt-4 md:px-0 md:pt-6">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Тир-лист YouTube-каналов</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">YouTube channel tier list</h1>
         <p className="mt-1 text-sm text-muted">
-          Перетаскивайте каналы между тирами, чтобы выстроить свой рейтинг.
+          Drag channels between tiers to build your ranking.
         </p>
       </div>
 

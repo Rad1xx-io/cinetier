@@ -40,7 +40,7 @@ export function TopNav() {
             </span>
           </Link>
 
-          <nav className="flex items-center gap-1" aria-label="Категории">
+          <nav className="flex items-center gap-1" aria-label="Categories">
             {DESKTOP_NAV_LEFT.map((item) => (
               <CategoryLink key={item.href} item={item} pathname={pathname} />
             ))}
@@ -50,7 +50,7 @@ export function TopNav() {
         <TierListTab pathname={pathname} />
 
         <div className="flex min-w-0 items-center justify-end gap-1">
-          <nav className="flex items-center gap-1" aria-label="Категории">
+          <nav className="flex items-center gap-1" aria-label="Categories">
             {DESKTOP_NAV_RIGHT.map((item) => (
               <CategoryLink key={item.href} item={item} pathname={pathname} />
             ))}
@@ -65,7 +65,7 @@ export function TopNav() {
                 "flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-raised hover:text-foreground",
                 pathname === "/settings" && "text-foreground"
               )}
-              aria-label="Настройки"
+              aria-label="Settings"
               aria-current={pathname === "/settings" ? "page" : undefined}
             >
               <Settings className="h-4.5 w-4.5" aria-hidden />
@@ -158,7 +158,7 @@ function MoreMenu({ pathname }: { pathname: string }) {
           anyActive ? "bg-surface-raised text-foreground" : "text-muted hover:text-foreground"
         )}
       >
-        Ещё
+        More
         <ChevronDown className="h-3.5 w-3.5" aria-hidden />
       </button>
       {open && (

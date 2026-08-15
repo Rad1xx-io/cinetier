@@ -71,7 +71,7 @@ describe("affiliateLinkList", () => {
     expect(list).toEqual([
       {
         providerId: "kinopoisk",
-        label: "Кинопоиск",
+        label: "Kinopoisk",
         url: "https://kinopoisk.ru/film/1",
         known: true,
       },

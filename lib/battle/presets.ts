@@ -6,7 +6,7 @@ import type { BattleCategory } from "@/lib/types/battle";
  *
  * These are curated data, not a catalog query. A themed set has to be stable —
  * a battle created today and played next month must contain the same items — and
- * "Топ игр 2024" from a live popularity endpoint would quietly become something
+ * "Top games of 2024" from a live popularity endpoint would quietly become something
  * else. Editing this file is the intended way to add or fix a set.
  *
  * Each pool holds far more entries than one battle uses, so the same preset can
@@ -31,8 +31,8 @@ export interface BattlePreset {
 export const BATTLE_PRESETS: BattlePreset[] = [
   {
     slug: "modern-classics",
-    name: "Современная классика",
-    description: "Фильмы, о которых спорят чаще всего.",
+    name: "Modern classics",
+    description: "The films people argue about most.",
     category: "cinema",
     items: [
       { id: "movie-27205", title: "Начало" },
@@ -81,8 +81,8 @@ export const BATTLE_PRESETS: BattlePreset[] = [
   },
   {
     slug: "prestige-tv",
-    name: "Великие сериалы",
-    description: "Те, что кто-нибудь обязательно назовёт лучшим в истории.",
+    name: "Great TV",
+    description: "The ones somebody will always call the best ever made.",
     category: "cinema",
     items: [
       { id: "tv-1396", title: "Во все тяжкие" },
@@ -129,8 +129,8 @@ export const BATTLE_PRESETS: BattlePreset[] = [
   },
   {
     slug: "anime-essentials",
-    name: "Аниме, которое советуют всем",
-    description: "Классический набор для спора о вкусах.",
+    name: "Anime everyone recommends",
+    description: "The classic set for an argument about taste.",
     category: "anime",
     items: [
       { id: "anime-16498", title: "Атака титанов" },
@@ -177,8 +177,8 @@ export const BATTLE_PRESETS: BattlePreset[] = [
   },
   {
     slug: "games-to-argue-about",
-    name: "Игры, о которых спорят",
-    description: "От всеобщих любимцев до самых неоднозначных.",
+    name: "Games people argue about",
+    description: "From universal favourites to the most divisive.",
     category: "games",
     items: [
       { id: "game-1091500", title: "Cyberpunk 2077" },

@@ -23,25 +23,25 @@ export function isDefaultChannelFilters(f: ChannelFilterState): boolean {
 }
 
 const SUBSCRIBER_TIERS = [
-  { value: 0, label: "Любое число подписчиков" },
-  { value: 1_000, label: "От 1 тыс." },
-  { value: 10_000, label: "От 10 тыс." },
-  { value: 50_000, label: "От 50 тыс." },
-  { value: 100_000, label: "От 100 тыс." },
-  { value: 500_000, label: "От 500 тыс." },
-  { value: 1_000_000, label: "От 1 млн" },
-  { value: 5_000_000, label: "От 5 млн" },
-  { value: 10_000_000, label: "От 10 млн" },
-  { value: 50_000_000, label: "От 50 млн" },
+  { value: 0, label: "Any subscriber count" },
+  { value: 1_000, label: "1K+" },
+  { value: 10_000, label: "10K+" },
+  { value: 50_000, label: "50K+" },
+  { value: 100_000, label: "100K+" },
+  { value: 500_000, label: "500K+" },
+  { value: 1_000_000, label: "1M+" },
+  { value: 5_000_000, label: "5M+" },
+  { value: 10_000_000, label: "10M+" },
+  { value: 50_000_000, label: "50M+" },
 ];
 
 const SORTS: { value: ChannelSortMode; label: string }[] = [
-  { value: "subscribers_desc", label: "Подписчики ↓" },
-  { value: "subscribers_asc", label: "Подписчики ↑" },
-  { value: "views_desc", label: "Просмотры ↓" },
-  { value: "views_asc", label: "Просмотры ↑" },
-  { value: "newest", label: "Недавно созданные" },
-  { value: "title", label: "Название А-Я" },
+  { value: "subscribers_desc", label: "Subscribers ↓" },
+  { value: "subscribers_asc", label: "Subscribers ↑" },
+  { value: "views_desc", label: "Views ↓" },
+  { value: "views_asc", label: "Views ↑" },
+  { value: "newest", label: "Newest" },
+  { value: "title", label: "Name A–Z" },
 ];
 
 interface ChannelFiltersProps {
@@ -63,7 +63,7 @@ export function ChannelFilters({ value, onChange, canReset, onReset }: ChannelFi
         value={value.minSubscribers}
         onChange={(e) => onChange({ ...value, minSubscribers: Number(e.target.value) })}
         className={FILTER_SELECT_CLASS}
-        aria-label="Минимум подписчиков"
+        aria-label="Minimum subscribers"
       >
         {SUBSCRIBER_TIERS.map((t) => (
           <option key={t.value} value={t.value}>
@@ -76,7 +76,7 @@ export function ChannelFilters({ value, onChange, canReset, onReset }: ChannelFi
         value={value.sort}
         onChange={(e) => onChange({ ...value, sort: e.target.value as ChannelSortMode })}
         className={FILTER_SELECT_CLASS}
-        aria-label="Сортировка"
+        aria-label="Sort"
       >
         {SORTS.map((s) => (
           <option key={s.value} value={s.value}>
@@ -87,7 +87,7 @@ export function ChannelFilters({ value, onChange, canReset, onReset }: ChannelFi
 
       <Button variant="ghost" size="sm" onClick={onReset} disabled={!canReset}>
         <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-        Сбросить
+        Reset
       </Button>
     </div>
   );

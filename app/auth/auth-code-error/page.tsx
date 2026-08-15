@@ -3,12 +3,12 @@ import { TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const metadata = {
-  title: "Не удалось войти — TierListOnline",
+  title: "Sign-in failed — TierListOnline",
 };
 
 const REASONS: Record<string, string> = {
-  "no-code": "Ссылка для входа неполная — в ней нет кода подтверждения.",
-  "not-configured": "Облачные аккаунты не настроены на этом развёртывании.",
+  "no-code": "The sign-in link is incomplete — it carries no confirmation code.",
+  "not-configured": "Cloud accounts are not configured on this deployment.",
 };
 
 /**
@@ -24,10 +24,10 @@ export default async function AuthCodeErrorPage(props: PageProps<"/auth/auth-cod
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-24 text-center">
       <TriangleAlert className="h-10 w-10 text-tier-s" aria-hidden />
-      <h1 className="text-lg font-semibold">Не удалось завершить вход</h1>
+      <h1 className="text-lg font-semibold">Could not complete sign-in</h1>
       <p className="text-sm text-muted">
-        Ссылка для входа действует один раз и недолго — если вы открыли её повторно или спустя
-        время, запросите новую.
+        A sign-in link works once and not for long — if you opened it twice, or after a
+        while, request a new one.
       </p>
       {detail && (
         <p className="max-w-sm break-words rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted">
@@ -36,10 +36,10 @@ export default async function AuthCodeErrorPage(props: PageProps<"/auth/auth-cod
       )}
       <div className="flex flex-wrap justify-center gap-2">
         <Button asChild>
-          <Link href="/settings">Попробовать снова</Link>
+          <Link href="/settings">Try again</Link>
         </Button>
         <Button asChild variant="secondary">
-          <Link href="/">На главную</Link>
+          <Link href="/">Go home</Link>
         </Button>
       </div>
     </div>

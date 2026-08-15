@@ -3,7 +3,7 @@ import { AnimeDiscoverClient } from "@/components/anime-search/anime-discover-cl
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata = {
-  title: "Аниме — TierListOnline",
+  title: "Anime — TierListOnline",
 };
 
 export default function AnimePage() {

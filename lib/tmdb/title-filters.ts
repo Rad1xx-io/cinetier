@@ -8,10 +8,10 @@
  */
 
 export const TITLE_SORTS = [
-  { value: "popularity", label: "По популярности" },
-  { value: "rating", label: "По рейтингу" },
-  { value: "released", label: "По дате выхода" },
-  { value: "title", label: "По алфавиту" },
+  { value: "popularity", label: "Most popular" },
+  { value: "rating", label: "Highest rated" },
+  { value: "released", label: "Release date" },
+  { value: "title", label: "A–Z" },
 ] as const;
 
 export type TitleSort = (typeof TITLE_SORTS)[number]["value"];

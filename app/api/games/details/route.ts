@@ -9,17 +9,17 @@ export async function GET(request: NextRequest) {
   const appId = raw ? Number(raw) : NaN;
 
   if (!Number.isFinite(appId)) {
-    return NextResponse.json({ error: "Некорректный идентификатор игры." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid game id." }, { status: 400 });
   }
 
   try {
     const game = await getGameDetails(appId);
     if (!game) {
-      return NextResponse.json({ error: "Игра не найдена." }, { status: 404 });
+      return NextResponse.json({ error: "Game not found." }, { status: 404 });
     }
     return NextResponse.json(game);
   } catch (error) {
     const status = error instanceof SteamError ? error.status : 500;
-    return NextResponse.json({ error: "Не удалось загрузить данные об игре." }, { status });
+    return NextResponse.json({ error: "Could not load game details." }, { status });
   }
 }

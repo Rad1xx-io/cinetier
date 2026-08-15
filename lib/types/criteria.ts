@@ -36,39 +36,39 @@ export const SCORE_DEFAULT = 5;
 export const DEFAULT_PRESETS: PresetGroup[] = [
   {
     id: "cinema-technical",
-    label: "Кино — техника",
+    label: "Film — craft",
     category: "cinema",
     criteria: [
-      { id: "story", name: "Сюжет" },
-      { id: "screenplay", name: "Сценарий" },
-      { id: "acting", name: "Актёрская игра" },
-      { id: "cinematography", name: "Операторская работа" },
-      { id: "editing", name: "Монтаж" },
-      { id: "sound", name: "Звук" },
-      { id: "music", name: "Музыка" },
+      { id: "story", name: "Story" },
+      { id: "screenplay", name: "Screenplay" },
+      { id: "acting", name: "Acting" },
+      { id: "cinematography", name: "Cinematography" },
+      { id: "editing", name: "Editing" },
+      { id: "sound", name: "Sound" },
+      { id: "music", name: "Music" },
     ],
   },
   {
     id: "cinema-entertainment",
-    label: "Кино — впечатления",
+    label: "Film — experience",
     category: "cinema",
     criteria: [
-      { id: "action", name: "Экшен" },
-      { id: "fun", name: "Веселье" },
-      { id: "rewatchability", name: "Пересматриваемость" },
-      { id: "atmosphere", name: "Атмосфера" },
+      { id: "action", name: "Action" },
+      { id: "fun", name: "Fun" },
+      { id: "rewatchability", name: "Rewatchability" },
+      { id: "atmosphere", name: "Atmosphere" },
     ],
   },
   {
     id: "games",
-    label: "Игры",
+    label: "Games",
     category: "games",
     criteria: [
-      { id: "gameplay", name: "Геймплей" },
-      { id: "graphics", name: "Графика" },
-      { id: "replayability", name: "Реиграбельность" },
-      { id: "world", name: "Мир" },
-      { id: "game-sound", name: "Звук" },
+      { id: "gameplay", name: "Gameplay" },
+      { id: "graphics", name: "Graphics" },
+      { id: "replayability", name: "Replayability" },
+      { id: "world", name: "World" },
+      { id: "game-sound", name: "Sound" },
     ],
   },
 ];
@@ -78,7 +78,7 @@ export const PRESET_BY_ID: Record<string, CriterionPreset> = Object.fromEntries(
   DEFAULT_PRESETS.flatMap((group) => group.criteria.map((c) => [c.id, c]))
 );
 
-/** Comparable form of a name, so "Сюжет" and " сюжет " count as the same criterion. */
+/** Comparable form of a name, so "Story" and " story " count as the same criterion. */
 export function normalizeCriterionName(name: string): string {
   return name.trim().toLowerCase();
 }

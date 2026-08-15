@@ -54,9 +54,9 @@ export function GameFilters({ value, onChange, canReset, onReset }: GameFiltersP
         value={value.genre}
         onChange={(e) => onChange({ ...value, genre: e.target.value as GameGenre | "" })}
         className={selectClass}
-        aria-label="Жанр"
+        aria-label="Genre"
       >
-        <option value="">Все жанры</option>
+        <option value="">All genres</option>
         {GAME_GENRES.map((g) => (
           <option key={g.value} value={g.value}>
             {g.label}
@@ -68,9 +68,9 @@ export function GameFilters({ value, onChange, canReset, onReset }: GameFiltersP
         value={value.platform}
         onChange={(e) => onChange({ ...value, platform: e.target.value as GamePlatform | "" })}
         className={selectClass}
-        aria-label="Платформа"
+        aria-label="Platform"
       >
-        <option value="">Все платформы</option>
+        <option value="">All platforms</option>
         {GAME_PLATFORMS.map((p) => (
           <option key={p.value} value={p.value}>
             {p.label}
@@ -82,9 +82,9 @@ export function GameFilters({ value, onChange, canReset, onReset }: GameFiltersP
         value={value.category}
         onChange={(e) => onChange({ ...value, category: e.target.value as GameCategory | "" })}
         className={selectClass}
-        aria-label="Режим игры"
+        aria-label="Game mode"
       >
-        <option value="">Любой режим</option>
+        <option value="">Any mode</option>
         {GAME_CATEGORIES.map((c) => (
           <option key={c.value} value={c.value}>
             {c.label}
@@ -96,7 +96,7 @@ export function GameFilters({ value, onChange, canReset, onReset }: GameFiltersP
         value={value.sort}
         onChange={(e) => onChange({ ...value, sort: e.target.value as GameSort })}
         className={selectClass}
-        aria-label="Сортировка"
+        aria-label="Sort"
       >
         {GAME_SORTS.map((s) => (
           <option key={s.value} value={s.value}>
@@ -107,7 +107,7 @@ export function GameFilters({ value, onChange, canReset, onReset }: GameFiltersP
 
       <Button variant="ghost" size="sm" onClick={onReset} disabled={!canReset}>
         <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-        Сбросить фильтры
+        Reset filters
       </Button>
     </div>
   );

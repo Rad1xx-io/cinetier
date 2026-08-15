@@ -53,7 +53,7 @@ export function MagicLinkForm({ redirectTo = "/" }: MagicLinkFormProps) {
 
       <div className="my-3 flex items-center gap-3">
         <span className="h-px flex-1 bg-border" />
-        <span className="text-xs text-muted">или по email</span>
+        <span className="text-xs text-muted">or by email</span>
         <span className="h-px flex-1 bg-border" />
       </div>
 
@@ -65,17 +65,17 @@ export function MagicLinkForm({ redirectTo = "/" }: MagicLinkFormProps) {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
           className="sm:max-w-xs"
-          aria-label="Email для входа"
+          aria-label="Email address"
         />
         <Button type="submit" disabled={status.kind === "sending"}>
           <Mail className="h-4 w-4" aria-hidden />
-          Прислать ссылку
+          Send me a link
         </Button>
       </form>
       {status.kind === "sent" && (
         <p className="mt-2 flex items-center gap-1.5 text-sm text-accent">
           <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          Ссылка отправлена на {status.email}. Проверьте почту.
+          Link sent to {status.email}. Check your inbox.
         </p>
       )}
       {status.kind === "error" && (

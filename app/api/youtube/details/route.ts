@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const id = searchParams.get("id");
 
   if (!id) {
-    return NextResponse.json({ error: "Некорректный идентификатор канала." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid channel id." }, { status: 400 });
   }
 
   try {
@@ -21,14 +21,14 @@ export async function GET(request: NextRequest) {
 
     const item = data.items[0];
     if (!item) {
-      return NextResponse.json({ error: "Канал не найден." }, { status: 404 });
+      return NextResponse.json({ error: "Channel not found." }, { status: 404 });
     }
 
     return NextResponse.json(mapChannelToDetails(item));
   } catch (error) {
     const status = error instanceof YouTubeError ? error.status : 500;
     return NextResponse.json(
-      { error: "Не удалось загрузить данные о канале." },
+      { error: "Could not load channel details." },
       { status }
     );
   }

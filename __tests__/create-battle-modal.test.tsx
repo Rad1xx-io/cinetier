@@ -80,7 +80,7 @@ function itemTitles(): string[] {
 
 /** A category tab, scoped to the tab group so item rows cannot match it. */
 function categoryTab(name: RegExp): HTMLButtonElement {
-  const group = screen.getByRole("group", { name: "Категория батла" });
+  const group = screen.getByRole("group", { name: "Battle category" });
   return within(group).getByRole("button", { name }) as HTMLButtonElement;
 }
 
@@ -112,8 +112,8 @@ describe("CreateBattleModal — choosing the pool", () => {
     open();
 
     // Four rated films/series beats one anime and one game.
-    expect(categoryTab(/^Кино/).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText(/Выбрано 5 из 5/)).toBeDefined();
+    expect(categoryTab(/^Film/).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText(/5 of 5 selected/)).toBeDefined();
   });
 
   it("leaves unrated titles out of the pool", () => {
@@ -142,7 +142,7 @@ describe("CreateBattleModal — choosing the pool", () => {
   it("switches the pool when another category is chosen", () => {
     open();
 
-    fireEvent.click(categoryTab(/^Аниме/));
+    fireEvent.click(categoryTab(/^Anime/));
 
     expect(itemTitles().some((t) => t.includes("Аниме A"))).toBe(true);
     expect(itemTitles().some((t) => t.includes("Фильм A"))).toBe(false);
@@ -151,7 +151,7 @@ describe("CreateBattleModal — choosing the pool", () => {
   it("disables a category with nothing rated in it", () => {
     open([title(1, "Только кино", "S")]);
 
-    expect(categoryTab(/^Игры/).disabled).toBe(true);
+    expect(categoryTab(/^Games/).disabled).toBe(true);
   });
 
   it("opens capped at the default size, not the maximum", () => {
@@ -169,7 +169,7 @@ describe("CreateBattleModal — choosing the pool", () => {
     );
     open(many);
 
-    fireEvent.change(screen.getByLabelText(/Максимум позиций/), {
+    fireEvent.change(screen.getByLabelText(/Maximum entries/), {
       target: { value: String(MAX_POOL_SIZE) },
     });
 
@@ -179,7 +179,7 @@ describe("CreateBattleModal — choosing the pool", () => {
   it("lets the creator lower the cap", () => {
     open();
 
-    fireEvent.change(screen.getByLabelText(/Максимум позиций/), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText(/Maximum entries/), { target: { value: "5" } });
 
     expect(itemButtons()).toHaveLength(5);
   });
@@ -189,7 +189,7 @@ describe("CreateBattleModal — choosing the pool", () => {
 
     fireEvent.click(itemButtons()[0]);
 
-    expect(screen.getByText(/Выбрано 4 из 5/)).toBeDefined();
+    expect(screen.getByText(/4 of 5 selected/)).toBeDefined();
     expect(itemButtons()[0].getAttribute("aria-pressed")).toBe("false");
   });
 
@@ -199,7 +199,7 @@ describe("CreateBattleModal — choosing the pool", () => {
     fireEvent.click(itemButtons()[0]);
     fireEvent.click(itemButtons()[0]);
 
-    expect(screen.getByText(/Выбрано 5 из 5/)).toBeDefined();
+    expect(screen.getByText(/5 of 5 selected/)).toBeDefined();
   });
 });
 
@@ -207,9 +207,9 @@ describe("CreateBattleModal — guardrails", () => {
   it("refuses to create a battle below the minimum", () => {
     open([title(1, "Один", "S"), title(2, "Два", "A")]);
 
-    const create = screen.getByRole("button", { name: "Создать батл" }) as HTMLButtonElement;
+    const create = screen.getByRole("button", { name: "Create battle" }) as HTMLButtonElement;
     expect(create.disabled).toBe(true);
-    expect(screen.getByText(new RegExp(`минимум ${MIN_POOL_SIZE} позиций`))).toBeDefined();
+    expect(screen.getByText(new RegExp(`At least ${MIN_POOL_SIZE} entries`))).toBeDefined();
   });
 
   it("blocks creation once too many items are unticked", () => {
@@ -217,7 +217,7 @@ describe("CreateBattleModal — guardrails", () => {
 
     fireEvent.click(itemButtons()[0]);
 
-    expect((screen.getByRole("button", { name: "Создать батл" }) as HTMLButtonElement).disabled)
+    expect((screen.getByRole("button", { name: "Create battle" }) as HTMLButtonElement).disabled)
       .toBe(true);
   });
 
@@ -227,9 +227,9 @@ describe("CreateBattleModal — guardrails", () => {
     // tab is disabled — so this is the only way the state is reached.
     open([title(1, "Неоценённый", "Unrated")]);
 
-    expect(screen.getByText(/пока нет подходящих позиций/)).toBeDefined();
+    expect(screen.getByText(/Nothing here fits yet/)).toBeDefined();
     expect(itemButtons()).toHaveLength(0);
-    expect((screen.getByRole("button", { name: "Создать батл" }) as HTMLButtonElement).disabled)
+    expect((screen.getByRole("button", { name: "Create battle" }) as HTMLButtonElement).disabled)
       .toBe(true);
   });
 });
@@ -238,7 +238,7 @@ describe("CreateBattleModal — creating", () => {
   it("sends the selected items and the creator's tiers", async () => {
     open();
 
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
 
     await waitFor(() => expect(createBattle).toHaveBeenCalledTimes(1));
     const [category, items, ratings] = createBattle.mock.calls[0];
@@ -260,7 +260,7 @@ describe("CreateBattleModal — creating", () => {
     open(many);
 
     fireEvent.click(itemButtons()[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
 
     await waitFor(() => expect(createBattle).toHaveBeenCalledTimes(1));
     const [, items] = createBattle.mock.calls[0];
@@ -271,10 +271,10 @@ describe("CreateBattleModal — creating", () => {
   it("shows the link and reports the event once the battle exists", async () => {
     open();
 
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
 
     expect(await screen.findByText("https://tierlistonline.app/battle/battle-xyz")).toBeDefined();
-    expect(screen.getByText("Ссылка готова!")).toBeDefined();
+    expect(screen.getByText("Link ready")).toBeDefined();
     expect(trackEvent).toHaveBeenCalledWith("battle_created", {
       battle_id: "battle-xyz",
       category: "cinema",
@@ -287,26 +287,26 @@ describe("CreateBattleModal — creating", () => {
     createBattle.mockResolvedValue(null);
     open();
 
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
 
-    expect(await screen.findByText(/Не удалось создать батл/)).toBeDefined();
-    expect(screen.queryByText("Ссылка готова!")).toBeNull();
+    expect(await screen.findByText(/Could not create the battle/)).toBeDefined();
+    expect(screen.queryByText("Link ready")).toBeNull();
     expect(trackEvent).not.toHaveBeenCalled();
     // The picker survives, so a retry does not mean rebuilding the selection.
-    expect(screen.getByRole("button", { name: "Создать батл" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Create battle" })).toBeDefined();
   });
 });
 
 describe("CreateBattleModal — sharing the link", () => {
   it("copies the link when there is no share sheet", async () => {
     open();
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Поделиться ссылкой/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Share the link/ }));
 
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith("https://tierlistonline.app/battle/battle-xyz")
     );
-    expect(await screen.findByText("Ссылка скопирована")).toBeDefined();
+    expect(await screen.findByText("Link copied")).toBeDefined();
   });
 
   it("prefers the native share sheet where it exists", async () => {
@@ -314,8 +314,8 @@ describe("CreateBattleModal — sharing the link", () => {
     Object.defineProperty(navigator, "share", { value: share, configurable: true });
 
     open();
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Поделиться ссылкой/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Share the link/ }));
 
     await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
     expect(writeText).not.toHaveBeenCalled();
@@ -328,8 +328,8 @@ describe("CreateBattleModal — sharing the link", () => {
     });
 
     open();
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Поделиться ссылкой/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Share the link/ }));
 
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith("https://tierlistonline.app/battle/battle-xyz")
@@ -363,7 +363,7 @@ describe("CreateBattleModal — YouTube channels", () => {
   it("keeps channels out of the film pool and films out of the channel pool", () => {
     open(titles, channels);
 
-    fireEvent.click(categoryTab(/^Кино/));
+    fireEvent.click(categoryTab(/^Film/));
     expect(itemTitles().some((t) => t.includes("Канал A"))).toBe(false);
 
     fireEvent.click(categoryTab(/^YouTube/));
@@ -386,7 +386,7 @@ describe("CreateBattleModal — YouTube channels", () => {
   it("creates a youtube battle with channel ids and tiers", async () => {
     open([], channels);
 
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
 
     await waitFor(() => expect(createBattle).toHaveBeenCalledTimes(1));
     const [category, items, ratings] = createBattle.mock.calls[0];
@@ -405,7 +405,7 @@ describe("CreateBattleModal — YouTube channels", () => {
   it("reports the category on the created event", async () => {
     open([], channels);
 
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
 
     await waitFor(() => expect(trackEvent).toHaveBeenCalled());
     expect(trackEvent).toHaveBeenCalledWith("battle_created", {
@@ -419,7 +419,7 @@ describe("CreateBattleModal — YouTube channels", () => {
 
 /** A tier toggle in the "which tiers take part" fieldset. */
 function tierToggle(tier: string): HTMLButtonElement {
-  const group = screen.getByRole("group", { name: /Тиры в батле/ });
+  const group = screen.getByRole("group", { name: /Tiers to include/ });
   return within(group).getByRole("button", { name: new RegExp(`^${tier}`) }) as HTMLButtonElement;
 }
 
@@ -462,7 +462,7 @@ describe("CreateBattleModal — tier filter", () => {
     open(trash);
 
     for (const tier of ["S", "A", "B", "C"]) fireEvent.click(tierToggle(tier));
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
 
     await waitFor(() => expect(createBattle).toHaveBeenCalledTimes(1));
     const [, , ratings] = createBattle.mock.calls[0];
@@ -485,14 +485,14 @@ describe("CreateBattleModal — tier filter", () => {
 describe("CreateBattleModal — presets", () => {
   function openPresets(list: RankedTitle[] = []) {
     open(list);
-    fireEvent.click(screen.getByRole("button", { name: /Подборки/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Presets/ }));
   }
 
   /** The inline tier pickers, one per entry the creator has not rated yet. */
   function unratedRows(): HTMLElement[] {
     return screen
       .queryAllByRole("group")
-      .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Оценить"));
+      .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Rate"));
   }
 
   /** Rates the first `count` unrated entries, whatever the shuffle dealt. */
@@ -506,8 +506,8 @@ describe("CreateBattleModal — presets", () => {
   it("offers the ready-made sets", () => {
     openPresets();
 
-    expect(screen.getByRole("button", { name: /Современная классика/ })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Игры, о которых спорят/ })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Modern classics/ })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Games people argue about/ })).toBeDefined();
   });
 
   it("deals only as many entries as the slider allows", () => {
@@ -516,19 +516,19 @@ describe("CreateBattleModal — presets", () => {
     // The pool is far larger than one battle uses — that is what makes a reroll
     // worth having.
     expect(itemButtons()).toHaveLength(DEFAULT_POOL_SIZE);
-    expect(screen.getByText(new RegExp(`из ${DEFAULT_POOL_SIZE}`))).toBeDefined();
+    expect(screen.getByText(new RegExp(`of ${DEFAULT_POOL_SIZE}`))).toBeDefined();
   });
 
   it("says how big the pool behind the set is", () => {
     openPresets();
 
-    expect(screen.getByText(/\d+ позиций в пуле/)).toBeDefined();
+    expect(screen.getByText(/\d+ in the pool/)).toBeDefined();
   });
 
   it("lists preset entries with no tier until the creator gives one", () => {
     openPresets();
 
-    expect(screen.getByText(/Выбрано 0 из/)).toBeDefined();
+    expect(screen.getByText(/0 of \d+ selected/)).toBeDefined();
   });
 
   it("offers a blind pass instead of blocking when nothing is rated", () => {
@@ -536,9 +536,9 @@ describe("CreateBattleModal — presets", () => {
 
     // The old behaviour refused to go on. Picking a set you have not worked
     // through is the normal case, so it now leads into rating it yourself.
-    const submit = screen.getByRole("button", { name: /Оценить и создать/ }) as HTMLButtonElement;
+    const submit = screen.getByRole("button", { name: /Rate and create/ }) as HTMLButtonElement;
     expect(submit.disabled).toBe(false);
-    expect(screen.getByText(/сначала пройдёте набор сами/)).toBeDefined();
+    expect(screen.getByText(/you play the line-up blind first/)).toBeDefined();
   });
 
   it("counts an entry once the creator rates it inline", () => {
@@ -546,7 +546,7 @@ describe("CreateBattleModal — presets", () => {
 
     rateFirst(1);
 
-    expect(screen.getByText(/Выбрано 1 из/)).toBeDefined();
+    expect(screen.getByText(/1 of \d+ selected/)).toBeDefined();
   });
 
   it("keeps a rating when the hand is reshuffled", () => {
@@ -554,7 +554,7 @@ describe("CreateBattleModal — presets", () => {
 
     const rated = unratedRows()[0].getAttribute("aria-label");
     rateFirst(1);
-    fireEvent.click(screen.getByRole("button", { name: /Перемешать/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Shuffle/ }));
 
     // The entry may or may not be dealt again, but if it is, it keeps its tier
     // rather than reverting to unrated.
@@ -566,7 +566,7 @@ describe("CreateBattleModal — presets", () => {
     openPresets();
     const first = itemTitles().join("|");
 
-    fireEvent.click(screen.getByRole("button", { name: /Перемешать/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Shuffle/ }));
 
     expect(itemTitles().join("|")).not.toBe(first);
   });
@@ -575,7 +575,7 @@ describe("CreateBattleModal — presets", () => {
     openPresets();
     const first = itemTitles().join("|");
 
-    fireEvent.click(screen.getByRole("button", { name: /Современная классика/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Modern classics/ }));
 
     expect(itemTitles().join("|")).not.toBe(first);
   });
@@ -592,13 +592,13 @@ describe("CreateBattleModal — presets", () => {
 
   it("creates a battle straight away once everything on offer is rated", async () => {
     openPresets();
-    fireEvent.change(screen.getByLabelText(/Максимум позиций/), {
+    fireEvent.change(screen.getByLabelText(/Maximum entries/), {
       target: { value: String(MIN_POOL_SIZE) },
     });
 
     rateFirst(MIN_POOL_SIZE);
     // Nothing left unrated, so no pass is needed and the label says so.
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
 
     await waitFor(() => expect(createBattle).toHaveBeenCalledTimes(1));
     const [category, items, ratings] = createBattle.mock.calls[0];
@@ -612,12 +612,12 @@ describe("CreateBattleModal — presets", () => {
 
   it("records the preset it came from", async () => {
     openPresets();
-    fireEvent.change(screen.getByLabelText(/Максимум позиций/), {
+    fireEvent.change(screen.getByLabelText(/Maximum entries/), {
       target: { value: String(MIN_POOL_SIZE) },
     });
 
     rateFirst(MIN_POOL_SIZE);
-    fireEvent.click(screen.getByRole("button", { name: "Создать батл" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
 
     await waitFor(() => expect(trackEvent).toHaveBeenCalled());
     expect(trackEvent).toHaveBeenCalledWith("battle_created", {
@@ -633,15 +633,15 @@ describe("CreateBattleModal — presets", () => {
 describe("CreateBattleModal — the author's own blind pass", () => {
   function openPresets(list: RankedTitle[] = []) {
     open(list);
-    fireEvent.click(screen.getByRole("button", { name: /Подборки/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Presets/ }));
   }
 
   function setSize(n: number) {
-    fireEvent.change(screen.getByLabelText(/Максимум позиций/), { target: { value: String(n) } });
+    fireEvent.change(screen.getByLabelText(/Maximum entries/), { target: { value: String(n) } });
   }
 
   function startPass() {
-    fireEvent.click(screen.getByRole("button", { name: /Оценить и создать/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Rate and create/ }));
   }
 
   /** A tier button in the one-card-at-a-time voting screen. */
@@ -650,7 +650,7 @@ describe("CreateBattleModal — the author's own blind pass", () => {
   }
 
   function skipCard() {
-    fireEvent.click(screen.getByRole("button", { name: /Пропустить/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Skip/ }));
   }
 
   it("opens the voting screen instead of writing anything", () => {
@@ -659,8 +659,8 @@ describe("CreateBattleModal — the author's own blind pass", () => {
 
     startPass();
 
-    expect(screen.getByText("Сначала оцените сами")).toBeDefined();
-    expect(screen.getByText(`Позиция 1 из ${MIN_POOL_SIZE}`)).toBeDefined();
+    expect(screen.getByText("Rate them yourself first")).toBeDefined();
+    expect(screen.getByText(`Entry 1 of ${MIN_POOL_SIZE}`)).toBeDefined();
     // Nothing is stored until the pass finishes — a half-rated battle must never
     // exist for a friend to open.
     expect(createBattle).not.toHaveBeenCalled();
@@ -689,7 +689,7 @@ describe("CreateBattleModal — the author's own blind pass", () => {
     for (let i = 0; i < MIN_POOL_SIZE; i++) voteTier("A");
 
     expect(await screen.findByText("https://tierlistonline.app/battle/battle-xyz")).toBeDefined();
-    expect(screen.getByText("Ссылка готова!")).toBeDefined();
+    expect(screen.getByText("Link ready")).toBeDefined();
   });
 
   it("only asks about entries the author has not ranked", () => {
@@ -707,7 +707,7 @@ describe("CreateBattleModal — the author's own blind pass", () => {
 
     // Only the three it has never seen: an opinion already on their board is not
     // asked for a second time.
-    expect(screen.getByText("Позиция 1 из 3")).toBeDefined();
+    expect(screen.getByText("Entry 1 of 3")).toBeDefined();
   });
 
   it("keeps a tier given inline and does not re-ask for it", () => {
@@ -716,12 +716,12 @@ describe("CreateBattleModal — the author's own blind pass", () => {
 
     const rated = screen
       .queryAllByRole("group")
-      .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Оценить"))[0];
+      .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Rate"))[0];
     fireEvent.click(within(rated).getByRole("button", { name: /: S$/ }));
 
     startPass();
 
-    expect(screen.getByText(`Позиция 1 из ${MIN_POOL_SIZE - 1}`)).toBeDefined();
+    expect(screen.getByText(`Entry 1 of ${MIN_POOL_SIZE - 1}`)).toBeDefined();
   });
 
   it("merges the inline tier with the pass answers", async () => {
@@ -730,7 +730,7 @@ describe("CreateBattleModal — the author's own blind pass", () => {
 
     const rated = screen
       .queryAllByRole("group")
-      .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Оценить"))[0];
+      .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Rate"))[0];
     fireEvent.click(within(rated).getByRole("button", { name: /: S$/ }));
 
     startPass();
@@ -752,10 +752,10 @@ describe("CreateBattleModal — the author's own blind pass", () => {
     voteTier("A");
     for (let i = 0; i < MIN_POOL_SIZE - 1; i++) skipCard();
 
-    expect(await screen.findByText(/Оценено 1 из 5 нужных/)).toBeDefined();
+    expect(await screen.findByText(/1 of the 5 needed are rated/)).toBeDefined();
     expect(createBattle).not.toHaveBeenCalled();
     // Back on the picker with the one answer preserved.
-    expect(screen.getByText(/Выбрано 1 из/)).toBeDefined();
+    expect(screen.getByText(/1 of \d+ selected/)).toBeDefined();
   });
 
   it("can be abandoned without losing the line-up", () => {
@@ -763,9 +763,9 @@ describe("CreateBattleModal — the author's own blind pass", () => {
     setSize(MIN_POOL_SIZE);
     startPass();
 
-    fireEvent.click(screen.getByRole("button", { name: /Вернуться к набору/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Back to the line-up/ }));
 
-    expect(screen.getByText("Батл вкусов")).toBeDefined();
+    expect(screen.getByText("Taste Battle")).toBeDefined();
     expect(itemButtons()).toHaveLength(MIN_POOL_SIZE);
     expect(createBattle).not.toHaveBeenCalled();
   });
@@ -775,20 +775,20 @@ describe("CreateBattleModal — the author's own blind pass", () => {
     setSize(MIN_POOL_SIZE);
     rateAllVisible();
 
-    expect(screen.queryByRole("button", { name: /Оценить и создать/ })).toBeNull();
-    expect(screen.getByRole("button", { name: "Создать батл" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /Rate and create/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Create battle" })).toBeDefined();
   });
 
   /** Rates every row shown in the picker, via the inline buttons. */
   function rateAllVisible(tier = "A") {
     let groups = screen
       .queryAllByRole("group")
-      .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Оценить"));
+      .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Rate"));
     while (groups.length > 0) {
       fireEvent.click(within(groups[0]).getByRole("button", { name: new RegExp(`: ${tier}$`) }));
       groups = screen
         .queryAllByRole("group")
-        .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Оценить"));
+        .filter((g) => (g.getAttribute("aria-label") ?? "").startsWith("Rate"));
     }
   }
 });

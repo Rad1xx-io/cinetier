@@ -26,15 +26,15 @@ import { cn } from "@/lib/utils/cn";
 type MediaFilter = "all" | "movie" | "tv";
 
 const MEDIA_OPTIONS: { value: MediaFilter; label: string }[] = [
-  { value: "all", label: "Все" },
-  { value: "movie", label: "Фильмы" },
-  { value: "tv", label: "Сериалы" },
+  { value: "all", label: "All" },
+  { value: "movie", label: "Films" },
+  { value: "tv", label: "TV" },
 ];
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal });
   const body = await res.json();
-  if (!res.ok) throw new Error((body as ApiErrorBody).error ?? "Что-то пошло не так.");
+  if (!res.ok) throw new Error((body as ApiErrorBody).error ?? "Something went wrong.");
   return body as T;
 }
 
@@ -137,7 +137,7 @@ export function DiscoverClient() {
         setPage(1);
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
-        setError((err as Error).message || "Не удалось загрузить тайтлы. Попробуйте ещё раз.");
+        setError((err as Error).message || "Could not load titles. Please try again.");
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -166,7 +166,7 @@ export function DiscoverClient() {
       });
       setPage(next);
     } catch (err) {
-      setError((err as Error).message || "Не удалось загрузить тайтлы. Попробуйте ещё раз.");
+      setError((err as Error).message || "Could not load titles. Please try again.");
     } finally {
       setLoadingMore(false);
     }
@@ -190,15 +190,15 @@ export function DiscoverClient() {
     <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 md:px-6 md:py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Фильмы и сериалы</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Films and TV</h1>
           <p className="mt-1 text-sm text-muted">
-            Ищите фильмы и сериалы в TMDB и добавляйте их в свой список.
+            Search TMDB for films and TV, then add them to your list.
           </p>
         </div>
         <Button asChild variant="secondary" size="sm">
           <Link href="/tier-list">
             <LayoutGrid className="h-4 w-4" aria-hidden />
-            Тир-лист
+            Tier list
           </Link>
         </Button>
       </div>
@@ -208,15 +208,15 @@ export function DiscoverClient() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск фильмов и сериалов…"
+          placeholder="Search films and TV…"
           className="pl-9"
-          aria-label="Поиск в TMDB"
+          aria-label="Search TMDB"
         />
       </div>
 
       <div className={FILTER_BAR_CLASS}>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border border-border p-0.5" role="group" aria-label="Тип">
+          <div className="flex rounded-lg border border-border p-0.5" role="group" aria-label="Type">
             {MEDIA_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
@@ -246,7 +246,7 @@ export function DiscoverClient() {
 
         {isSearching && canReset && (
           <p className="mt-2 text-xs text-muted">
-            Пока идёт поиск по названию, фильтры не применяются — очистите строку поиска.
+            Filters do not apply while a title search is running — clear the search box first.
           </p>
         )}
       </div>
@@ -260,11 +260,11 @@ export function DiscoverClient() {
         </div>
       )}
 
-      {loading && <p className="text-sm text-muted">Загрузка…</p>}
+      {loading && <p className="text-sm text-muted">Loading…</p>}
 
       {!loading && !error && (
         <p className="text-sm text-muted">
-          {results.length === 0 ? "Ничего не найдено." : `Найдено: ${results.length}`}
+          {results.length === 0 ? "Nothing found." : `${results.length} found`}
         </p>
       )}
 
@@ -279,7 +279,7 @@ export function DiscoverClient() {
         <div className="flex justify-center pt-2">
           <Button variant="secondary" onClick={handleLoadMore} disabled={loadingMore}>
             {loadingMore && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            Показать ещё
+            Show more
           </Button>
         </div>
       )}

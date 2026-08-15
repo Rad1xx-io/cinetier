@@ -24,24 +24,24 @@ export function Hero() {
       <div className="relative grid gap-8 md:grid-cols-[1.1fr_1fr] md:items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Твой личный медиа-рейтинг
+            Your personal media ranking
           </h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-muted sm:text-base">
-            Составляй тир-листы фильмов, аниме, игр и любимых YouTube-каналов. Делись своим мнением
-            с друзьями.
+            Build tier lists of films, anime, games and the YouTube channels you follow, then share
+            them with your friends.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Button asChild>
               <Link href="/tier-list">
                 <ListChecks className="h-4 w-4" aria-hidden />
-                Собрать тир-лист
+                Build a tier list
               </Link>
             </Button>
             <Button asChild variant="secondary">
               <Link href="/discover">
                 <Compass className="h-4 w-4" aria-hidden />
-                Обзор каталога
+                Browse the catalogue
               </Link>
             </Button>
           </div>

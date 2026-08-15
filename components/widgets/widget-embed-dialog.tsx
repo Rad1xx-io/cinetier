@@ -15,9 +15,9 @@ interface WidgetEmbedDialogProps {
 }
 
 const THEMES: { value: WidgetTheme; label: string }[] = [
-  { value: "transparent", label: "Прозрачный" },
-  { value: "dark", label: "Тёмный" },
-  { value: "light", label: "Светлый" },
+  { value: "transparent", label: "Transparent" },
+  { value: "dark", label: "Dark" },
+  { value: "light", label: "Light" },
 ];
 
 export function WidgetEmbedDialog({ isOpen, onClose, listId }: WidgetEmbedDialogProps) {
@@ -66,16 +66,16 @@ export function WidgetEmbedDialog({ isOpen, onClose, listId }: WidgetEmbedDialog
           <div>
             <h2 className="flex items-center gap-2 text-base font-semibold">
               <MonitorPlay className="h-4 w-4 text-accent" aria-hidden />
-              Виджет для OBS
+              OBS widget
             </h2>
             <p className="mt-1 text-xs text-muted">
-              Добавьте ссылку как Browser Source — доска появится поверх стрима.
+              Add the link as a Browser Source and the board appears over your stream.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Закрыть"
+            aria-label="Close"
             className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:text-foreground"
           >
             <X className="h-4 w-4" aria-hidden />
@@ -84,7 +84,7 @@ export function WidgetEmbedDialog({ isOpen, onClose, listId }: WidgetEmbedDialog
 
         <div className="mt-4 space-y-3">
           <div>
-            <span className="mb-1.5 block text-xs font-medium text-muted">Фон</span>
+            <span className="mb-1.5 block text-xs font-medium text-muted">Background</span>
             <div className="flex flex-wrap gap-1 rounded-lg border border-border p-0.5">
               {THEMES.map((option) => (
                 <button
@@ -112,7 +112,7 @@ export function WidgetEmbedDialog({ isOpen, onClose, listId }: WidgetEmbedDialog
               onChange={(e) => setCompact(e.target.checked)}
               className="h-4 w-4 accent-[var(--accent)]"
             />
-            Компактный режим — мельче постеры, меньше отступы
+            Compact mode — smaller posters, tighter spacing
           </label>
 
           <label className="flex items-center gap-2 text-xs">
@@ -122,36 +122,36 @@ export function WidgetEmbedDialog({ isOpen, onClose, listId }: WidgetEmbedDialog
               onChange={(e) => setShowTitle(e.target.checked)}
               className="h-4 w-4 accent-[var(--accent)]"
             />
-            Показывать имя автора
+            Show the author’s name
           </label>
 
           <label className="flex flex-wrap items-center gap-2 text-xs">
-            Показать только верхние
+            Show only the top
             <input
               type="number"
               min={1}
               max={6}
               value={limit ?? ""}
-              placeholder="все"
+              placeholder="all"
               onChange={(e) => {
                 const next = Number(e.target.value);
                 setLimit(Number.isFinite(next) && next >= 1 ? next : null);
               }}
-              aria-label="Сколько тиров показывать"
+              aria-label="How many tiers to show"
               className="h-8 w-16 rounded-lg border border-border bg-surface-raised px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
-            тир(ов)
+            tier(s)
           </label>
         </div>
 
         <div className="mt-4">
-          <span className="mb-1.5 block text-xs font-medium text-muted">Ссылка</span>
+          <span className="mb-1.5 block text-xs font-medium text-muted">Link</span>
           <div className="flex gap-2">
             <input
               readOnly
               value={url}
               onFocus={(e) => e.currentTarget.select()}
-              aria-label="Ссылка на виджет"
+              aria-label="Widget link"
               className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface-raised px-3 font-mono text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
             <Button size="sm" onClick={handleCopy} className="shrink-0">
@@ -160,13 +160,13 @@ export function WidgetEmbedDialog({ isOpen, onClose, listId }: WidgetEmbedDialog
               ) : (
                 <Copy className="h-3.5 w-3.5" aria-hidden />
               )}
-              {copied ? "Скопировано" : "Копировать"}
+              {copied ? "Copied" : "Copy"}
             </Button>
           </div>
         </div>
 
         <div className="mt-4">
-          <span className="mb-1.5 block text-xs font-medium text-muted">Предпросмотр</span>
+          <span className="mb-1.5 block text-xs font-medium text-muted">Preview</span>
           {/* A real iframe of the real URL: the point of a preview here is to
               show what OBS will show, and a mock-up would drift from it. The
               checkerboard stands in for the stream behind a transparent theme. */}
@@ -184,13 +184,13 @@ export function WidgetEmbedDialog({ isOpen, onClose, listId }: WidgetEmbedDialog
               <iframe
                 key={url}
                 src={url}
-                title="Предпросмотр виджета"
+                title="Widget preview"
                 className="h-64 w-full border-0"
               />
             )}
           </div>
           <p className="mt-1.5 text-[11px] text-muted">
-            Виджет читает вашу публичную страницу — он покажет доску только пока профиль открыт.
+            The widget reads your public page — it shows the board only while your profile is open.
           </p>
         </div>
       </div>

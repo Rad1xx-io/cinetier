@@ -4,8 +4,8 @@ import { PublicTierListView } from "@/components/public-tier-list/public-tier-li
 export async function generateMetadata(props: PageProps<"/u/[username]">): Promise<Metadata> {
   const { username } = await props.params;
   return {
-    title: `Тир-лист @${username} — TierListOnline`,
-    description: `Личный рейтинг фильмов, аниме, игр и YouTube-каналов пользователя @${username}.`,
+    title: `@${username}'s tier list — TierListOnline`,
+    description: `How @${username} ranks films, anime, games and YouTube channels.`,
   };
 }
 

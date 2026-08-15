@@ -1,18 +1,18 @@
 import type { AnimeSeason, AnimeStatus } from "@/lib/types/anime";
 
 const SEASON_LABELS: Record<AnimeSeason, string> = {
-  WINTER: "Зима",
-  SPRING: "Весна",
-  SUMMER: "Лето",
-  FALL: "Осень",
+  WINTER: "Winter",
+  SPRING: "Spring",
+  SUMMER: "Summer",
+  FALL: "Fall",
 };
 
 const STATUS_LABELS: Record<AnimeStatus, string> = {
-  FINISHED: "Завершён",
-  RELEASING: "Онгоинг",
-  NOT_YET_RELEASED: "Анонс",
-  CANCELLED: "Отменён",
-  HIATUS: "Приостановлен",
+  FINISHED: "Finished",
+  RELEASING: "Airing",
+  NOT_YET_RELEASED: "Announced",
+  CANCELLED: "Cancelled",
+  HIATUS: "On hiatus",
 };
 
 export function seasonLabel(season: AnimeSeason | null): string | null {
@@ -29,5 +29,5 @@ export function formatScore(score: number | null): string {
 
 export function formatEpisodes(episodes: number | null): string {
   if (!episodes) return "—";
-  return `${episodes} эп.`;
+  return `${episodes} ep.`;
 }

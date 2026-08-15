@@ -14,7 +14,7 @@ import type { RankedChannel } from "@/lib/types/youtube";
 import { TIER_META } from "@/lib/tier-meta";
 import { tierColorVar } from "@/lib/utils/tier-style";
 import { getPublicTierList, type PublicTierList } from "@/lib/supabase/profiles";
-import { titlesCountLabel } from "@/lib/utils/pluralize-ru";
+import { titlesCountLabel } from "@/lib/utils/plural";
 import { criteriaAverage, type CriterionScore } from "@/lib/types/criteria";
 import { trackSharedContentViewed } from "@/lib/analytics/events";
 import { ForkButton } from "@/components/public-tier-list/fork-button";
@@ -69,13 +69,13 @@ export function PublicTierListView({ username }: { username: string }) {
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-24 text-center">
         <TriangleAlert className="h-10 w-10 text-muted" aria-hidden />
-        <h1 className="text-lg font-semibold">Тир-лист не найден</h1>
+        <h1 className="text-lg font-semibold">Tier list not found</h1>
         <p className="text-sm text-muted">
-          Пользователя <span className="text-foreground">@{username}</span> не существует, либо его
-          список закрыт.
+          There is no user <span className="text-foreground">@{username}</span>, or their list is
+          closed.
         </p>
         <Button asChild variant="secondary">
-          <Link href="/">На главную</Link>
+          <Link href="/">Go home</Link>
         </Button>
       </div>
     );
@@ -106,11 +106,11 @@ export function PublicTierListView({ username }: { username: string }) {
     <div className="mx-auto max-w-[1600px] px-4 pb-16 pt-6 md:px-6">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-wide text-muted">Тир-лист пользователя</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Tier list by</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{displayName}</h1>
           <p className="mt-1 text-sm text-muted">
             @{profile.username} · {titlesCountLabel(total)}
-            {category !== "all" && ` · показано ${shown}`}
+            {category !== "all" && ` · showing ${shown}`}
           </p>
         </div>
         <ForkButton profile={profile} sourceTitles={titles} sourceChannels={channels} />
@@ -120,7 +120,7 @@ export function PublicTierListView({ username }: { username: string }) {
         <div
           className="mb-5 flex flex-wrap gap-1 rounded-lg border border-border p-0.5"
           role="group"
-          aria-label="Категория"
+          aria-label="Category"
         >
           {availableFilters.map((opt) => (
             <button
@@ -165,9 +165,9 @@ export function PublicTierListView({ username }: { username: string }) {
 
       <div className="mt-6 flex flex-col items-center gap-3 rounded-2xl border border-border bg-surface px-6 py-8 text-center">
         <ListChecks className="h-8 w-8 text-accent" aria-hidden />
-        <p className="text-sm text-muted">Соберите свой тир-лист фильмов, аниме, игр и каналов.</p>
+        <p className="text-sm text-muted">Build your own tier list of films, anime, games and channels.</p>
         <Button asChild size="sm">
-          <Link href="/">Начать в TierListOnline</Link>
+          <Link href="/">Start on TierListOnline</Link>
         </Button>
       </div>
     </div>
@@ -188,7 +188,7 @@ function ReadOnlyTierRow({
   const meta = TIER_META[tier];
   const count = titles.length + channels.length;
 
-  // An empty "не оценено" row is noise on someone else's list.
+  // An empty "unrated" row is noise on someone else's list.
   if (isUnrated && count === 0) return null;
 
   return (
@@ -210,7 +210,7 @@ function ReadOnlyTierRow({
       </div>
 
       <div className="flex min-h-28 flex-1 flex-wrap content-start items-start gap-3 p-3 sm:min-h-32">
-        {count === 0 && <p className="flex h-24 items-center px-2 text-xs text-muted">Пусто</p>}
+        {count === 0 && <p className="flex h-24 items-center px-2 text-xs text-muted">Empty</p>}
 
         {titles.map((t) => {
           const average = criteriaAverage(t.criteriaScores);
