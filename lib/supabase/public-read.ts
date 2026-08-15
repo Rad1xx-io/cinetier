@@ -33,7 +33,58 @@ export interface PublicProfileRef {
 export const PUBLIC_PROFILE_LIMIT = 10_000;
 
 /**
- * Every profile its owner chose to publish.
+ * How much of a board makes a page worth offering a search engine.
+ *
+ * One entry is the literal reading of "not empty". Raise it to 3–5 if the index
+ * starts filling with near-empty boards: a page holding a single poster is thin
+ * content, and enough of them drags down the pages that are not.
+ */
+export const MIN_SITEMAP_BOARD_ITEMS = 1;
+
+interface ProfileRow {
+  username: string;
+  updated_at: string | null;
+}
+
+function toRef(row: ProfileRow): PublicProfileRef[] {
+  if (!row.username) return [];
+  const updated = row.updated_at ? new Date(row.updated_at) : null;
+  return [
+    {
+      username: row.username,
+      // A row written before `updated_at` had a default would otherwise produce
+      // `Invalid Date` and an unparseable <lastmod>.
+      updatedAt: updated && !Number.isNaN(updated.getTime()) ? updated : new Date(),
+    },
+  ];
+}
+
+type Client = NonNullable<ReturnType<typeof getPublicClient>>;
+
+/**
+ * The path taken before migration 011 has been applied: every published
+ * profile, empty boards included.
+ *
+ * Kept as a fallback rather than removed, because the alternative on a database
+ * still missing the view is a sitemap with no profiles in it at all — strictly
+ * worse than one carrying a few thin pages.
+ */
+async function listWithoutCounts(client: Client, limit: number): Promise<PublicProfileRef[]> {
+  const { data, error } = await client
+    .from("profiles")
+    .select("username,updated_at")
+    // `is_public` is the owner's own switch. The select policy on this table is
+    // open, so the filter has to be explicit — RLS will not do it here.
+    .eq("is_public", true)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) return [];
+  return (data as ProfileRow[]).flatMap(toRef);
+}
+
+/**
+ * Published profiles whose board actually holds something.
  *
  * Never throws. A sitemap that 500s is worse than a short one: the static
  * routes are still worth serving when the database is unreachable, and a build
@@ -47,28 +98,22 @@ export async function listPublicProfiles(
 
   try {
     const { data, error } = await supabase
-      .from("profiles")
-      .select("username,updated_at")
-      // `is_public` is the owner's own switch. The select policy on this table
-      // is open, so the filter has to be explicit — RLS will not do it here.
-      .eq("is_public", true)
+      .from("public_profile_sitemap")
+      .select("username,updated_at,items_count")
+      // The view already filters on is_public; this is the empty-board cut.
+      .gte("items_count", MIN_SITEMAP_BOARD_ITEMS)
       .order("updated_at", { ascending: false })
       .limit(limit);
 
+    // 42P01 is Postgres' undefined_table, which here means migration 011 has
+    // not been run yet. Anything else is a real failure and gets the same
+    // treatment as an outage.
+    if (error?.code === "42P01" || error?.message?.includes("public_profile_sitemap")) {
+      return listWithoutCounts(supabase, limit);
+    }
     if (error || !data) return [];
 
-    return (data as { username: string; updated_at: string | null }[]).flatMap((row) => {
-      if (!row.username) return [];
-      const updated = row.updated_at ? new Date(row.updated_at) : null;
-      return [
-        {
-          username: row.username,
-          // A row written before `updated_at` had a default would otherwise
-          // produce `Invalid Date` and an unparseable <lastmod>.
-          updatedAt: updated && !Number.isNaN(updated.getTime()) ? updated : new Date(),
-        },
-      ];
-    });
+    return (data as ProfileRow[]).flatMap(toRef);
   } catch {
     return [];
   }
