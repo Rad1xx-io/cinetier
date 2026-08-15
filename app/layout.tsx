@@ -26,6 +26,10 @@ export const metadata: Metadata = {
   // images, the sitemap link. Without it those stay relative and are dropped by
   // the crawlers that need them most.
   metadataBase: new URL(SITE_URL),
+  // "./" resolves against metadataBase *and the current route*, so every page
+  // gets its own canonical on the real domain. A literal "/" here would claim
+  // every page is the home page, which is worse than no canonical at all.
+  alternates: { canonical: "./" },
   title: "TierListOnline — rank what you watch and play",
   description: "Build tier lists for films, TV, anime, games and YouTube channels, then share them.",
   // Spelled out rather than left to Next's defaults: without an explicit block
@@ -38,7 +42,9 @@ export const metadata: Metadata = {
     title: "TierListOnline — rank what you watch and play",
     description:
       "Build tier lists for films, TV, anime, games and YouTube channels, then share them.",
-    url: SITE_URL,
+    // Relative for the same reason as the canonical above: a fixed origin here
+    // would tell every share sheet that /feed and /u/<name> are the home page.
+    url: "./",
   },
   twitter: {
     card: "summary_large_image",

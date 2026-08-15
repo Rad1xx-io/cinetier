@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getBattleParticipants, type Battle, type BattleEntry } from "@/lib/supabase/battles";
 import { trackLinkCopied, trackShareClicked } from "@/lib/analytics/events";
 import { tierColorVar } from "@/lib/utils/tier-style";
+import { shareUrl } from "@/lib/seo/site";
 
 function canWebShare(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.share === "function";
@@ -50,7 +51,7 @@ export function BattleOwnerView({ battle }: { battle: Battle }) {
     };
   }, [battle.id]);
 
-  const link = `${typeof window === "undefined" ? "" : window.location.origin}/battle/${battle.id}`;
+  const link = shareUrl(`/battle/${battle.id}`);
 
   const handleShare = useCallback(async () => {
     trackShareClicked("battle", battle.id);

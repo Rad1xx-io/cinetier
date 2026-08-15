@@ -57,6 +57,9 @@ export function GoogleSignInButton({ redirectTo = "/" }: GoogleSignInButtonProps
         // Same callback the magic link uses, carrying the destination along so
         // both sign-in routes land in the same place rather than one of them
         // dropping the user on /settings.
+        // Deliberately the live origin, not the canonical site URL: sign-in has
+        // to come back to the host the visitor is on, or a session started on
+        // localhost or a preview would be handed to production and lost.
         redirectTo: `${window.location.origin}/auth/callback?redirect_to=${encodeURIComponent(redirectTo)}`,
       },
     });

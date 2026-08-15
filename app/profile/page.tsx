@@ -17,6 +17,7 @@ import { useToast } from "@/lib/hooks/use-toast";
 import { getMyProfile, type Profile } from "@/lib/supabase/profiles";
 import { TierPill } from "@/components/movie-card/tier-pill";
 import { titleHref } from "@/lib/utils/title-route";
+import { shareUrl } from "@/lib/seo/site";
 import { cn } from "@/lib/utils/cn";
 import type { ContentType } from "@/lib/utils/content-type";
 
@@ -115,7 +116,7 @@ export default function ProfilePage() {
 
   async function copyShareLink() {
     if (!profile) return;
-    const url = `${window.location.origin}/u/${profile.username}`;
+    const url = shareUrl(`/u/${profile.username}`);
     try {
       await navigator.clipboard.writeText(url);
       notify("Link copied");

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { tierColorVar } from "@/lib/utils/tier-style";
 import { trackLinkCopied, trackShareClicked } from "@/lib/analytics/events";
 import type { BattleComparison, BattleItem } from "@/lib/types/battle";
+import { shareUrl } from "@/lib/seo/site";
 import { cn } from "@/lib/utils/cn";
 
 const RING_RADIUS = 54;
@@ -58,7 +59,7 @@ export function BattleResults({
 
   const handleShare = useCallback(async () => {
     trackShareClicked("battle", battleId);
-    const url = `${window.location.origin}/battle/${battleId}`;
+    const url = shareUrl(`/battle/${battleId}`);
     const text = `Our taste matched ${comparison.overallMatchPercentage}%. See how you do:`;
 
     // Web Share where it exists — on a phone that opens the real share sheet,

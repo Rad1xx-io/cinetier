@@ -40,7 +40,9 @@ beforeEach(() => {
     configurable: true,
   });
   Object.defineProperty(window, "location", {
-    value: { origin: "https://tierlistonline.app" },
+    // A deliberately wrong host. Shared links must come out on the canonical
+    // domain regardless of where they were copied from.
+    value: { origin: "https://some-preview-xyz.vercel.app" },
     configurable: true,
   });
 });
@@ -169,7 +171,7 @@ describe("BattleResults — sharing", () => {
     fireEvent.click(screen.getByRole("button", { name: /Share the result/ }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.app/battle/battle-1");
+      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.com/battle/battle-1");
     });
     expect(await screen.findByText("Link copied")).toBeDefined();
   });
@@ -194,7 +196,7 @@ describe("BattleResults — sharing", () => {
     fireEvent.click(screen.getByRole("button", { name: /Share the result/ }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.app/battle/battle-1");
+      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.com/battle/battle-1");
     });
   });
 

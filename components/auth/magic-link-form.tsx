@@ -38,6 +38,9 @@ export function MagicLinkForm({ redirectTo = "/" }: MagicLinkFormProps) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
+        // Deliberately the live origin, not the canonical site URL: sign-in has
+        // to come back to the host the visitor is on, or a session started on
+        // localhost or a preview would be handed to production and lost.
         emailRedirectTo: `${window.location.origin}/auth/callback?redirect_to=${encodeURIComponent(redirectTo)}`,
       },
     });

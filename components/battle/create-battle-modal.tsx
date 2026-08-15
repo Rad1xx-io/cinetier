@@ -37,6 +37,7 @@ import { TIERS, type Tier, type RankedTitle } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
 import type { BattleCategory } from "@/lib/types/battle";
 import { tierColorVar } from "@/lib/utils/tier-style";
+import { shareUrl } from "@/lib/seo/site";
 import { cn } from "@/lib/utils/cn";
 
 const CATEGORY_LABELS: Record<BattleCategory, string> = {
@@ -297,7 +298,7 @@ export function CreateBattleModal({
     });
   }
 
-  const link = battleId ? `${window.location.origin}/battle/${battleId}` : "";
+  const link = battleId ? shareUrl(`/battle/${battleId}`) : "";
 
   async function handleShare() {
     if (!battleId) return;

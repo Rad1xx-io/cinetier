@@ -21,6 +21,21 @@ export function absoluteUrl(path: string): string {
   return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+/**
+ * A link built to be handed to someone else.
+ *
+ * Deliberately not `window.location.origin`: a link copied from a preview
+ * deployment would carry that deployment's hostname, which stops resolving the
+ * moment the preview is torn down. Whoever receives it should land on the real
+ * site, wherever it was copied from.
+ *
+ * Sign-in redirects are the opposite case and must keep using the live origin —
+ * see the note in the auth components.
+ */
+export function shareUrl(path: string): string {
+  return absoluteUrl(path);
+}
+
 export interface SitemapRoute {
   path: string;
   changeFrequency: "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never";

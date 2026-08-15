@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="TierListOnline">
+  <!-- Three stacked tier rows in the S/A/B colours from globals.css. At 16px the
+       shapes survive where a letterform would not, and the colour order is the
+       one thing about this app that reads instantly as a tier list. -->
+  <rect width="64" height="64" rx="14" fill="#09090b"/>
+  <rect x="12" y="14" width="40" height="10" rx="3" fill="#e2545a"/>
+  <rect x="12" y="27" width="31" height="10" rx="3" fill="#e8894c"/>
+  <rect x="12" y="40" width="22" height="10" rx="3" fill="#e8c34c"/>
+</svg>

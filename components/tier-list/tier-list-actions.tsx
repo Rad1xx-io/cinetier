@@ -13,6 +13,7 @@ import { getMyProfile, type Profile } from "@/lib/supabase/profiles";
 import { trackLinkCopied, trackShareClicked } from "@/lib/analytics/events";
 import type { RankedTitle } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
+import { shareUrl } from "@/lib/seo/site";
 
 interface TierListActionsProps {
   /** The element to rasterise — the tier rows only, without the toolbar. */
@@ -55,7 +56,7 @@ export function TierListActions({
 
   const copyLink = useCallback(
     async (handle: string) => {
-      const url = `${window.location.origin}/u/${handle}`;
+      const url = shareUrl(`/u/${handle}`);
       // Counted before the write: a clipboard refusal still falls back to
       // showing the link, so the user got their link either way.
       trackLinkCopied("tier_list", handle);

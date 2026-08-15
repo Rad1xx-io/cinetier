@@ -88,7 +88,9 @@ beforeEach(() => {
   createBattle.mockResolvedValue("battle-xyz");
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   Object.defineProperty(window, "location", {
-    value: { origin: "https://tierlistonline.app" },
+    // A deliberately wrong host. Shared links must come out on the canonical
+    // domain regardless of where they were copied from.
+    value: { origin: "https://some-preview-xyz.vercel.app" },
     configurable: true,
   });
   // jsdom implements <dialog> but not showModal in every version; a no-op keeps
@@ -273,7 +275,7 @@ describe("CreateBattleModal — creating", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Create battle" }));
 
-    expect(await screen.findByText("https://tierlistonline.app/battle/battle-xyz")).toBeDefined();
+    expect(await screen.findByText("https://tierlistonline.com/battle/battle-xyz")).toBeDefined();
     expect(screen.getByText("Link ready")).toBeDefined();
     expect(trackEvent).toHaveBeenCalledWith("battle_created", {
       battle_id: "battle-xyz",
@@ -304,7 +306,7 @@ describe("CreateBattleModal — sharing the link", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Share the link/ }));
 
     await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.app/battle/battle-xyz")
+      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.com/battle/battle-xyz")
     );
     expect(await screen.findByText("Link copied")).toBeDefined();
   });
@@ -332,7 +334,7 @@ describe("CreateBattleModal — sharing the link", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Share the link/ }));
 
     await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.app/battle/battle-xyz")
+      expect(writeText).toHaveBeenCalledWith("https://tierlistonline.com/battle/battle-xyz")
     );
   });
 });
@@ -688,7 +690,7 @@ describe("CreateBattleModal — the author's own blind pass", () => {
 
     for (let i = 0; i < MIN_POOL_SIZE; i++) voteTier("A");
 
-    expect(await screen.findByText("https://tierlistonline.app/battle/battle-xyz")).toBeDefined();
+    expect(await screen.findByText("https://tierlistonline.com/battle/battle-xyz")).toBeDefined();
     expect(screen.getByText("Link ready")).toBeDefined();
   });
 

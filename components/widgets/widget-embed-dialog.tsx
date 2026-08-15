@@ -5,6 +5,7 @@ import { Check, Copy, MonitorPlay, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildWidgetUrl, WIDGET_DEFAULTS, type WidgetTheme } from "@/lib/widgets/params";
 import { trackLinkCopied } from "@/lib/analytics/events";
+import { SITE_URL } from "@/lib/seo/site";
 import { cn } from "@/lib/utils/cn";
 
 interface WidgetEmbedDialogProps {
@@ -37,7 +38,9 @@ export function WidgetEmbedDialog({ isOpen, onClose, listId }: WidgetEmbedDialog
 
   // The origin is only knowable in the browser, and the URL is worthless
   // without it — so it is read at render rather than guessed at build time.
-  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  // The URL is pasted into OBS on a machine that may never open this site, so
+  // it has to be the canonical one rather than whatever host produced it.
+  const origin = SITE_URL;
   const url = buildWidgetUrl(origin, listId, { theme, compact, showTitle, limit });
 
   async function handleCopy() {
