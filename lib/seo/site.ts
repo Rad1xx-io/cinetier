@@ -46,5 +46,16 @@ export const SITEMAP_ROUTES: SitemapRoute[] = [
   { path: "/youtube", changeFrequency: "daily", priority: 0.8 },
 ];
 
+/**
+ * Published profiles, added to the sitemap at request time from the database.
+ *
+ * Ranked below the catalogue pages but above nothing: these hold content that
+ * exists nowhere else on the web, which is more than the catalogues can say.
+ * `weekly` matches how a board actually moves — people add a few titles and
+ * leave it for a while.
+ */
+export const PROFILE_PRIORITY = 0.7;
+export const PROFILE_CHANGE_FREQUENCY = "weekly" as const;
+
 /** Routes that are not pages, or are pages no search result should land on. */
 export const CRAWLER_DISALLOW = ["/api/", "/auth/", "/widgets/"];
