@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, Loader2, Send, Share2, Swords } from "lucide-react";
+import { Download, Loader2, MonitorPlay, Send, Share2, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UsernameDialog } from "@/components/profile/username-dialog";
+import { WidgetEmbedDialog } from "@/components/widgets/widget-embed-dialog";
 import { CreateBattleModal } from "@/components/battle/create-battle-modal";
 import { PublishPostDialog } from "@/components/feed/publish-post-dialog";
 import { suggestedPostCategory } from "@/lib/feed/post-preview";
@@ -35,6 +36,7 @@ export function TierListActions({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [battleOpen, setBattleOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [widgetOpen, setWidgetOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -182,6 +184,15 @@ export function TierListActions({
         Опубликовать
       </Button>
 
+      {/* Only offered once the board is public: the widget reads the same page
+          a visitor would, so on a closed profile it would render nothing. */}
+      {shareHandle && (
+        <Button variant="secondary" size="sm" onClick={() => setWidgetOpen(true)}>
+          <MonitorPlay className="h-3.5 w-3.5" aria-hidden />
+          Виджет для OBS
+        </Button>
+      )}
+
       <Button size="sm" onClick={handleStartBattle} className="relative">
         <Swords className="h-3.5 w-3.5" aria-hidden />
         Батл вкусов
@@ -191,6 +202,14 @@ export function TierListActions({
           new
         </span>
       </Button>
+
+      {shareHandle && (
+        <WidgetEmbedDialog
+          isOpen={widgetOpen}
+          onClose={() => setWidgetOpen(false)}
+          listId={shareHandle}
+        />
+      )}
 
       <PublishPostDialog
         open={publishOpen}

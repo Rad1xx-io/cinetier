@@ -174,3 +174,24 @@ export function trackAffiliateClicked({ titleId, titleName, provider, url }: Aff
     url,
   });
 }
+
+export interface WidgetView {
+  tierListId: string;
+  theme: string;
+  isCompact: boolean;
+}
+
+/**
+ * An OBS overlay coming up.
+ *
+ * Fires once per browser-source load, which for a streamer means once per
+ * broadcast rather than once per viewer — these are not page views and should
+ * not be read as reach.
+ */
+export function trackWidgetViewed({ tierListId, theme, isCompact }: WidgetView): void {
+  trackEvent("widget_viewed", {
+    tier_list_id: tierListId,
+    theme,
+    is_compact: isCompact,
+  });
+}

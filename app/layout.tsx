@@ -5,6 +5,7 @@ import { MobileHeader } from "@/components/navigation/mobile-header";
 import { BottomNav } from "@/components/navigation/bottom-nav";
 import { Analytics } from "@vercel/analytics/next";
 import { CloudSyncProvider } from "@/components/auth/cloud-sync-provider";
+import { ChromeGate } from "@/components/layout/chrome-gate";
 import { PageViewTracker } from "@/components/analytics/page-view-tracker";
 import { PostHogProvider } from "@/app/providers/PostHogProvider";
 import "./globals.css";
@@ -40,13 +41,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <CloudSyncProvider />
         <PostHogProvider />
         <PageViewTracker />
-        <TopNav />
-        <MobileHeader />
+        <ChromeGate>
+          <TopNav />
+          <MobileHeader />
+        </ChromeGate>
         <main className="flex-1 pb-20 md:pb-0">{children}</main>
-        <footer className="hidden border-t border-border px-6 py-6 text-center text-xs text-muted md:block">
-          Этот продукт использует TMDB API, но не одобрен и не сертифицирован TMDB.
-        </footer>
-        <BottomNav />
+        <ChromeGate>
+          <footer className="hidden border-t border-border px-6 py-6 text-center text-xs text-muted md:block">
+            Этот продукт использует TMDB API, но не одобрен и не сертифицирован TMDB.
+          </footer>
+          <BottomNav />
+        </ChromeGate>
         {/* Vercel Web Analytics. Inert outside a Vercel deployment, so local
             runs and other hosts are unaffected. */}
         <Analytics />

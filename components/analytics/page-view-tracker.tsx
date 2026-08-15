@@ -18,6 +18,10 @@ export function PageViewTracker() {
   useEffect(() => {
     // The App Router can re-run this for the same path (search-param changes,
     // Fast Refresh); a page view should follow the path, not the render.
+    // An OBS overlay is not a page view. The browser source reloads on every
+    // scene change and every reconnect, which would put a stream's worth of
+    // phantom visits into the funnel; `widget_viewed` already counts these.
+    if (pathname.startsWith("/widgets")) return;
     if (lastPath.current === pathname) return;
     lastPath.current = pathname;
     trackPageView(pathname);

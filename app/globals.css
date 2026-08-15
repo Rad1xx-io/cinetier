@@ -121,3 +121,13 @@ body {
     animation-duration: 0.01ms;
   }
 }
+
+/*
+ * OBS composites a browser source over the stream, so anything the page paints
+ * behind the widget becomes an opaque box on the broadcast. The body's own
+ * background is the only thing left painting at that point — the widget route
+ * marks itself and the body steps aside.
+ */
+body:has([data-widget-root]) {
+  background: transparent;
+}
