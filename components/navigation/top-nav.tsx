@@ -36,7 +36,7 @@ export function TopNav() {
           >
             <Clapperboard className="h-5 w-5 text-accent" aria-hidden />
             <span>
-              Cine<span className="text-accent">Tier</span>
+              TierList<span className="text-accent">Online</span>
             </span>
           </Link>
 

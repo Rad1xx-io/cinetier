@@ -15,7 +15,7 @@ export function MobileHeader() {
       <Link href="/" className="flex items-center gap-1.5 font-semibold tracking-tight">
         <Clapperboard className="h-4.5 w-4.5 text-accent" aria-hidden />
         <span className="text-sm">
-          Cine<span className="text-accent">Tier</span>
+          TierList<span className="text-accent">Online</span>
         </span>
       </Link>
       <div className="ml-auto flex items-center gap-1">

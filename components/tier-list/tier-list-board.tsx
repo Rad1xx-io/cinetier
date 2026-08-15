@@ -398,7 +398,7 @@ export function TierListBoard() {
             data-export-watermark
             className="pointer-events-none absolute bottom-1 right-3 text-xs font-semibold tracking-tight opacity-0"
           >
-            Cine<span className="text-accent">Tier</span>
+            TierList<span className="text-accent">Online</span>
           </p>
         </div>
 
