@@ -16,7 +16,7 @@ import {
   type PostCategory,
 } from "@/lib/supabase/feed";
 import { titlesByAuthor } from "@/lib/feed/post-preview";
-import { trackPageView } from "@/lib/analytics/events";
+import { trackPageView, trackPostCommented, trackPostLiked } from "@/lib/analytics/events";
 import type { RankedTitle } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 
@@ -102,6 +102,11 @@ export function FeedView() {
     );
 
     const result = await toggleLike(post.id, wasLiked);
+    // Reported only once the write lands: an optimistic flip that rolls back is
+    // not a like, and counting it would inflate the number the funnel exists to
+    // measure.
+    if (result !== null) trackPostLiked(post.id, result);
+
     if (result === null) {
       setLikes((prev) => {
         const next = new Set(prev);
@@ -121,6 +126,7 @@ export function FeedView() {
     setPosts((prev) =>
       prev.map((p) => (p.id === postId ? { ...p, commentsCount: p.commentsCount + 1 } : p))
     );
+    trackPostCommented(postId);
   }, []);
 
   useEffect(() => {

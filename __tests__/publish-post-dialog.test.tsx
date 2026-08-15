@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 
 const publishPost = vi.fn();
 const trackListPublished = vi.fn();
+const trackPostPublished = vi.fn();
 const push = vi.fn();
 
 vi.mock("@/lib/supabase/feed", () => ({
@@ -10,6 +11,7 @@ vi.mock("@/lib/supabase/feed", () => ({
 }));
 vi.mock("@/lib/analytics/events", () => ({
   trackListPublished: (...args: unknown[]) => trackListPublished(...args),
+  trackPostPublished: (...args: unknown[]) => trackPostPublished(...args),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
@@ -128,6 +130,8 @@ describe("PublishPostDialog — publishing", () => {
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/feed"));
     expect(trackListPublished).toHaveBeenCalledWith("post-1");
+    // The feed's own event carries the category the funnel breaks down on.
+    expect(trackPostPublished).toHaveBeenCalledWith("post-1", expect.any(String));
     expect(onClose).toHaveBeenCalled();
   });
 

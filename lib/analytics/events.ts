@@ -98,6 +98,24 @@ export function trackLinkCopied(contentType: ShareableContentType, contentId: st
   trackEvent("link_copied", { content_type: contentType, content_id: contentId });
 }
 
+/** A post published to the community feed. */
+export function trackPostPublished(postId: string, category: string): void {
+  trackEvent("post_published", { post_id: postId, category });
+}
+
+/**
+ * Liking and unliking are one event with a direction rather than two names: the
+ * interesting number is net likes over time, and splitting it across two event
+ * types makes that a subtraction in every query.
+ */
+export function trackPostLiked(postId: string, liked: boolean): void {
+  trackEvent("post_liked", { post_id: postId, liked });
+}
+
+export function trackPostCommented(postId: string): void {
+  trackEvent("post_commented", { post_id: postId });
+}
+
 export function trackForkClicked(originalListId: string, originalAuthorId: string): void {
   trackEvent("fork_clicked", {
     original_list_id: originalListId,

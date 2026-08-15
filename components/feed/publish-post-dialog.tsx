@@ -11,7 +11,7 @@ import {
   POST_TITLE_MAX,
   validatePost,
 } from "@/lib/feed/post-preview";
-import { trackListPublished } from "@/lib/analytics/events";
+import { trackListPublished, trackPostPublished } from "@/lib/analytics/events";
 import { cn } from "@/lib/utils/cn";
 
 const CATEGORY_OPTIONS: { value: PostCategory; label: string }[] = [
@@ -84,6 +84,7 @@ export function PublishPostDialog({
     }
 
     trackListPublished(result.postId);
+    trackPostPublished(result.postId, category);
     onClose();
     router.push("/feed");
   }

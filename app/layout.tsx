@@ -6,6 +6,7 @@ import { BottomNav } from "@/components/navigation/bottom-nav";
 import { Analytics } from "@vercel/analytics/next";
 import { CloudSyncProvider } from "@/components/auth/cloud-sync-provider";
 import { PageViewTracker } from "@/components/analytics/page-view-tracker";
+import { PostHogProvider } from "@/app/providers/PostHogProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <CloudSyncProvider />
+        <PostHogProvider />
         <PageViewTracker />
         <TopNav />
         <MobileHeader />
