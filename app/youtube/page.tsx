@@ -1,29 +1,52 @@
-import { Suspense } from "react";
+import type { Metadata } from "next";
 import { YouTubeDiscoverClient } from "@/components/youtube-search/youtube-discover-client";
-import { Skeleton } from "@/components/ui/skeleton";
+import { loadInitial } from "@/lib/catalog/initial-data";
+import { discoverChannels } from "@/lib/youtube/channel-lookup";
+import type { ChannelSearchResponse } from "@/lib/types/youtube";
 
-export const metadata = {
+/*
+ * Rendered per request rather than prerendered.
+ *
+ * The listing is a client component that reads useSearchParams, and Next makes
+ * that bail out to the client during a prerender unless it sits behind a
+ * Suspense boundary — which would put the skeleton in the static HTML and undo
+ * the whole point of this page. Rendering on demand removes the bailout.
+ *
+ * The upstream cost stays bounded anyway: the catalogue clients each cache
+ * their fetch for five minutes, so repeated renders mostly hit that rather
+ * than the API.
+ */
+export const dynamic = "force-dynamic";
+
+const DESCRIPTION =
+  "Browse YouTube channels by country and subscriber count, then rank the ones you watch into tiers from S to F.";
+
+export const metadata: Metadata = {
   title: "YouTube channels — TierListOnline",
+  description: DESCRIPTION,
+  alternates: { canonical: "/youtube" },
+  openGraph: {
+    title: "YouTube channels — TierListOnline",
+    description: DESCRIPTION,
+    url: "/youtube",
+  },
+  twitter: { title: "YouTube channels — TierListOnline", description: DESCRIPTION },
 };
 
-export default function YouTubePage() {
-  return (
-    <Suspense fallback={<YouTubeFallback />}>
-      <YouTubeDiscoverClient />
-    </Suspense>
+export default async function YouTubePage() {
+  // The YouTube quota is the tightest of the catalogues, which is what the
+  // five-minute revalidate above is really protecting: one render serves every
+  // visitor and every crawler in that window.
+  const discovered = await loadInitial("youtube", () =>
+    discoverChannels({ sort: "subscribers_desc" })
   );
-}
 
-function YouTubeFallback() {
-  return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:px-6 md:py-8">
-      <Skeleton className="h-9 w-56" />
-      <Skeleton className="h-10 w-full" />
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <Skeleton key={i} className="aspect-square rounded-full" />
-        ))}
-      </div>
-    </div>
-  );
+  const initialData: ChannelSearchResponse | null = discovered
+    ? {
+        results: discovered.results,
+        ...(discovered.nextPageToken ? { nextPageToken: discovered.nextPageToken } : {}),
+      }
+    : null;
+
+  return <YouTubeDiscoverClient initialData={initialData} />;
 }

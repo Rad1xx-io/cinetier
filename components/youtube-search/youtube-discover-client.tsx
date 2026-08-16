@@ -48,7 +48,16 @@ function buildSearchUrl(query: string, f: ChannelFilterState, pageToken?: string
   return `/api/youtube/search?${sp.toString()}`;
 }
 
-export function YouTubeDiscoverClient() {
+interface YouTubeDiscoverClientProps {
+  /**
+   * The default listing, rendered on the server so the HTML is not empty.
+   * Null when the YouTube API could not be reached at render time — the client
+   * then fetches exactly as it did before.
+   */
+  initialData?: ChannelSearchResponse | null;
+}
+
+export function YouTubeDiscoverClient({ initialData }: YouTubeDiscoverClientProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -66,10 +75,22 @@ export function YouTubeDiscoverClient() {
   });
   const debouncedQuery = useDebouncedValue(query.trim(), 400);
 
-  const [results, setResults] = useState<ChannelSummary[]>([]);
-  const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
+  /**
+   * The server rendered the default listing, so it only applies while the
+   * visitor is still looking at the default listing.
+   */
+  const arrivedFiltered = ["q", "country", "minSubscribers", "sort"].some((key) =>
+    searchParams.get(key)
+  );
+  const serverData = arrivedFiltered ? null : (initialData ?? null);
+  const pendingServerData = useRef(serverData);
+
+  const [results, setResults] = useState<ChannelSummary[]>(serverData?.results ?? []);
+  const [nextPageToken, setNextPageToken] = useState<string | undefined>(serverData?.nextPageToken);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [loading, setLoading] = useState(true);
+  // Starting true with server data on screen would swap it for a skeleton on
+  // the first paint, undoing the point of rendering it.
+  const [loading, setLoading] = useState(!serverData);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [correctedQuery, setCorrectedQuery] = useState<string | null>(null);
@@ -96,6 +117,13 @@ export function YouTubeDiscoverClient() {
   const requestIdRef = useRef(0);
 
   useEffect(() => {
+    // The first pass has its answer already. Consumed once, so any later change
+    // of query or filter fetches normally.
+    if (pendingServerData.current) {
+      pendingServerData.current = null;
+      return;
+    }
+
     const controller = new AbortController();
     const requestId = ++requestIdRef.current;
 

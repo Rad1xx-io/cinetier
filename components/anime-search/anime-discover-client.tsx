@@ -47,7 +47,16 @@ function buildUrl(query: string, f: AnimeFilterState, page: number): string {
   return `/api/anime/search?${sp.toString()}`;
 }
 
-export function AnimeDiscoverClient() {
+interface AnimeDiscoverClientProps {
+  /**
+   * The default listing, rendered on the server so the HTML is not empty.
+   * Null when the catalogue could not be reached at render time — the client
+   * then fetches exactly as it did before.
+   */
+  initialData?: AnimeSearchResponse | null;
+}
+
+export function AnimeDiscoverClient({ initialData }: AnimeDiscoverClientProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -70,11 +79,26 @@ export function AnimeDiscoverClient() {
 
   const debouncedQuery = useDebouncedValue(query.trim(), 400);
 
+  /**
+   * The server rendered the default listing, so it is only usable while the
+   * visitor is still looking at the default listing. Arriving with a filter in
+   * the URL means the markup is about to be replaced either way.
+   */
+  const arrivedFiltered =
+    Boolean(searchParams.toString()) &&
+    Boolean(searchParams.get("q") || searchParams.get("genre") || searchParams.get("year") ||
+      searchParams.get("season") || searchParams.get("format") || searchParams.get("status") ||
+      searchParams.get("sort"));
+  const serverData = arrivedFiltered ? null : (initialData ?? null);
+  const pendingServerData = useRef(serverData);
+
   const [genres, setGenres] = useState<string[]>([]);
-  const [results, setResults] = useState<AnimeSummary[]>([]);
+  const [results, setResults] = useState<AnimeSummary[]>(serverData?.results ?? []);
   const [page, setPage] = useState(1);
-  const [hasNextPage, setHasNextPage] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [hasNextPage, setHasNextPage] = useState(serverData?.hasNextPage ?? false);
+  // Starting true with server data on screen would replace it with a skeleton
+  // on the very first paint, undoing the point of rendering it.
+  const [loading, setLoading] = useState(!serverData);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [correctedQuery, setCorrectedQuery] = useState<string | null>(null);
@@ -109,6 +133,13 @@ export function AnimeDiscoverClient() {
   const requestIdRef = useRef(0);
 
   useEffect(() => {
+    // The first pass has its answer already. Consumed once, so any later change
+    // of query or filter fetches normally.
+    if (pendingServerData.current) {
+      pendingServerData.current = null;
+      return;
+    }
+
     const controller = new AbortController();
     const requestId = ++requestIdRef.current;
 
