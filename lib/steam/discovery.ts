@@ -20,7 +20,7 @@ const GAMES_ONLY = "998";
 async function fetchApp(appId: number): Promise<GameSummary | null> {
   try {
     const data = await steamFetch<SteamAppDetailsResponse>(
-      `${STORE}/api/appdetails?appids=${appId}&l=russian`
+      `${STORE}/api/appdetails?appids=${appId}&l=english`
     );
     const entry = data?.[String(appId)];
     if (!entry?.success || !entry.data) return null;
@@ -69,7 +69,7 @@ function buildSearchParams(params: DiscoverGamesParams, term: string | undefined
   const sp = new URLSearchParams({
     json: "1",
     infinite: "1",
-    l: "russian",
+    l: "english",
     category1: GAMES_ONLY,
     start: String(start),
     count: String(GAMES_PAGE_SIZE),
@@ -222,7 +222,7 @@ export async function discoverGames(params: DiscoverGamesParams): Promise<Discov
 
 export async function getGameDetails(appId: number): Promise<GameDetails | null> {
   const data = await steamFetch<SteamAppDetailsResponse>(
-    `${STORE}/api/appdetails?appids=${appId}&l=russian`
+    `${STORE}/api/appdetails?appids=${appId}&l=english`
   );
   const entry = data?.[String(appId)];
   if (!entry?.success || !entry.data) return null;

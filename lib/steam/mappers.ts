@@ -11,8 +11,8 @@ export function libraryPosterUrl(appId: number): string {
 }
 
 /**
- * Steam only exposes a localized display date ("18 мая. 2015 г."), which no
- * date parser handles across locales. The year is the only part the app
+ * Steam only exposes a localized display date ("19 May, 2015"), which no date
+ * parser handles across locales. The year is the only part the app
  * actually uses (card label, "sort by year"), so pull it out and normalize.
  */
 function releaseYearToIso(raw: string | undefined): string | null {

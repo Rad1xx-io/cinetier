@@ -14,7 +14,7 @@ export interface GameSummary {
   fallbackImage: string | null;
   shortDescription: string;
   genres: string[];
-  /** Steam store features — "Одиночная игра", "Кооператив", "Многопользовательская игра", … */
+  /** Steam store features — "Single-player", "Co-op", "Multi-player", … */
   categories: string[];
   platforms: string[];
   developers: string[];
