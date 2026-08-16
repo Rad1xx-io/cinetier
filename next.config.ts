@@ -68,6 +68,25 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+
+  /**
+   * The films section lives at /discover, which is what it was called when the
+   * app had one catalogue. /films is where a reader — and a search engine —
+   * looks for it, and it has only ever returned a 404.
+   *
+   * Permanent, so the redirect is cached and the target inherits any ranking
+   * the wrong URL picked up. Exact path only: there are no pages under /films
+   * to forward.
+   */
+  async redirects() {
+    return [
+      {
+        source: "/films",
+        destination: "/discover",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
