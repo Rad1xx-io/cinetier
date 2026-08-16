@@ -4,6 +4,7 @@ import { anilistFetch } from "@/lib/anilist/client";
 import { DISCOVER_ANIME_QUERY, ANIME_DETAILS_QUERY, GENRE_COLLECTION_QUERY } from "@/lib/anilist/queries";
 import { mapMediaToDetails, mapMediaToSummary } from "@/lib/anilist/mappers";
 import { searchWithFallback } from "@/lib/search/with-fallback";
+import { hasCyrillic, sentenceCase } from "@/lib/search/normalize-query";
 import type {
   AniListGenreCollectionResponse,
   AniListMediaResponse,
@@ -60,8 +61,13 @@ export async function discoverAnime(params: DiscoverAnimeParams): Promise<AnimeS
     };
   }
 
-  // AniList indexes Russian names through its synonyms, so most Cyrillic
-  // queries land unaided; the fallback only covers the ones that do not.
+  /**
+   * AniList indexes Russian names as synonyms, but matches them only in the
+   * casing it stores — sentence case — and nobody types the capital. Verified
+   * against the live API: "твоя апрельская ложь" returns nothing, "Твоя
+   * апрельская ложь" returns the show. Supplying the capital is what makes a
+   * Cyrillic search work at all.
+   */
   let hasNextPage = false;
   const { results, correctedQuery } = await searchWithFallback(
     query,
@@ -70,7 +76,8 @@ export async function discoverAnime(params: DiscoverAnimeParams): Promise<AnimeS
       hasNextPage = hasNextPage || data.Page.pageInfo.hasNextPage;
       return data.Page.media;
     },
-    (media) => String(media.id)
+    (media) => String(media.id),
+    { extraVariants: (term) => (hasCyrillic(term) ? [sentenceCase(term)] : []) }
   );
 
   return {

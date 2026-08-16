@@ -14,6 +14,20 @@ export function hasCyrillic(value: string): boolean {
   return CYRILLIC.test(value);
 }
 
+/**
+ * "твоя апрельская ложь" -> "Твоя апрельская ложь".
+ *
+ * AniList matches a synonym only in the exact casing it stores, and it stores
+ * Russian names in sentence case — verified against the live API, where the
+ * lowercase form returns nothing and this one returns the show. Nobody types
+ * the capital, so it has to be supplied.
+ */
+export function sentenceCase(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed[0].toLocaleUpperCase("ru-RU") + trimmed.slice(1);
+}
+
 export function transliterate(value: string): string {
   return value
     .toLowerCase()

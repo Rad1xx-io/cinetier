@@ -14,6 +14,17 @@ export interface FallbackSearchResult<T> {
   correctedQuery: string | null;
 }
 
+export interface FallbackOptions {
+  /**
+   * Extra spellings to try, for a source whose index is fussier than the
+   * normalizer knows about — AniList matching Cyrillic synonyms only in their
+   * stored casing, for instance. Tried straight after the original, before the
+   * normalizer's own alternatives, since a source-specific quirk is the more
+   * likely explanation for a thin result than a typo.
+   */
+  extraVariants?: (query: string) => string[];
+}
+
 /**
  * Runs a catalog search, reaching for a corrected spelling only if needed.
  *
@@ -24,13 +35,23 @@ export interface FallbackSearchResult<T> {
 export async function searchWithFallback<T>(
   rawQuery: string,
   run: (term: string) => Promise<T[]>,
-  keyOf: (item: T) => string
+  keyOf: (item: T) => string,
+  options: FallbackOptions = {}
 ): Promise<FallbackSearchResult<T>> {
   const { variants, corrected } = normalizeQuery(rawQuery);
   if (variants.length === 0) return { results: [], correctedQuery: null };
 
-  const results = await run(variants[0]);
-  if (results.length >= MIN_RESULTS_BEFORE_FALLBACK || variants.length === 1) {
+  const extras = options.extraVariants?.(variants[0]) ?? [];
+  const ordered = [variants[0], ...extras, ...variants.slice(1)];
+  // Compared exactly, not case-insensitively: an extra variant may differ from
+  // the original in nothing but capitalisation, and that is precisely the point
+  // of it when a source matches its index case-sensitively.
+  const attempts = ordered.filter(
+    (term, index) => term && ordered.indexOf(term) === index
+  );
+
+  const results = await run(attempts[0]);
+  if (results.length >= MIN_RESULTS_BEFORE_FALLBACK || attempts.length === 1) {
     return { results, correctedQuery: null };
   }
 
@@ -38,7 +59,7 @@ export async function searchWithFallback<T>(
   const merged = [...results];
   let correctedQuery: string | null = null;
 
-  for (const term of variants.slice(1)) {
+  for (const term of attempts.slice(1)) {
     let extra: T[];
     try {
       extra = await run(term);
