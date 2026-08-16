@@ -9,10 +9,10 @@ interface RawGenreList {
  * One filter option covering both catalogs.
  *
  * TMDB keeps separate genre vocabularies per media type and the ids do not line
- * up — "боевик" is 28 for films but folded into "Боевик и Приключения" (10759)
- * for series. Matching on the localized name lets a single dropdown entry carry
- * whichever id each endpoint actually expects, so the "Все" tab can query films
- * and series together instead of silently filtering one of them wrong.
+ * up — "Action" is 28 for films but folded into "Action & Adventure" (10759)
+ * for series. Matching on the name lets a single dropdown entry carry whichever
+ * id each endpoint actually expects, so the "All" tab can query films and
+ * series together instead of silently filtering one of them wrong.
  */
 export interface GenreOption {
   /** Stable url-safe key; what travels in the query string. */
@@ -23,17 +23,17 @@ export interface GenreOption {
 }
 
 function slugify(name: string): string {
-  return name.toLowerCase().replace(/[^a-zа-яё0-9]+/gi, "-").replace(/^-|-$/g, "");
+  return name.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
 }
 
 /**
  * Series genres that exist under a different name on the film side. Without
- * these, picking "Боевик" would quietly drop every series from the results.
+ * these, picking "Action" would quietly drop every series from the results.
  */
 const TV_EQUIVALENTS: Record<string, string[]> = {
-  "боевик и приключения": ["боевик", "приключения"],
-  "научная фантастика и фэнтези": ["фантастика", "фэнтези"],
-  "война и политика": ["военный"],
+  "action & adventure": ["action", "adventure"],
+  "sci-fi & fantasy": ["science fiction", "fantasy"],
+  "war & politics": ["war"],
 };
 
 let cached: GenreOption[] | null = null;
@@ -76,7 +76,7 @@ export async function getGenreVocabulary(): Promise<GenreOption[]> {
       byLabel.set(key, { slug: slugify(g.name), label: g.name, tvId: g.id });
     }
 
-    cached = [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label, "ru"));
+    cached = [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label, "en"));
     return cached;
   })().finally(() => {
     pending = null;

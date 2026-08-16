@@ -21,7 +21,7 @@ function getToken(): string {
 }
 
 /** Default response localization. Overridable per-request via the `language` search param. */
-export const DEFAULT_TMDB_LANGUAGE = "ru-RU";
+export const DEFAULT_TMDB_LANGUAGE = "en-US";
 
 /**
  * Server-only fetch helper for the TMDB API. Never import this from a Client Component —

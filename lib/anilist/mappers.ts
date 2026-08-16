@@ -14,59 +14,26 @@ function stripHtml(value: string | null): string {
     .trim();
 }
 
-const CYRILLIC = /[а-яё]/i;
-
 /**
- * Letters that exist in other Cyrillic alphabets but not in Russian.
+ * The headline, in the order a reader of an English site wants it.
  *
- * "Cyrillic" alone is not the same as "Russian": AniList's synonym lists carry
- * Ukrainian, Bulgarian and Serbian names too, and a naive Cyrillic test picked
- * "Сталевий алхімік" over the Russian title for Fullmetal Alchemist. Ukrainian
- * і/ї/є/ґ, Belarusian ў and the Serbian ђ/ћ/њ/љ/џ/ј are the giveaways.
+ * AniList also carries community-submitted Russian names in `synonyms`, and
+ * this used to prefer them. It no longer does: the catalogue reads in English
+ * now, so a Russian headline on an English page was the odd one out. The
+ * synonyms still earn their keep — AniList matches against them, which is what
+ * lets a Russian query find a title the site then names in English.
  */
-const NON_RUSSIAN_CYRILLIC = /[іїєґўђћњљџѕјѐѝ]/i;
-
-/**
- * AniList has no Russian title field — `title` carries only romaji, english and
- * native (Japanese). Community-submitted Russian names do live in `synonyms`
- * though ("Атака титанов" for Attack on Titan, verified), so the first Cyrillic
- * synonym is the closest thing to an official localisation the API offers.
- *
- * Only entries that are mostly Cyrillic qualify: a synonym list also holds
- * transliterations and stray punctuation, and a string with one Russian letter
- * in it is not a Russian title.
- */
-function russianSynonym(synonyms: string[] | undefined): string | null {
-  for (const value of synonyms ?? []) {
-    if (NON_RUSSIAN_CYRILLIC.test(value)) continue;
-    const letters = value.replace(/[^\p{L}]/gu, "");
-    if (!letters) continue;
-    const cyrillic = letters.match(/[а-яё]/gi)?.length ?? 0;
-    if (CYRILLIC.test(value) && cyrillic / letters.length > 0.6) return value;
-  }
-  return null;
-}
-
 function pickTitle(raw: AniListMedia): string {
-  return (
-    russianSynonym(raw.synonyms) ??
-    raw.title.english ??
-    raw.title.romaji ??
-    raw.title.native ??
-    "Untitled"
-  );
+  return raw.title.english ?? raw.title.romaji ?? raw.title.native ?? "Untitled";
 }
 
 export function mapMediaToSummary(raw: AniListMedia): AnimeSummary {
-  const russian = russianSynonym(raw.synonyms);
   return {
     anilistId: raw.id,
     title: pickTitle(raw),
     titles: {
       romaji: raw.title.romaji,
-      // Keeps the English name reachable as the secondary line even when the
-      // Russian one has taken the headline.
-      english: raw.title.english ?? (russian ? raw.title.romaji : null),
+      english: raw.title.english,
       native: raw.title.native,
     },
     coverImage: raw.coverImage?.large ?? raw.coverImage?.medium ?? null,

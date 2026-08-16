@@ -53,7 +53,7 @@ export const SEARCH_ALIASES: Record<string, string> = {
   "магическая битва": "jujutsu kaisen",
   "человек бензопила": "chainsaw man",
   "тетрадь смерти": "death note",
-  "血 хантер": "hunter x hunter",
+  "хантер х хантер": "hunter x hunter",
   "охотник х охотник": "hunter x hunter",
   "стальной алхимик": "fullmetal alchemist",
   "унесённые призраками": "spirited away",
@@ -68,6 +68,17 @@ export const SEARCH_ALIASES: Record<string, string> = {
   "моя геройская академия": "my hero academia",
   "врата штейна": "steins gate",
   "код гиас": "code geass",
+  // AniList carries no Cyrillic synonym for these, verified against the live
+  // API: the Russian name returns nothing at all without the alias.
+  "реинкарнация безработного": "mushoku tensei",
+  "мусоку тенсей": "mushoku tensei",
+  "провожающая в последний путь фрирен": "frieren",
+  "магистр дьявольского культа": "mo dao zu shi",
+  "поднятие уровня в одиночку": "solo leveling",
+  "госпожа кагуя": "kaguya-sama",
+  "паразит": "parasyte",
+  "обещанный неверленд": "promised neverland",
+  "дораэмон": "doraemon",
 
   // Film and TV
   "звёздные войны": "star wars",
