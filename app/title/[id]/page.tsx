@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { detailMetadata } from "@/lib/seo/detail-metadata";
+import { titleJsonLd } from "@/lib/seo/json-ld";
+import { JsonLd } from "@/components/seo/json-ld";
 import { parseTitleParam } from "@/lib/utils/title-route";
 import { tmdbFetch, TMDBError } from "@/lib/tmdb/client";
 import { mapToDetails } from "@/lib/tmdb/mappers";
@@ -70,5 +72,10 @@ export default async function TitleDetailsPage(props: PageProps<"/title/[id]">) 
   if (result.kind === "not-found") notFound();
   if (result.kind === "error") return <TitleDetailsError />;
 
-  return <TitleDetailsView details={result.details} watchLinks={result.watchLinks} />;
+  return (
+    <>
+      <JsonLd data={titleJsonLd(result.details, `/title/${id}`)} />
+      <TitleDetailsView details={result.details} watchLinks={result.watchLinks} />
+    </>
+  );
 }

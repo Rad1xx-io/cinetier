@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { YouTubeDiscoverClient } from "@/components/youtube-search/youtube-discover-client";
 import { loadInitial } from "@/lib/catalog/initial-data";
+import { itemListJsonLd } from "@/lib/seo/json-ld";
+import { JsonLd } from "@/components/seo/json-ld";
 import { discoverChannels } from "@/lib/youtube/channel-lookup";
 import type { ChannelSearchResponse } from "@/lib/types/youtube";
 
@@ -48,5 +50,22 @@ export default async function YouTubePage() {
       }
     : null;
 
-  return <YouTubeDiscoverClient initialData={initialData} />;
+  return (
+    <>
+      {initialData?.results.length ? (
+        <JsonLd
+          data={itemListJsonLd(
+            initialData.results.map((channel) => ({
+              type: "Organization",
+              name: channel.title,
+              path: `/youtube/channel/${channel.channelId}`,
+            })),
+            "/youtube",
+            "Popular YouTube channels"
+          )}
+        />
+      ) : null}
+      <YouTubeDiscoverClient initialData={initialData} />
+    </>
+  );
 }

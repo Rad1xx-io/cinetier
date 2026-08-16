@@ -51,6 +51,8 @@ export interface JikanAnime {
   airing?: boolean;
   /** Already on a 0-10 scale, unlike AniList's 0-100. */
   score: number | null;
+  /** How many MyAnimeList users scored it — AniList needs a histogram sum for the same number. */
+  scored_by?: number | null;
   favorites: number | null;
   year: number | null;
   /** Lowercase: "spring". */

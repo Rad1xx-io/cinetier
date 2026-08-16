@@ -41,6 +41,11 @@ export interface AnimeRelation {
 export interface AnimeDetails extends AnimeSummary {
   source: string | null;
   relations: AnimeRelation[];
+  /**
+   * How many users scored the entry — AniList's score distribution summed,
+   * MyAnimeList's `scored_by`. Absent when the source did not report it.
+   */
+  scoredBy?: number;
 }
 
 export interface AnimeSearchResponse {

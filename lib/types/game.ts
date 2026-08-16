@@ -30,6 +30,12 @@ export interface GameSummary {
 export interface GameDetails extends GameSummary {
   publishers: string[];
   website: string | null;
+  /**
+   * How many ratings `score` averages over. IGDB reports it; Steam's
+   * Metacritic number arrives without one, so this stays absent on the Steam
+   * fallback rather than being guessed at.
+   */
+  ratingCount?: number;
 }
 
 export interface GameSearchResponse {

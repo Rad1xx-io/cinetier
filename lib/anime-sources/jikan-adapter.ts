@@ -148,6 +148,9 @@ export function mapRelations(raw: JikanAnime): AnimeRelation[] {
 export function mapJikanToDetails(raw: JikanAnime): AnimeDetails {
   return {
     ...mapJikanToSummary(raw),
+    ...(typeof raw.scored_by === "number" && raw.scored_by > 0
+      ? { scoredBy: raw.scored_by }
+      : {}),
     // Left in MyAnimeList's readable casing ("Light novel") rather than forced
     // to AniList's LIGHT_NOVEL: the details page prints this verbatim.
     source: raw.source?.trim() || null,

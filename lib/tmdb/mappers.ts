@@ -47,5 +47,6 @@ export function mapToDetails(
     runtime: movie?.runtime ?? null,
     numberOfSeasons: tv?.number_of_seasons ?? null,
     status: raw.status ?? null,
+    ...(typeof raw.vote_count === "number" ? { voteCount: raw.vote_count } : {}),
   };
 }

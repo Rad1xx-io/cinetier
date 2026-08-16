@@ -50,6 +50,14 @@ export interface AniListMedia {
   format: string | null;
   source: string | null;
   relations: { edges: AniListRelationEdge[] } | null;
+  /** Requested by the details query only — see ANIME_DETAILS_QUERY. */
+  stats?: { scoreDistribution: AniListScoreBucket[] | null } | null;
+}
+
+/** One bar of AniList's 10-bucket score histogram. */
+export interface AniListScoreBucket {
+  score: number;
+  amount: number;
 }
 
 export interface AniListPageInfo {
