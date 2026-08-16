@@ -1,0 +1,49 @@
+name: Smoke
+
+# Every six hours, and on demand. The unit suite runs entirely against mocks
+# and cannot see a catalogue change its own behaviour — both anime outages this
+# year, and AniList becoming case-sensitive about Cyrillic, were reported by a
+# user before any test noticed. This is the thing that would have noticed.
+#
+# Not on push or pull request: these tests fail for reasons that have nothing to
+# do with the commit, and a check that cries wolf gets ignored.
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  catalogues:
+    name: Live catalogue checks
+    runs-on: ubuntu-latest
+
+    # Retries and their pauses are inside the tests; this is the outer stop.
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - run: npm ci
+
+      # A catalogue with no key here skips rather than fails, so a missing
+      # secret shows up as a quiet gap rather than a false alarm. AniList and
+      # Jikan need none and always run.
+      - name: Smoke
+        run: npm run test:smoke
+        env:
+          TMDB_API_TOKEN: ${{ secrets.TMDB_API_TOKEN }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
