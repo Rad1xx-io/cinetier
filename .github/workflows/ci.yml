@@ -37,6 +37,13 @@ jobs:
 
       # Each step runs even when an earlier one failed, so a red build reports
       # everything that is wrong in one go rather than one problem per push.
+      #
+      # `typecheck` runs `next typegen` first. PageProps and LayoutProps are
+      # generated into .next/types, which a fresh checkout does not have — the
+      # first run of this workflow failed on exactly that, with fourteen
+      # "Cannot find name" errors that never appear locally because .next is
+      # already there. The generation lives in the script rather than here, so a
+      # fresh clone typechecks for a person too.
       - name: Typecheck
         if: '!cancelled()'
         run: npm run typecheck
