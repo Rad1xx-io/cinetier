@@ -14,13 +14,21 @@ const SOURCES: Record<AnimeSourceId, AnimeSource> = {
 /**
  * Which catalogue is live.
  *
- * MyAnimeList, because AniList disabled its API — "temporarily disabled due to
- * severe stability issues" is what the endpoint returns — and the anime tab
- * went with it. Overridable by env so the switch back needs a redeploy rather
- * than a release, and so a preview can be pointed at the other source to check
- * it before flipping production.
+ * AniList. It was down for a stretch — "temporarily disabled due to severe
+ * stability issues" was what every endpoint returned, and the anime tab went
+ * with it — which is why the Jikan implementation exists at all. AniList has
+ * since recovered and answers search, details and genres; Jikan's own list
+ * endpoints were still failing when this was written, so it is the standby
+ * rather than the default.
+ *
+ * This deliberately matches what production already sets in ANIME_SOURCE. The
+ * two agreeing means losing the variable degrades nothing, where before it
+ * would have silently swapped in a source whose search does not work.
+ *
+ * Still overridable by env, so switching costs a redeploy rather than a release
+ * and a preview can be pointed at the other source before production is.
  */
-const DEFAULT_SOURCE: AnimeSourceId = "jikan";
+const DEFAULT_SOURCE: AnimeSourceId = "anilist";
 
 function isSourceId(value: string | undefined): value is AnimeSourceId {
   return value === "anilist" || value === "jikan";
