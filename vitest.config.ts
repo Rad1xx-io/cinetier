@@ -9,7 +9,9 @@ export default defineConfig({
     // Setting `exclude` replaces Vitest's defaults, so node_modules has to be
     // restated. `.next` is not in those defaults and holds compiled copies of
     // application code after a build — exactly what the glob above would catch.
-    exclude: ["**/node_modules/**", "**/.next/**"],
+    // The smoke suite reaches real catalogues; it has its own config and its
+    // own script, because a network failure must never redden an ordinary run.
+    exclude: ["**/node_modules/**", "**/.next/**", "**/__tests__/smoke/**"],
   },
   resolve: {
     alias: {
