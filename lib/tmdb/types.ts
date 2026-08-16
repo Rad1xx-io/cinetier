@@ -14,6 +14,7 @@ export interface TMDBRawMovie {
   release_date: string | null;
   overview: string;
   vote_average: number;
+  vote_count?: number;
   genre_ids?: number[];
   genres?: TMDBRawGenre[];
   runtime?: number | null;
@@ -30,6 +31,7 @@ export interface TMDBRawTVShow {
   first_air_date: string | null;
   overview: string;
   vote_average: number;
+  vote_count?: number;
   genre_ids?: number[];
   genres?: TMDBRawGenre[];
   number_of_seasons?: number | null;

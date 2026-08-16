@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { detailMetadata } from "@/lib/seo/detail-metadata";
+import { animeJsonLd } from "@/lib/seo/json-ld";
+import { JsonLd } from "@/components/seo/json-ld";
 import { AnimeSourceError, getAnimeSource, type AnimeSource } from "@/lib/anime-sources";
 import { AnimeDetailsView } from "@/components/anime-details/anime-details-view";
 import { AnimeDetailsError } from "@/components/anime-details/anime-details-error";
@@ -45,5 +47,10 @@ export default async function AnimeDetailsPage(props: PageProps<"/anime/[id]">) 
   if (result.kind === "not-found") notFound();
   if (result.kind === "error") return <AnimeDetailsError />;
 
-  return <AnimeDetailsView details={result.details} />;
+  return (
+    <>
+      <JsonLd data={animeJsonLd(result.details, `/anime/${id}`)} />
+      <AnimeDetailsView details={result.details} />
+    </>
+  );
 }

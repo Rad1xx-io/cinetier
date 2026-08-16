@@ -66,5 +66,8 @@ export function mapGameToDetails(raw: IGDBGame): GameDetails {
     ...mapGameToSummary(raw),
     publishers: companies(raw, "publisher"),
     website: official?.url ?? null,
+    ...(typeof raw.total_rating_count === "number"
+      ? { ratingCount: raw.total_rating_count }
+      : {}),
   };
 }

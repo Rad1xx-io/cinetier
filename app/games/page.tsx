@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { GamesDiscoverClient } from "@/components/games-search/games-discover-client";
 import { loadInitial } from "@/lib/catalog/initial-data";
+import { itemListJsonLd } from "@/lib/seo/json-ld";
+import { JsonLd } from "@/components/seo/json-ld";
 import { discoverGames } from "@/lib/games/source";
 import type { GameSearchResponse } from "@/lib/types/game";
 
@@ -49,5 +51,22 @@ export default async function GamesPage() {
       }
     : null;
 
-  return <GamesDiscoverClient initialData={initialData} />;
+  return (
+    <>
+      {initialData?.results.length ? (
+        <JsonLd
+          data={itemListJsonLd(
+            initialData.results.map((game) => ({
+              type: "VideoGame",
+              name: game.title,
+              path: `/games/${game.appId}`,
+            })),
+            "/games",
+            "Popular games"
+          )}
+        />
+      ) : null}
+      <GamesDiscoverClient initialData={initialData} />
+    </>
+  );
 }

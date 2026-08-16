@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { DiscoverClient } from "@/components/search/discover-client";
 import { loadInitial } from "@/lib/catalog/initial-data";
+import { itemListJsonLd } from "@/lib/seo/json-ld";
+import { titleHref } from "@/lib/utils/title-route";
+import { JsonLd } from "@/components/seo/json-ld";
 import { discoverTitles } from "@/lib/tmdb/discover";
 import type { SearchResponse } from "@/lib/types";
 
@@ -42,5 +45,22 @@ export default async function DiscoverPage() {
   // client's shape carries both, and this is always the first.
   const initialData: SearchResponse | null = discovered ? { page: 1, ...discovered } : null;
 
-  return <DiscoverClient initialData={initialData} />;
+  return (
+    <>
+      {initialData?.results.length ? (
+        <JsonLd
+          data={itemListJsonLd(
+            initialData.results.map((title) => ({
+              type: title.mediaType === "tv" ? "TVSeries" : "Movie",
+              name: title.title,
+              path: titleHref(title.mediaType, title.tmdbId),
+            })),
+            "/discover",
+            "Popular films and TV shows"
+          )}
+        />
+      ) : null}
+      <DiscoverClient initialData={initialData} />
+    </>
+  );
 }

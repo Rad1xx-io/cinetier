@@ -63,6 +63,11 @@ export const ANIME_DETAILS_QUERY = `
   query ($id: Int) {
     Media(id: $id, type: ANIME) {
       ${MEDIA_FIELDS}
+      # Details only. AniList publishes no "number of scores" field, so the
+      # distribution is the only place that count exists — and asking for it
+      # on the listing query would fetch ten buckets per card for something no
+      # card shows.
+      stats { scoreDistribution { score amount } }
     }
   }
 `;

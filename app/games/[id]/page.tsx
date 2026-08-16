@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { detailMetadata } from "@/lib/seo/detail-metadata";
+import { gameJsonLd } from "@/lib/seo/json-ld";
+import { JsonLd } from "@/components/seo/json-ld";
 import { SteamError } from "@/lib/steam/client";
 import { getGameDetails } from "@/lib/games/source";
 import { GameDetailsView } from "@/components/game-details/game-details-view";
@@ -46,5 +48,10 @@ export default async function GameDetailsPage(props: PageProps<"/games/[id]">) {
   if (result.kind === "not-found") notFound();
   if (result.kind === "error") return <GameDetailsError />;
 
-  return <GameDetailsView details={result.details} />;
+  return (
+    <>
+      <JsonLd data={gameJsonLd(result.details, `/games/${id}`)} />
+      <GameDetailsView details={result.details} />
+    </>
+  );
 }

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { AnimeDiscoverClient } from "@/components/anime-search/anime-discover-client";
 import { loadInitial } from "@/lib/catalog/initial-data";
+import { itemListJsonLd } from "@/lib/seo/json-ld";
+import { JsonLd } from "@/components/seo/json-ld";
 import { getAnimeSource } from "@/lib/anime-sources";
 
 /*
@@ -42,5 +44,22 @@ export default async function AnimePage() {
   // No Suspense boundary any more: the data is resolved before this renders,
   // and the client component's own `useSearchParams` no longer needs one now
   // that the page itself is not statically prerendered.
-  return <AnimeDiscoverClient initialData={initialData} />;
+  return (
+    <>
+      {initialData?.results.length ? (
+        <JsonLd
+          data={itemListJsonLd(
+            initialData.results.map((anime) => ({
+              type: "TVSeries",
+              name: anime.title,
+              path: `/anime/${anime.anilistId}`,
+            })),
+            "/anime",
+            "Popular anime"
+          )}
+        />
+      ) : null}
+      <AnimeDiscoverClient initialData={initialData} />
+    </>
+  );
 }

@@ -52,9 +52,25 @@ export function mapMediaToSummary(raw: AniListMedia): AnimeSummary {
   };
 }
 
+/**
+ * How many people actually scored the entry.
+ *
+ * AniList exposes no such field directly — `popularity` counts everyone with
+ * the show on a list, scored or not, and `favourites` counts a different thing
+ * again. Summing the score histogram is the one honest answer available.
+ */
+function scoredBy(raw: AniListMedia): number | null {
+  const buckets = raw.stats?.scoreDistribution;
+  if (!buckets?.length) return null;
+  const total = buckets.reduce((sum, bucket) => sum + (bucket.amount ?? 0), 0);
+  return total > 0 ? total : null;
+}
+
 export function mapMediaToDetails(raw: AniListMedia): AnimeDetails {
+  const scored = scoredBy(raw);
   return {
     ...mapMediaToSummary(raw),
+    ...(scored !== null ? { scoredBy: scored } : {}),
     source: raw.source,
     relations: (raw.relations?.edges ?? [])
       .filter((edge) => edge.node.type === "ANIME")

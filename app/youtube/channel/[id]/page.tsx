@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { detailMetadata } from "@/lib/seo/detail-metadata";
+import { channelJsonLd } from "@/lib/seo/json-ld";
+import { JsonLd } from "@/components/seo/json-ld";
 import { youtubeFetch, YouTubeError } from "@/lib/youtube/client";
 import { mapChannelToDetails } from "@/lib/youtube/mappers";
 import type { YouTubeChannelsResponse } from "@/lib/youtube/types";
@@ -48,5 +50,10 @@ export default async function ChannelDetailsPage(props: PageProps<"/youtube/chan
   if (result.kind === "not-found") notFound();
   if (result.kind === "error") return <ChannelDetailsError />;
 
-  return <ChannelDetailsView details={result.details} />;
+  return (
+    <>
+      <JsonLd data={channelJsonLd(result.details, `/youtube/channel/${id}`)} />
+      <ChannelDetailsView details={result.details} />
+    </>
+  );
 }

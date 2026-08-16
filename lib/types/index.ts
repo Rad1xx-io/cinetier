@@ -38,6 +38,12 @@ export interface TitleDetails extends TitleSummary {
   runtime: number | null;
   numberOfSeasons: number | null;
   status: string | null;
+  /**
+   * How many TMDB users the `voteAverage` averages over. Optional because
+   * nothing displayed it before; structured data needs it, since a rating
+   * without a sample size is not a rating a search engine will show.
+   */
+  voteCount?: number;
 }
 
 /** The minimal record persisted per title in local storage. `tmdbId` holds the
