@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { detailMetadata } from "@/lib/seo/detail-metadata";
 import { youtubeFetch, YouTubeError } from "@/lib/youtube/client";
 import { mapChannelToDetails } from "@/lib/youtube/mappers";
 import type { YouTubeChannelsResponse } from "@/lib/youtube/types";
@@ -30,7 +31,12 @@ export async function generateMetadata(props: PageProps<"/youtube/channel/[id]">
   const { id } = await props.params;
   const result = await loadChannel(id);
   if (result.kind === "ok") {
-    return { title: `${result.details.title} — TierListOnline` };
+    return detailMetadata({
+      title: result.details.title,
+      description: result.details.description,
+      image: result.details.thumbnailUrl,
+      path: `/youtube/channel/${id}`,
+    });
   }
   return { title: "TierListOnline" };
 }

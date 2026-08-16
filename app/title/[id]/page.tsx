@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { detailMetadata } from "@/lib/seo/detail-metadata";
 import { parseTitleParam } from "@/lib/utils/title-route";
 import { tmdbFetch, TMDBError } from "@/lib/tmdb/client";
 import { mapToDetails } from "@/lib/tmdb/mappers";
@@ -52,7 +53,12 @@ export async function generateMetadata(props: PageProps<"/title/[id]">): Promise
   const { id } = await props.params;
   const result = await loadDetails(id);
   if (result.kind === "ok") {
-    return { title: `${result.details.title} — TierListOnline` };
+    return detailMetadata({
+      title: result.details.title,
+      description: result.details.overview,
+      image: result.details.posterPath,
+      path: `/title/${id}`,
+    });
   }
   return { title: "TierListOnline" };
 }

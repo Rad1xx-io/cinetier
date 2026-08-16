@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { detailMetadata } from "@/lib/seo/detail-metadata";
 import { AnimeSourceError, getAnimeSource, type AnimeSource } from "@/lib/anime-sources";
 import { AnimeDetailsView } from "@/components/anime-details/anime-details-view";
 import { AnimeDetailsError } from "@/components/anime-details/anime-details-error";
@@ -27,7 +28,12 @@ export async function generateMetadata(props: PageProps<"/anime/[id]">): Promise
   const { id } = await props.params;
   const result = await loadAnime(id);
   if (result.kind === "ok") {
-    return { title: `${result.details.title} — TierListOnline` };
+    return detailMetadata({
+      title: result.details.title,
+      description: result.details.description,
+      image: result.details.coverImage,
+      path: `/anime/${id}`,
+    });
   }
   return { title: "TierListOnline" };
 }

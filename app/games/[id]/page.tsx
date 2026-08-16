@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { detailMetadata } from "@/lib/seo/detail-metadata";
 import { SteamError } from "@/lib/steam/client";
 import { getGameDetails } from "@/lib/games/source";
 import { GameDetailsView } from "@/components/game-details/game-details-view";
@@ -28,7 +29,12 @@ export async function generateMetadata(props: PageProps<"/games/[id]">): Promise
   const { id } = await props.params;
   const result = await loadGame(id);
   if (result.kind === "ok") {
-    return { title: `${result.details.title} — TierListOnline` };
+    return detailMetadata({
+      title: result.details.title,
+      description: result.details.shortDescription,
+      image: result.details.posterPath,
+      path: `/games/${id}`,
+    });
   }
   return { title: "TierListOnline" };
 }
