@@ -40,3 +40,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Keys and certificates. Nothing here matches a file in the repo today — the
+# point is that the first one to arrive is ignored before anyone thinks about
+# it, now that this repository is public. (*.pem is covered under "misc" above.)
+*.key
+*.p12
+*.pfx
+serviceAccountKey.json
