@@ -1,6 +1,10 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 
 const ANILIST_URL = "https://graphql.anilist.co";
+
+/** Discovery listings change slowly; repeated requests in one session should not hammer AniList. */
+const REVALIDATE_SECONDS = 300;
 
 export class AniListError extends Error {
   status: number;
@@ -18,13 +22,13 @@ interface GraphQLResponse<T> {
 }
 
 /**
- * Server-only fetch helper for AniList's public GraphQL API. No API key —
- * AniList's Media/Page/GenreCollection queries are fully public for reads
- * (a token is only needed to mutate a user's own AniList list, which this
- * app never does). Never import from a Client Component — "server-only"
- * makes that a build-time error if attempted.
+ * One round trip to AniList, with no caching of any kind. Throws on every
+ * failure, including the ones that arrive dressed as success.
+ *
+ * Exported for tests — application code goes through `anilistFetch`, which adds
+ * the caching this deliberately leaves out.
  */
-export async function anilistFetch<T>(
+export async function anilistFetchUncached<T>(
   query: string,
   variables?: Record<string, unknown>
 ): Promise<T> {
@@ -34,9 +38,9 @@ export async function anilistFetch<T>(
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ query, variables }),
-      // Discovery listings change slowly; a short cache keeps repeated
-      // requests during a session from hammering AniList's rate limit.
-      next: { revalidate: 300 },
+      // Caching happens a layer up, keyed on the query, and only for results
+      // that came back whole.
+      cache: "no-store",
     });
   } catch {
     throw new AniListError("Could not reach AniList.", 502);
@@ -57,4 +61,29 @@ export async function anilistFetch<T>(
     throw new AniListError("AniList returned an empty response.", 502);
   }
   return body.data;
+}
+
+/**
+ * Server-only fetch helper for AniList's public GraphQL API. No API key —
+ * Media/Page/GenreCollection queries are fully public for reads. Never import
+ * from a Client Component; "server-only" makes that a build-time error.
+ *
+ * The caching sits in `unstable_cache` rather than in `next: { revalidate }` on
+ * the fetch, because GraphQL reports failure inside a 200 response. Next's Data
+ * Cache stores any 200 it sees, so a rate-limit error or a validation failure
+ * would be served back for the next five minutes — an outage outliving itself.
+ * `unstable_cache` writes only when its callback resolves, so a thrown error is
+ * never stored, and the next caller gets a real attempt.
+ */
+export async function anilistFetch<T>(
+  query: string,
+  variables?: Record<string, unknown>
+): Promise<T> {
+  // The key has to carry both, or two different queries share one entry.
+  const cached = unstable_cache(
+    () => anilistFetchUncached<T>(query, variables),
+    ["anilist", query, JSON.stringify(variables ?? {})],
+    { revalidate: REVALIDATE_SECONDS }
+  );
+  return cached();
 }
