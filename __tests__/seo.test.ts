@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   absoluteUrl,
   CRAWLER_DISALLOW,
@@ -10,9 +10,14 @@ import {
 // Mocked rather than imported: the real module is server-only, and the point of
 // these tests is the shape of the sitemap, not Supabase's client.
 const listPublicProfiles = vi.fn();
+const listRankedEntries = vi.fn();
+const listRankedChannels = vi.fn();
 vi.mock("@/lib/supabase/public-read", () => ({
   listPublicProfiles: () => listPublicProfiles(),
+  listRankedEntries: () => listRankedEntries(),
+  listRankedChannels: () => listRankedChannels(),
   PUBLIC_PROFILE_LIMIT: 10_000,
+  RANKED_ENTRY_LIMIT: 10_000,
 }));
 
 const { default: sitemap } = await import("@/app/sitemap");
@@ -21,6 +26,18 @@ const { default: robots } = await import("@/app/robots");
 const profile = (username: string, iso: string) => ({
   username,
   updatedAt: new Date(iso),
+});
+
+const entry = (slug: string, iso: string) => ({ slug, updatedAt: new Date(iso) });
+
+const NO_ENTRIES = { titles: [], anime: [], games: [] };
+
+beforeEach(() => {
+  // Every case opts in to whatever dynamic rows it needs; the default is a
+  // database with nothing published in it.
+  listPublicProfiles.mockResolvedValue([]);
+  listRankedEntries.mockResolvedValue(NO_ENTRIES);
+  listRankedChannels.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -52,13 +69,11 @@ describe("sitemap — static routes", () => {
   });
 
   it("lists them first, in declaration order", async () => {
-    listPublicProfiles.mockResolvedValue([]);
     const entries = await sitemap();
     expect(entries.map((e) => e.url)).toEqual(SITEMAP_ROUTES.map((r) => absoluteUrl(r.path)));
   });
 
   it("ranks the home page above the rest", async () => {
-    listPublicProfiles.mockResolvedValue([]);
     const entries = await sitemap();
     const home = entries.find((e) => e.url === absoluteUrl("/"));
     expect(home?.priority).toBe(1);
@@ -68,7 +83,6 @@ describe("sitemap — static routes", () => {
   });
 
   it("stamps one build time across them rather than a fresh one each", async () => {
-    listPublicProfiles.mockResolvedValue([]);
     const first = await sitemap();
     const stamps = new Set(first.map((e) => String(e.lastModified)));
     expect(stamps.size).toBe(1);
@@ -79,7 +93,6 @@ describe("sitemap — static routes", () => {
   });
 
   it("excludes the routes that should never be a search result", async () => {
-    listPublicProfiles.mockResolvedValue([]);
     const urls = (await sitemap()).map((e) => e.url).join(" ");
     for (const path of ["/settings", "/profile", "/widgets", "/battle", "/api"]) {
       expect(urls).not.toContain(path);
@@ -129,7 +142,6 @@ describe("sitemap — published profiles", () => {
 
   it("still serves the static routes when the database gives nothing back", async () => {
     // The loader swallows its own failures, so an outage arrives here as [].
-    listPublicProfiles.mockResolvedValue([]);
 
     const entries = await sitemap();
     expect(entries).toHaveLength(SITEMAP_ROUTES.length);
@@ -151,6 +163,72 @@ describe("sitemap — published profiles", () => {
       expect(entry.priority ?? 0).toBeGreaterThan(0);
       expect(entry.priority ?? 0).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe("sitemap — catalogue pages", () => {
+  it("routes each media type to the page that actually renders it", async () => {
+    listRankedEntries.mockResolvedValue({
+      titles: [entry("movie-27205", "2026-08-01T10:00:00Z"), entry("tv-1396", "2026-08-02T10:00:00Z")],
+      anime: [entry("16498", "2026-08-03T10:00:00Z")],
+      games: [entry("1091500", "2026-08-04T10:00:00Z")],
+    });
+    listRankedChannels.mockResolvedValue([entry("UCX6OQ3DkcsbYNE6H8uQQuVA", "2026-08-05T10:00:00Z")]);
+
+    const urls = (await sitemap()).map((e) => e.url);
+    // /title carries the media type in its slug; the others do not.
+    expect(urls).toContain(`${SITE_URL}/title/movie-27205`);
+    expect(urls).toContain(`${SITE_URL}/title/tv-1396`);
+    expect(urls).toContain(`${SITE_URL}/anime/16498`);
+    expect(urls).toContain(`${SITE_URL}/games/1091500`);
+    expect(urls).toContain(`${SITE_URL}/youtube/channel/UCX6OQ3DkcsbYNE6H8uQQuVA`);
+  });
+
+  it("dates a catalogue page from the row, not from the build", async () => {
+    listRankedEntries.mockResolvedValue({
+      ...NO_ENTRIES,
+      games: [entry("1091500", "2026-08-04T10:00:00Z")],
+    });
+
+    const own = (await sitemap()).find((e) => e.url === `${SITE_URL}/games/1091500`);
+    expect(new Date(own!.lastModified as Date).toISOString()).toBe("2026-08-04T10:00:00.000Z");
+  });
+
+  it("ranks catalogue pages above profiles but below the home page", async () => {
+    listRankedEntries.mockResolvedValue({ ...NO_ENTRIES, anime: [entry("1", "2026-08-01T10:00:00Z")] });
+    listPublicProfiles.mockResolvedValue([profile("anya", "2026-08-01T10:00:00Z")]);
+
+    const all = await sitemap();
+    const page = all.find((e) => e.url === `${SITE_URL}/anime/1`)!;
+    const own = all.find((e) => e.url === `${SITE_URL}/u/anya`)!;
+    expect(page.priority!).toBeGreaterThan(own.priority!);
+    expect(page.priority!).toBeLessThan(1);
+  });
+
+  it("escapes a channel id rather than pasting it in raw", async () => {
+    listRankedChannels.mockResolvedValue([entry("UC a/b", "2026-08-01T10:00:00Z")]);
+    expect((await sitemap()).map((e) => e.url)).toContain(`${SITE_URL}/youtube/channel/UC%20a%2Fb`);
+  });
+
+  /**
+   * Battles have no public flag: migration 006 makes the uuid itself the access
+   * check. Listing them would hand every battle to anyone who opens the sitemap.
+   */
+  it("never lists a battle, whatever the loaders return", async () => {
+    listRankedEntries.mockResolvedValue({
+      ...NO_ENTRIES,
+      games: [entry("1091500", "2026-08-01T10:00:00Z")],
+    });
+
+    for (const url of (await sitemap()).map((e) => e.url)) {
+      expect(url).not.toContain("/battle");
+    }
+  });
+
+  it("keeps the static routes when only the dynamic half fails", async () => {
+    // Each loader answers with an empty list rather than throwing.
+    const entries = await sitemap();
+    expect(entries).toHaveLength(SITEMAP_ROUTES.length);
   });
 });
 

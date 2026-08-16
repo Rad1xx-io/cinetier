@@ -59,6 +59,10 @@ export const SITEMAP_ROUTES: SitemapRoute[] = [
   { path: "/anime", changeFrequency: "daily", priority: 0.8 },
   { path: "/games", changeFrequency: "daily", priority: 0.8 },
   { path: "/youtube", changeFrequency: "daily", priority: 0.8 },
+  // The boards themselves. A visitor with no account sees an empty state and a
+  // way in, which is a real landing page rather than a dead one.
+  { path: "/tier-list", changeFrequency: "weekly", priority: 0.7 },
+  { path: "/youtube/tier-list", changeFrequency: "weekly", priority: 0.6 },
 ];
 
 /**
