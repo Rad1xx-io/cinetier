@@ -34,7 +34,16 @@ async function fetchJson<T>(url: string, signal: AbortSignal): Promise<T> {
   return body as T;
 }
 
-export function GamesDiscoverClient() {
+interface GamesDiscoverClientProps {
+  /**
+   * The default listing, rendered on the server so the HTML is not empty.
+   * Null when the games catalogue could not be reached at render time — the
+   * client then fetches exactly as it did before.
+   */
+  initialData?: GameSearchResponse | null;
+}
+
+export function GamesDiscoverClient({ initialData }: GamesDiscoverClientProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -57,14 +66,26 @@ export function GamesDiscoverClient() {
   // collapses into a single request.
   const debouncedQuery = useDebouncedValue(query.trim(), 400);
 
-  const [results, setResults] = useState<GameSummary[]>([]);
+  /**
+   * The server rendered the default listing, so it only applies while the
+   * visitor is still looking at the default listing.
+   */
+  const arrivedFiltered = ["q", "genre", "platform", "category", "sort"].some((key) =>
+    searchParams.get(key)
+  );
+  const serverData = arrivedFiltered ? null : (initialData ?? null);
+  const pendingServerData = useRef(serverData);
+
+  const [results, setResults] = useState<GameSummary[]>(serverData?.results ?? []);
   const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(serverData?.hasMore ?? false);
+  // Starting true with server data on screen would swap it for a skeleton on
+  // the first paint, undoing the point of rendering it.
+  const [loading, setLoading] = useState(!serverData);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [correctedQuery, setCorrectedQuery] = useState<string | null>(null);
-  const [stale, setStale] = useState(false);
+  const [stale, setStale] = useState(Boolean(serverData?.stale));
 
   const { titles, add } = useRankedTitles();
   const rankedByKey = useMemo(() => {
@@ -102,6 +123,13 @@ export function GamesDiscoverClient() {
   );
 
   useEffect(() => {
+    // The first pass has its answer already. Consumed once, so any later change
+    // of query or filter fetches normally.
+    if (pendingServerData.current) {
+      pendingServerData.current = null;
+      return;
+    }
+
     const controller = new AbortController();
     const requestId = ++requestIdRef.current;
 

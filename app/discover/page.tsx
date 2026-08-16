@@ -1,29 +1,46 @@
-import { Suspense } from "react";
+import type { Metadata } from "next";
 import { DiscoverClient } from "@/components/search/discover-client";
-import { Skeleton } from "@/components/ui/skeleton";
+import { loadInitial } from "@/lib/catalog/initial-data";
+import { discoverTitles } from "@/lib/tmdb/discover";
+import type { SearchResponse } from "@/lib/types";
 
-export const metadata = {
+/*
+ * Rendered per request rather than prerendered.
+ *
+ * The listing is a client component that reads useSearchParams, and Next makes
+ * that bail out to the client during a prerender unless it sits behind a
+ * Suspense boundary — which would put the skeleton in the static HTML and undo
+ * the whole point of this page. Rendering on demand removes the bailout.
+ *
+ * The upstream cost stays bounded anyway: the catalogue clients each cache
+ * their fetch for five minutes, so repeated renders mostly hit that rather
+ * than the API.
+ */
+export const dynamic = "force-dynamic";
+
+const DESCRIPTION =
+  "Browse popular films and TV shows, filter by genre, year and rating, then rank what you have seen into tiers from S to F.";
+
+export const metadata: Metadata = {
   title: "Films and TV — TierListOnline",
+  description: DESCRIPTION,
+  alternates: { canonical: "/discover" },
+  openGraph: {
+    title: "Films and TV — TierListOnline",
+    description: DESCRIPTION,
+    url: "/discover",
+  },
+  twitter: { title: "Films and TV — TierListOnline", description: DESCRIPTION },
 };
 
-export default function DiscoverPage() {
-  return (
-    <Suspense fallback={<DiscoverFallback />}>
-      <DiscoverClient />
-    </Suspense>
+export default async function DiscoverPage() {
+  const discovered = await loadInitial("discover", () =>
+    discoverTitles({ type: "all", sort: "popularity", page: 1 })
   );
-}
 
-function DiscoverFallback() {
-  return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:px-6 md:py-8">
-      <Skeleton className="h-9 w-40" />
-      <Skeleton className="h-10 w-full" />
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <Skeleton key={i} className="aspect-2/3" />
-        ))}
-      </div>
-    </div>
-  );
+  // discoverTitles reports the page count but not which page it returned; the
+  // client's shape carries both, and this is always the first.
+  const initialData: SearchResponse | null = discovered ? { page: 1, ...discovered } : null;
+
+  return <DiscoverClient initialData={initialData} />;
 }

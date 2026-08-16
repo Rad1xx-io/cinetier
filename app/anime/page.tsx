@@ -1,29 +1,46 @@
-import { Suspense } from "react";
+import type { Metadata } from "next";
 import { AnimeDiscoverClient } from "@/components/anime-search/anime-discover-client";
-import { Skeleton } from "@/components/ui/skeleton";
+import { loadInitial } from "@/lib/catalog/initial-data";
+import { getAnimeSource } from "@/lib/anime-sources";
 
-export const metadata = {
+/*
+ * Rendered per request rather than prerendered.
+ *
+ * The listing is a client component that reads useSearchParams, and Next makes
+ * that bail out to the client during a prerender unless it sits behind a
+ * Suspense boundary — which would put the skeleton in the static HTML and undo
+ * the whole point of this page. Rendering on demand removes the bailout.
+ *
+ * The upstream cost stays bounded anyway: the catalogue clients each cache
+ * their fetch for five minutes, so repeated renders mostly hit that rather
+ * than the API.
+ */
+export const dynamic = "force-dynamic";
+
+const DESCRIPTION =
+  "Browse anime by genre, season, format and score, then rank what you have watched into tiers from S to F.";
+
+export const metadata: Metadata = {
   title: "Anime — TierListOnline",
+  description: DESCRIPTION,
+  alternates: { canonical: "/anime" },
+  openGraph: {
+    title: "Anime — TierListOnline",
+    description: DESCRIPTION,
+    url: "/anime",
+  },
+  twitter: { title: "Anime — TierListOnline", description: DESCRIPTION },
 };
 
-export default function AnimePage() {
-  return (
-    <Suspense fallback={<AnimeFallback />}>
-      <AnimeDiscoverClient />
-    </Suspense>
+export default async function AnimePage() {
+  // The same call the /api/anime/search route makes with no parameters, so the
+  // markup matches what the client would have fetched a moment later.
+  const initialData = await loadInitial("anime", () =>
+    getAnimeSource().search({ sort: "popularity", page: 1, perPage: 24 })
   );
-}
 
-function AnimeFallback() {
-  return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:px-6 md:py-8">
-      <Skeleton className="h-9 w-40" />
-      <Skeleton className="h-10 w-full" />
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <Skeleton key={i} className="aspect-2/3" />
-        ))}
-      </div>
-    </div>
-  );
+  // No Suspense boundary any more: the data is resolved before this renders,
+  // and the client component's own `useSearchParams` no longer needs one now
+  // that the page itself is not statically prerendered.
+  return <AnimeDiscoverClient initialData={initialData} />;
 }
