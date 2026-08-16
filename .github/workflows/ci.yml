@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A branch that gets two pushes in a minute should not run twice. The in-flight
+# run is cancelled, except on main, where every commit deserves its own verdict.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, lint and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Matches the version this app is developed on. Node 20 is past its
+      # end-of-life, so it is not the fallback it used to be; Next 16 itself
+      # requires 20.9 or newer.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      # `ci`, not `install`: it installs exactly what package-lock.json pins and
+      # fails if the two have drifted, which is the point of running it here.
+      - run: npm ci
+
+      # Each step runs even when an earlier one failed, so a red build reports
+      # everything that is wrong in one go rather than one problem per push.
+      - name: Typecheck
+        if: '!cancelled()'
+        run: npm run typecheck
+
+      - name: Lint
+        if: '!cancelled()'
+        run: npm run lint
+
+      - name: Test
+        if: '!cancelled()'
+        run: npm test
