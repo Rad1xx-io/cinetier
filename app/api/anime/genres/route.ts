@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import { AniListError } from "@/lib/anilist/client";
-import { getAnimeGenres } from "@/lib/anilist/discovery";
+import { AnimeSourceError, getAnimeSource } from "@/lib/anime-sources";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const genres = await getAnimeGenres();
+    const genres = await getAnimeSource().getGenres();
     return NextResponse.json({ genres });
   } catch (error) {
-    const status = error instanceof AniListError ? error.status : 500;
-    return NextResponse.json({ error: "Could not load the genre list." }, { status });
+    const status = error instanceof AnimeSourceError ? error.status : 500;
+    const message =
+      error instanceof AnimeSourceError && (status === 429 || status === 503)
+        ? error.message
+        : "Could not load the genre list.";
+    if (status >= 500) console.error("[anime/genres]", error);
+    return NextResponse.json({ error: message }, { status });
   }
 }

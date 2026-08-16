@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sanitizeSearchQuery } from "@/lib/utils/search-query";
-import { AniListError } from "@/lib/anilist/client";
-import { discoverAnime } from "@/lib/anilist/discovery";
+import { AnimeSourceError, getAnimeSource } from "@/lib/anime-sources";
 import { isAnimeFormat, type AnimeSortMode } from "@/lib/anilist/anime-filters";
 import type { AnimeSeason, AnimeStatus } from "@/lib/types/anime";
 
@@ -28,11 +27,19 @@ export async function GET(request: NextRequest) {
   const format = isAnimeFormat(formatRaw) ? formatRaw : undefined;
 
   try {
-    const data = await discoverAnime({ query, genre, year, season, status, format, sort, page, perPage: 24 });
+    const source = getAnimeSource();
+    const data = await source.search({ query, genre, year, season, status, format, sort, page, perPage: 24 });
     return NextResponse.json(data);
   } catch (error) {
-    const httpStatus = error instanceof AniListError ? error.status : 500;
-    const message = httpStatus === 429 ? "Too many requests. Please try again later." : "Could not load anime. Please try again.";
+    const httpStatus = error instanceof AnimeSourceError ? error.status : 500;
+    // The upstream's own wording is passed through for the states a user can
+    // act on — rate limited, catalogue down — because "try again" and "try
+    // again in an hour" are different instructions.
+    const message =
+      error instanceof AnimeSourceError && (httpStatus === 429 || httpStatus === 503)
+        ? error.message
+        : "Could not load anime. Please try again.";
+    if (httpStatus >= 500) console.error("[anime/search]", error);
     return NextResponse.json({ error: message }, { status: httpStatus });
   }
 }

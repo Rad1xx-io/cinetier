@@ -1,25 +1,24 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { AniListError } from "@/lib/anilist/client";
-import { getAnimeDetails } from "@/lib/anilist/discovery";
+import { AnimeSourceError, getAnimeSource, type AnimeSource } from "@/lib/anime-sources";
 import { AnimeDetailsView } from "@/components/anime-details/anime-details-view";
 import { AnimeDetailsError } from "@/components/anime-details/anime-details-error";
 
 type LoadResult =
   | { kind: "not-found" }
   | { kind: "error" }
-  | { kind: "ok"; details: Awaited<ReturnType<typeof getAnimeDetails>> & object };
+  | { kind: "ok"; details: NonNullable<Awaited<ReturnType<AnimeSource["getDetails"]>>> };
 
 async function loadAnime(id: string): Promise<LoadResult> {
   const anilistId = Number(id);
   if (!Number.isFinite(anilistId)) return { kind: "not-found" };
 
   try {
-    const details = await getAnimeDetails(anilistId);
+    const details = await getAnimeSource().getDetails(anilistId);
     if (!details) return { kind: "not-found" };
     return { kind: "ok", details };
   } catch (error) {
-    if (error instanceof AniListError && error.status === 404) return { kind: "not-found" };
+    if (error instanceof AnimeSourceError && error.status === 404) return { kind: "not-found" };
     return { kind: "error" };
   }
 }

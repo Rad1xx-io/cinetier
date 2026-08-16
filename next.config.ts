@@ -40,6 +40,14 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "s2.anilist.co",
       },
+      // MyAnimeList, reached through Jikan. Kept alongside the AniList hosts
+      // rather than replacing them: boards saved while AniList was the source
+      // still hold s4.anilist.co poster URLs, and dropping the host would blank
+      // every one of them.
+      {
+        protocol: "https",
+        hostname: "cdn.myanimelist.net",
+      },
       // Steam serves the same asset from several CDNs and swaps between them
       // per request, so match the whole family rather than chasing hostnames.
       {
