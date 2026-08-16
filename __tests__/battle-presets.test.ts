@@ -110,3 +110,56 @@ describe("titlesMatch", () => {
     expect(titlesMatch("Дюна", "Дюна: Часть вторая")).toBe(false);
   });
 });
+
+/**
+ * The prefill that puts a creator's existing rating onto a preset row looks the
+ * entry up by id and then checks the titles agree — see create-battle-modal.
+ * Both halves have failed silently before, which is what these guard.
+ */
+describe("preset entries can still be matched against a board", () => {
+  const items = BATTLE_PRESETS.flatMap((preset) => preset.items);
+
+  it("carries no Cyrillic title", () => {
+    // Boards are filled from catalogues answering in English now. A Russian
+    // preset title would pass the id check and fail the title guard, and the
+    // creator's own rating would quietly stop appearing.
+    const cyrillic = items.filter((item) => /[\u0400-\u04FF]/.test(item.title));
+    expect(cyrillic.map((i) => `${i.id} ${i.title}`)).toEqual([]);
+  });
+
+  it("names every anime entry with an AniList id, not a MyAnimeList one", () => {
+    // Four entries held MAL ids, which resolve to nothing on AniList: no match,
+    // and a details link to a page that does not exist. These four are the ones
+    // that were wrong, kept as a regression guard.
+    const anime = new Map(items.filter((i) => i.id.startsWith("anime-")).map((i) => [i.id, i.title]));
+    for (const stale of ["anime-30276", "anime-31964", "anime-38000", "anime-32281", "anime-33486"]) {
+      expect(anime.has(stale), `${stale} is a MyAnimeList id`).toBe(false);
+    }
+    expect(anime.get("anime-21087")).toBe("One-Punch Man");
+    expect(anime.get("anime-21519")).toBe("Your Name.");
+  });
+
+  it("matches a board entry that came from the catalogue", () => {
+    // What the modal actually does: find by id, then confirm the titles agree.
+    const board = [
+      { tmdbId: 27205, mediaType: "movie", title: "Inception" },
+      { tmdbId: 16498, mediaType: "anime", title: "Attack on Titan" },
+    ];
+    const byId = new Map(board.map((t) => [`${t.mediaType}-${t.tmdbId}`, t]));
+
+    for (const [id, expected] of [["movie-27205", "Inception"], ["anime-16498", "Attack on Titan"]]) {
+      const item = items.find((i) => i.id === id);
+      expect(item, `${id} missing from the presets`).toBeDefined();
+      const own = byId.get(id);
+      expect(own && titlesMatch(own.title, item!.title)).toBe(true);
+      expect(item!.title).toBe(expected);
+    }
+  });
+
+  it("refuses a board entry whose id collides but whose title does not", () => {
+    // The reason the title guard exists: a curated id that turned out to point
+    // somewhere else must not import an unrelated rating.
+    const item = items.find((i) => i.id === "movie-27205")!;
+    expect(titlesMatch("Some Other Film", item.title)).toBe(false);
+  });
+});
