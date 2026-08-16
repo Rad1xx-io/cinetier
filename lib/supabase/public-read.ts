@@ -26,6 +26,45 @@ export interface PublicProfileRef {
 }
 
 /**
+ * A catalogue page somebody has actually ranked.
+ *
+ * There is no catalogue table in this database — /title, /anime and /games are
+ * views onto TMDB, AniList and IGDB. The only ids this app knows about are the
+ * ones its users put on a board, so those are what the sitemap can offer.
+ */
+export interface RankedEntryRef {
+  /** Route-ready: "movie-27205", "16498", "1091500", or a channel id. */
+  slug: string;
+  updatedAt: Date;
+}
+
+/** Shared ceiling per catalogue. A sitemap caps at 50,000 URLs in total. */
+export const RANKED_ENTRY_LIMIT = 10_000;
+
+function toDate(value: string | null | undefined): Date {
+  const parsed = value ? new Date(value) : null;
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
+}
+
+/**
+ * Keeps one entry per id, dated by the most recent time anyone touched it.
+ *
+ * The same film sits on many boards, and each copy carries its own timestamp.
+ * The freshest is the honest `lastmod` for a page whose content is the film,
+ * not the ranking.
+ */
+function newestPerSlug(rows: { slug: string; updated: string | null }[]): RankedEntryRef[] {
+  const best = new Map<string, Date>();
+  for (const row of rows) {
+    if (!row.slug) continue;
+    const at = toDate(row.updated);
+    const seen = best.get(row.slug);
+    if (!seen || at > seen) best.set(row.slug, at);
+  }
+  return [...best.entries()].map(([slug, updatedAt]) => ({ slug, updatedAt }));
+}
+
+/**
  * Sitemaps cap at 50,000 URLs. This sits far below that while still being more
  * profiles than the app is likely to hold for a long while; the ordering below
  * makes sure it is the freshest ones that survive the cut if it is ever hit.
@@ -114,6 +153,89 @@ export async function listPublicProfiles(
     if (error || !data) return [];
 
     return (data as ProfileRow[]).flatMap(toRef);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Every catalogue page reachable from a published board, grouped by the route
+ * that renders it.
+ *
+ * One query, not one per media type: `ranked_titles` holds films, series, anime
+ * and games together, and splitting them is a `switch` rather than a round trip.
+ * RLS does the access control — the anonymous key sees a ranked row only when
+ * its owner published their profile — so nothing here can leak a private board.
+ *
+ * Never throws. A sitemap missing its dynamic half still beats a 500.
+ */
+export async function listRankedEntries(limit = RANKED_ENTRY_LIMIT): Promise<{
+  titles: RankedEntryRef[];
+  anime: RankedEntryRef[];
+  games: RankedEntryRef[];
+}> {
+  const supabase = getPublicClient();
+  const empty = { titles: [], anime: [], games: [] };
+  if (!supabase) return empty;
+
+  try {
+    const { data, error } = await supabase
+      .from("ranked_titles")
+      .select("tmdb_id,media_type,updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return empty;
+
+    const rows = data as { tmdb_id: number; media_type: string; updated_at: string | null }[];
+    const titles: { slug: string; updated: string | null }[] = [];
+    const anime: { slug: string; updated: string | null }[] = [];
+    const games: { slug: string; updated: string | null }[] = [];
+
+    for (const row of rows) {
+      if (!Number.isFinite(row.tmdb_id)) continue;
+      // Mirrors titleHref in lib/utils/title-route.ts — /title carries the media
+      // type in its slug because one route serves both of TMDB's kinds.
+      switch (row.media_type) {
+        case "movie":
+        case "tv":
+          titles.push({ slug: `${row.media_type}-${row.tmdb_id}`, updated: row.updated_at });
+          break;
+        case "anime":
+          anime.push({ slug: String(row.tmdb_id), updated: row.updated_at });
+          break;
+        case "game":
+          games.push({ slug: String(row.tmdb_id), updated: row.updated_at });
+          break;
+      }
+    }
+
+    return {
+      titles: newestPerSlug(titles),
+      anime: newestPerSlug(anime),
+      games: newestPerSlug(games),
+    };
+  } catch {
+    return empty;
+  }
+}
+
+/** YouTube channels on a published board. Their own table, their own route. */
+export async function listRankedChannels(limit = RANKED_ENTRY_LIMIT): Promise<RankedEntryRef[]> {
+  const supabase = getPublicClient();
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from("ranked_channels")
+      .select("channel_id,updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return [];
+
+    const rows = data as { channel_id: string; updated_at: string | null }[];
+    return newestPerSlug(rows.map((r) => ({ slug: r.channel_id, updated: r.updated_at })));
   } catch {
     return [];
   }
