@@ -16,7 +16,13 @@ import {
   type PostCategory,
 } from "@/lib/supabase/feed";
 import { titlesByAuthor } from "@/lib/feed/post-preview";
-import { trackPageView, trackPostCommented, trackPostLiked } from "@/lib/analytics/events";
+import {
+  trackCommunityPostViewed,
+  trackPageView,
+  trackPostCommented,
+  trackPostLiked,
+} from "@/lib/analytics/events";
+import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
 import type { RankedTitle } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 
@@ -39,6 +45,7 @@ export function FeedView() {
   const [likes, setLikes] = useState<Set<string>>(new Set());
   const [category, setCategory] = useState<PostCategory | "all">("all");
   const [openPost, setOpenPost] = useState<FeedPost | null>(null);
+  const { user } = useSupabaseSession();
 
   // Switching tabs resets the list during render rather than in the effect: the
   // old category's cards must not sit under the new tab's heading for a frame.
@@ -122,6 +129,22 @@ export function FeedView() {
     }
   }, [likes]);
 
+  /*
+   * Opening someone else's post is the read half of the feed, and the only
+   * half that leaves no other trace — a post nobody opens looks identical to a
+   * post nobody scrolled past. Own posts are skipped: an author checking their
+   * own work is not community engagement.
+   */
+  const handleOpenPost = useCallback(
+    (post: FeedPost) => {
+      setOpenPost(post);
+      if (post.userId !== user?.id) {
+        trackCommunityPostViewed(post.id, post.category, post.userId);
+      }
+    },
+    [user]
+  );
+
   const handleCommentAdded = useCallback((postId: string) => {
     setPosts((prev) =>
       prev.map((p) => (p.id === postId ? { ...p, commentsCount: p.commentsCount + 1 } : p))
@@ -202,7 +225,7 @@ export function FeedView() {
               post={post}
               titles={authorTitles.get(post.userId) ?? []}
               liked={likes.has(post.id)}
-              onOpen={setOpenPost}
+              onOpen={handleOpenPost}
               onToggleLike={handleToggleLike}
             />
           ))}

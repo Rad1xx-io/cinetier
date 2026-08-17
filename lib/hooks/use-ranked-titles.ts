@@ -15,6 +15,7 @@ import {
 } from "@/lib/storage";
 import type { AddTitleInput } from "@/lib/storage";
 import { getServerSnapshot, getSnapshot, subscribe } from "@/lib/storage/ranked-titles-store";
+import { trackListCreationStarted } from "@/lib/analytics/events";
 
 /**
  * Reads the ranking list from localStorage via useSyncExternalStore, so it stays
@@ -31,7 +32,22 @@ export function useRankedTitles() {
   const hydrated = snapshot.status !== "loading";
   const storageAvailable = snapshot.status !== "unavailable";
 
-  const add = useCallback((input: AddTitleInput) => addTitle(input), []);
+  /*
+   * Reported here rather than at the eight screens that add titles, because
+   * what makes it a creation is not the click but the board: the first film to
+   * arrive starts a film list, the tenth does not. Only this layer knows which
+   * one just happened, and only once.
+   */
+  const add = useCallback((input: AddTitleInput) => {
+    const before = getSnapshot();
+    const startsCatalog =
+      before.status === "ready" &&
+      !before.titles.some((title) => title.mediaType === input.mediaType);
+
+    const added = addTitle(input);
+    if (startsCatalog) trackListCreationStarted(input.mediaType);
+    return added;
+  }, []);
   const remove = useCallback(
     (tmdbId: number, mediaType: MediaType) => removeTitle(tmdbId, mediaType),
     []
