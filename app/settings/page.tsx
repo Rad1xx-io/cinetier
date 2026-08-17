@@ -10,7 +10,9 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-8 px-4 py-8 md:px-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-muted">Manage the TierListOnline data stored on this device.</p>
+        <p className="mt-1 text-sm text-muted">
+          Manage your TierListOnline data — where it lives, and how to keep a copy.
+        </p>
       </div>
 
       <AccountPanel />

@@ -62,6 +62,50 @@ export function contentTypeAccent(type: ContentType): ContentTypeAccent {
   return CONTENT_TYPE_ACCENTS[type];
 }
 
+/**
+ * Plural names for the catalogs, for prose rather than for a badge.
+ *
+ * Films and TV share an entry: they come from the same catalog, sit together
+ * everywhere in the app, and a board holding both is one thing to its owner,
+ * not two.
+ */
+const CATALOG_PROSE: { types: MediaType[]; label: string }[] = [
+  { types: ["movie", "tv"], label: "films and TV" },
+  { types: ["movie"], label: "films" },
+  { types: ["tv"], label: "TV series" },
+  { types: ["anime"], label: "anime" },
+  { types: ["game"], label: "games" },
+];
+
+/**
+ * Names the catalogs a collection actually spans.
+ *
+ * The dashboard shelves show whatever has been ranked — for one person that is
+ * only games, for another it is all four — so a fixed subtitle was wrong for
+ * everyone it did not happen to describe. Returns null for an empty collection,
+ * which has no catalogs to name.
+ */
+export function rankedCatalogsLabel(types: Iterable<MediaType>): string | null {
+  const present = new Set(types);
+  if (present.size === 0) return null;
+
+  const parts: string[] = [];
+  for (const entry of CATALOG_PROSE) {
+    if (!entry.types.every((type) => present.has(type))) continue;
+    // A pairing claims its members, so "movie" alone cannot also match after
+    // "films and TV" already spoke for it.
+    entry.types.forEach((type) => present.delete(type));
+    parts.push(entry.label);
+  }
+
+  if (parts.length === 1) return parts[0];
+
+  // "films and TV and games" runs two conjunctions together; a comma before the
+  // last one keeps the pairing readable.
+  const separator = parts.some((part) => part.includes(" and ")) ? ", and " : " and ";
+  return `${parts.slice(0, -1).join(", ")}${separator}${parts[parts.length - 1]}`;
+}
+
 /** "all" plus every catalog — the vocabulary any category filter draws from. */
 export type CategoryFilter = "all" | ContentType;
 
