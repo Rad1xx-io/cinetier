@@ -43,6 +43,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { trackItemRanked, trackListCreationStarted, trackListSaved } from "@/lib/analytics/events";
 import { takeForkInteraction, takeForkToast } from "@/lib/storage/fork-handoff";
+import { SITE_HOST } from "@/lib/seo/site";
 
 /**
  * Which tier a board item currently sits in, or null if it is not on the board.
@@ -393,13 +394,20 @@ export function TierListBoard() {
               onChannelTier={handleChannelTierChange}
             />
           ))}
-          {/* Invisible on screen; the export handler reveals it for the shot. */}
-          <p
+          {/* Invisible on screen; the export handler reveals it for the shot.
+              The address is spelled out under the wordmark rather than left
+              implied: a name alone sends anyone who liked the picture to a
+              search box, and there is an unrelated site on a near-identical
+              domain waiting at the end of that search. */}
+          <div
             data-export-watermark
-            className="pointer-events-none absolute bottom-1 right-3 text-xs font-semibold tracking-tight opacity-0"
+            className="pointer-events-none absolute bottom-1 right-3 flex flex-col items-end leading-tight opacity-0"
           >
-            TierList<span className="text-accent">Online</span>
-          </p>
+            <span className="text-xs font-semibold tracking-tight">
+              TierList<span className="text-accent">Online</span>
+            </span>
+            <span className="text-[10px] font-medium tracking-tight text-muted">{SITE_HOST}</span>
+          </div>
         </div>
 
         <DragOverlay>

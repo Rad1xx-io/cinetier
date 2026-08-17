@@ -175,6 +175,30 @@ export function trackAffiliateClicked({ titleId, titleName, provider, url }: Aff
   });
 }
 
+export interface ImageExport {
+  /** Cards on the board. A render that stalls is usually a crowded one. */
+  itemsCount: number;
+  succeeded: boolean;
+  /** Why it failed, when it did — the timeout, or whatever the library said. */
+  reason?: string;
+}
+
+/**
+ * A board leaving as a PNG.
+ *
+ * Counted on the way out and on the way down, because the failure is the half
+ * worth knowing about: rasterising happens in the visitor's browser against
+ * their fonts and their memory, so a board that renders here can still fail
+ * there, and nothing else in the app would ever say so.
+ */
+export function trackImageExported({ itemsCount, succeeded, reason }: ImageExport): void {
+  trackEvent("image_exported", {
+    items_count: itemsCount,
+    succeeded,
+    ...(reason ? { reason } : {}),
+  });
+}
+
 export interface WidgetView {
   tierListId: string;
   theme: string;

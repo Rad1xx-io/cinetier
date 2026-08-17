@@ -10,7 +10,11 @@ import { PublishPostDialog } from "@/components/feed/publish-post-dialog";
 import { suggestedPostCategory } from "@/lib/feed/post-preview";
 import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
 import { getMyProfile, type Profile } from "@/lib/supabase/profiles";
-import { trackLinkCopied, trackShareClicked } from "@/lib/analytics/events";
+import {
+  trackImageExported,
+  trackLinkCopied,
+  trackShareClicked,
+} from "@/lib/analytics/events";
 import type { RankedTitle } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
 import { shareUrl } from "@/lib/seo/site";
@@ -76,6 +80,8 @@ export function TierListActions({
     const node = boardRef.current;
     if (!node) return;
 
+    const itemsCount = titles.length + channels.length;
+
     setExporting(true);
     // The watermark sits in the DOM at zero opacity so it never disturbs the
     // live layout; it is only made visible for the duration of the capture.
@@ -114,9 +120,11 @@ export function TierListActions({
       link.download = `tierlistonline-${new Date().toISOString().slice(0, 10)}.png`;
       link.href = dataUrl;
       link.click();
+      trackImageExported({ itemsCount, succeeded: true });
       onNotify("Image saved");
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
+      trackImageExported({ itemsCount, succeeded: false, reason: reason.slice(0, 120) });
       onNotify(
         reason === "export-timeout"
           ? "The image took too long to render. Please try again."
@@ -126,7 +134,7 @@ export function TierListActions({
       if (watermark) watermark.style.opacity = "0";
       setExporting(false);
     }
-  }, [boardRef, onNotify]);
+  }, [boardRef, onNotify, titles.length, channels.length]);
 
   const handleShare = useCallback(() => {
     // Fired on every press, including the ones that end at the username dialog
