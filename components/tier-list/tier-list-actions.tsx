@@ -19,6 +19,18 @@ import type { RankedTitle } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
 import { shareUrl } from "@/lib/seo/site";
 
+/** The board is transparent by design; the export paints this behind it. */
+const BOARD_BACKGROUND = "#09090b";
+
+/** Retina-ish scale for the poster art. */
+const EXPORT_SCALE = 2;
+
+/**
+ * Browsers stop honouring a canvas past roughly this on a side and return a
+ * blank one, so a very tall board is scaled down rather than exported empty.
+ */
+const MAX_CANVAS_SIDE = 16_384;
+
 interface TierListActionsProps {
   /** The element to rasterise — the tier rows only, without the toolbar. */
   boardRef: React.RefObject<HTMLElement | null>;
@@ -91,22 +103,62 @@ export function TierListActions({
     try {
       // Imported here rather than at module scope: the library is only needed
       // the moment someone actually exports, and it is far from small.
-      const { toPng } = await import("html-to-image");
+      const { toSvg } = await import("html-to-image");
 
-      const render = toPng(node, {
+      /*
+       * toPng is deliberately not used.
+       *
+       * It ends in the library's own `createImage`, which resolves inside a
+       * requestAnimationFrame — and a tab that is not compositing (switched
+       * away, or a window fully covered by another) is never given a frame, so
+       * that promise never settles and the export dies on the timeout below
+       * with nothing to show for it. Measured on this board: everything up to
+       * the SVG finishes in about 80ms, then toPng waits forever.
+       *
+       * What follows is what the library's toCanvas does, minus that frame.
+       */
+      const render = (async () => {
+        const svg = await toSvg(node, {
+          backgroundColor: BOARD_BACKGROUND,
+          // Controls are hidden for the shot via the data attribute below.
+          filter: (el) => !(el instanceof HTMLElement && el.dataset.exportHide !== undefined),
+          // Without this the library walks every stylesheet and inlines each web
+          // font as a data URI before it will rasterise anything — on a slow link
+          // that step alone can outlast the user's patience, and it buys nothing
+          // here because the export is a picture of posters, not of typography.
+          skipFonts: true,
+        });
+
+        const image = new Image();
+        image.decoding = "async";
+        await new Promise<void>((resolve, reject) => {
+          image.onload = () => resolve();
+          image.onerror = () => reject(new Error("the board could not be rasterised"));
+          image.src = svg;
+        });
+
+        // The SVG carries the size the library measured, so the canvas takes it
+        // from the image rather than measuring the board a second time.
+        const width = image.naturalWidth || node.clientWidth;
+        const height = image.naturalHeight || node.clientHeight;
+        // Two-times scale keeps the poster art crisp. Browsers refuse a canvas
+        // past roughly 16k on a side and hand back a blank one instead, so a
+        // very tall board is scaled down rather than exported empty.
+        const scale = Math.min(EXPORT_SCALE, MAX_CANVAS_SIDE / Math.max(width, height));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.floor(width * scale);
+        canvas.height = Math.floor(height * scale);
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("this browser offered no canvas to draw on");
+
         // The board is transparent by design, so without this the PNG comes out
-        // with a see-through background that reads as black in most viewers.
-        backgroundColor: "#09090b",
-        // Two-times scale keeps the poster art crisp without ballooning the file.
-        pixelRatio: 2,
-        // Controls are hidden for the shot via the data attribute below.
-        filter: (el) => !(el instanceof HTMLElement && el.dataset.exportHide !== undefined),
-        // Without this the library walks every stylesheet and inlines each web
-        // font as a data URI before it will rasterise anything — on a slow link
-        // that step alone can outlast the user's patience, and it buys nothing
-        // here because the export is a picture of posters, not of typography.
-        skipFonts: true,
-      });
+        // see-through, which reads as black in most viewers.
+        context.fillStyle = BOARD_BACKGROUND;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL();
+      })();
 
       // A stalled capture must not leave the button disabled forever.
       const dataUrl = await Promise.race([
@@ -127,8 +179,8 @@ export function TierListActions({
       trackImageExported({ itemsCount, succeeded: false, reason: reason.slice(0, 120) });
       onNotify(
         reason === "export-timeout"
-          ? "The image took too long to render. Please try again."
-          : `Could not create the image: ${reason.slice(0, 120)}`
+          ? "The image did not finish rendering. Use “Copy link” to share your board instead."
+          : `Could not create the image (${reason.slice(0, 80)}). Use “Copy link” instead.`
       );
     } finally {
       if (watermark) watermark.style.opacity = "0";
