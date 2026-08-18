@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { History, PlusCircle, Sparkles, ListPlus } from "lucide-react";
 import { useRankedTitles } from "@/lib/hooks/use-ranked-titles";
+import { rankedCatalogsLabel } from "@/lib/utils/content-type";
 import { StatsGrid } from "@/components/dashboard/stats-grid";
 import { TitleShelf } from "@/components/dashboard/title-shelf";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -63,6 +64,11 @@ export default function DashboardPage() {
     .sort((a, b) => b.addedAt - a.addedAt)
     .slice(0, 12);
 
+  // The shelves below show whatever is on the board, which is rarely the whole
+  // catalog and often only one of them — so the subtitle follows the board
+  // rather than naming a category the reader may own nothing from.
+  const catalogs = rankedCatalogsLabel(titles.map((t) => t.mediaType));
+
   return (
     <div className="mx-auto max-w-7xl space-y-10 px-4 py-8 md:px-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -70,7 +76,9 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             My TierList<span className="text-accent">Online</span>
           </h1>
-          <p className="mt-1 text-sm text-muted">Your personal ranking of films and TV.</p>
+          <p className="mt-1 text-sm text-muted">
+            {catalogs ? `Your personal ranking of ${catalogs}.` : "Everything you have ranked."}
+          </p>
         </div>
         <Button asChild variant="secondary" size="sm">
           <Link href="/tier-list">

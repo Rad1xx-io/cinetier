@@ -87,8 +87,9 @@ export function ImportExportPanel() {
       <div className="rounded-xl border border-border bg-surface p-4">
         <h2 className="font-semibold">Backups</h2>
         <p className="mt-1 text-sm text-muted">
-          {titlesCountLabel(titles.length)} stored only in this browser’s local storage. Export the
-          list from time to time so you have a copy.
+          {titlesCountLabel(titles.length)} in your tier list. An export is a copy you keep
+          yourself — a file on your own disk, in addition to whatever the account above syncs.
+          It is also how a list moves to another browser or another account.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Button onClick={handleExport} variant="secondary">
