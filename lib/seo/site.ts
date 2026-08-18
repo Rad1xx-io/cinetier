@@ -11,6 +11,12 @@ export const SITE_URL = (
 ).replace(/\/+$/, "");
 
 /**
+ * The bare hostname, for the places that show the address rather than link to
+ * it — the export watermark, where a protocol would only be noise.
+ */
+export const SITE_HOST = SITE_URL.replace(/^https?:\/\//, "");
+
+/**
  * The token from Google Search Console. Left empty until one is issued: an
  * empty verification tag is worse than none, since it looks configured while
  * verifying nothing.
