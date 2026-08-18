@@ -141,6 +141,17 @@ export function TierListActions({
            */
           imagePlaceholder: TRANSPARENT_PIXEL,
           onImageErrorHandler: () => {},
+          /*
+           * Every cover on the board is one `/_next/image` request, and they
+           * differ only in the query. The library caches what it inlines, and
+           * its key drops the query unless this is set — so all of them share
+           * one entry. Within a single export the fetches start together and
+           * each card still gets its own picture, but the entry keeps whichever
+           * finished last, and the *next* export in the same tab hands that one
+           * image to every card. Filters looked like the trigger only because
+           * changing one is what makes somebody export twice.
+           */
+          includeQueryParams: true,
           // Without this the library walks every stylesheet and inlines each web
           // font as a data URI before it will rasterise anything — on a slow link
           // that step alone can outlast the user's patience, and it buys nothing
