@@ -133,10 +133,36 @@ export function trackForkCreated(originalListId: string, newListId: string): voi
 /** How the account was created, and which surface prompted it. */
 export type SignupMethod = "google" | "magic_link";
 
-export function trackUserRegistered(signupMethod: SignupMethod, entryPoint: string): void {
-  trackEvent("user_registered", {
+/**
+ * A new account, counted once.
+ *
+ * Sign-in and sign-up are the same Supabase callback, so what separates them is
+ * the account's own age — see `isFirstSession`. Only the first one is a signup;
+ * every later arrival is a returning visit and belongs in retention, not
+ * acquisition.
+ */
+export function trackSignupCompleted(signupMethod: SignupMethod, entryPoint: string): void {
+  trackEvent("signup_completed", {
     signup_method: signupMethod,
     entry_point: entryPoint,
+  });
+}
+
+/**
+ * Someone else's post, opened from the community feed.
+ *
+ * Distinct from `shared_content_viewed`, which is an arrival from a link
+ * someone was sent. This one is browsing: the reader was already here.
+ */
+export function trackCommunityPostViewed(
+  postId: string,
+  category: string,
+  authorUserId: string
+): void {
+  trackEvent("community_post_viewed", {
+    post_id: postId,
+    category,
+    author_user_id: authorUserId,
   });
 }
 

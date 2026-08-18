@@ -7,6 +7,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { CloudSyncProvider } from "@/components/auth/cloud-sync-provider";
 import { ChromeGate } from "@/components/layout/chrome-gate";
 import { PageViewTracker } from "@/components/analytics/page-view-tracker";
+import { SignupTracker } from "@/components/analytics/signup-tracker";
 import { GOOGLE_SITE_VERIFICATION, SITE_URL } from "@/lib/seo/site";
 import { defaultOgImage } from "@/lib/seo/og-image";
 import { PostHogProvider } from "@/app/providers/PostHogProvider";
@@ -82,6 +83,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <CloudSyncProvider />
         <PostHogProvider />
         <PageViewTracker />
+        <SignupTracker />
         <ChromeGate>
           <TopNav />
           <MobileHeader />
