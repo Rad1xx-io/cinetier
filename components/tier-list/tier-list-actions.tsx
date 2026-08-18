@@ -18,6 +18,11 @@ import {
 import type { RankedTitle } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
 import { shareUrl } from "@/lib/seo/site";
+import { describeExportFailure } from "@/lib/utils/export-error";
+
+/** Stands in for a cover the browser could not fetch. 1x1, fully transparent. */
+const TRANSPARENT_PIXEL =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 /** The board is transparent by design; the export paints this behind it. */
 const BOARD_BACKGROUND = "#09090b";
@@ -122,6 +127,20 @@ export function TierListActions({
           backgroundColor: BOARD_BACKGROUND,
           // Controls are hidden for the shot via the data attribute below.
           filter: (el) => !(el instanceof HTMLElement && el.dataset.exportHide !== undefined),
+          /*
+           * One cover that will not load must not cost the whole board.
+           *
+           * The library inlines every image as a data URI before it rasterises
+           * anything. When a fetch fails — TMDB genuinely 404s a few posters,
+           * and the optimiser answers a burst of parallel requests with rate
+           * limits — it falls back to this placeholder, and without one it
+           * assigns an empty src instead, which fires an error event that
+           * rejects the entire export. `onImageErrorHandler` catches the same
+           * thing one step later, for an image that loads to something the
+           * browser then refuses to decode.
+           */
+          imagePlaceholder: TRANSPARENT_PIXEL,
+          onImageErrorHandler: () => {},
           // Without this the library walks every stylesheet and inlines each web
           // font as a data URI before it will rasterise anything — on a slow link
           // that step alone can outlast the user's patience, and it buys nothing
@@ -175,7 +194,7 @@ export function TierListActions({
       trackImageExported({ itemsCount, succeeded: true });
       onNotify("Image saved");
     } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
+      const reason = describeExportFailure(err);
       trackImageExported({ itemsCount, succeeded: false, reason: reason.slice(0, 120) });
       onNotify(
         reason === "export-timeout"
