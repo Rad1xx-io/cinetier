@@ -8,6 +8,7 @@ import { CloudSyncProvider } from "@/components/auth/cloud-sync-provider";
 import { ChromeGate } from "@/components/layout/chrome-gate";
 import { PageViewTracker } from "@/components/analytics/page-view-tracker";
 import { GOOGLE_SITE_VERIFICATION, SITE_URL } from "@/lib/seo/site";
+import { defaultOgImage } from "@/lib/seo/og-image";
 import { PostHogProvider } from "@/app/providers/PostHogProvider";
 import "./globals.css";
 
@@ -45,12 +46,18 @@ export const metadata: Metadata = {
     // Relative for the same reason as the canonical above: a fixed origin here
     // would tell every share sheet that /feed and /u/<name> are the home page.
     url: "./",
+    // The floor for every page that has nothing more specific to show. A
+    // summary_large_image card with no image does not render large — it
+    // collapses to a plain link, which is what /feed and the home page were
+    // doing until now.
+    images: [defaultOgImage],
   },
   twitter: {
     card: "summary_large_image",
     title: "TierListOnline — rank what you watch and play",
     description:
       "Build tier lists for films, TV, anime, games and YouTube channels, then share them.",
+    images: [defaultOgImage],
   },
   // Emitted only once a token exists: a tag with an empty content attribute
   // looks configured while verifying nothing.
