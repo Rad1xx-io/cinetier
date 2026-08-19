@@ -1,3 +1,5 @@
+import { displayWidthFromSizes } from "@/lib/utils/image-source";
+
 const IMAGE_BASE_URL = "https://image.tmdb.org/t/p";
 
 export type PosterSize = "w92" | "w154" | "w185" | "w342" | "w500";
@@ -17,10 +19,9 @@ export type PosterSize = "w92" | "w154" | "w185" | "w342" | "w500";
  * so by passing `size` explicitly, and are left alone.
  */
 export function posterSizeForDisplay(sizes: string | undefined): PosterSize {
-  const widths = (sizes ?? "").match(/(\d+)px/g)?.map((px) => parseInt(px, 10)) ?? [];
-  // No px anywhere (a vw-based hint, or nothing at all) means the component's
-  // own default, which tops out around 180px.
-  const display = widths.length ? Math.max(...widths) : 180;
+  // Shared with the CDN resizer, and careful to ignore the media conditions:
+  // "(max-width: 640px) 144px" is a 144px card, not a 640px one.
+  const display = displayWidthFromSizes(sizes);
 
   // Two-times for a retina screen, then the smallest bucket that covers it.
   const wanted = display * 2;

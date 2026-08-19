@@ -1,6 +1,11 @@
 import Image from "next/image";
 import { SquarePlay } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import {
+  displayWidthFromSizes,
+  isUnoptimizedSource,
+  resizeCdnImage,
+} from "@/lib/utils/image-source";
 
 interface ChannelThumbnailProps {
   thumbnailUrl: string | null;
@@ -31,15 +36,21 @@ export function ChannelThumbnail({
     );
   }
 
+  // YouTube hands out an s800 avatar for a circle that is never wider than
+  // 120px. Asking for the size actually painted turns 35KB into 8KB.
+  const hint = sizes ?? "(max-width: 640px) 33vw, 120px";
+  const src = resizeCdnImage(thumbnailUrl, displayWidthFromSizes(hint, 120));
+
   return (
     <div className={cn("relative aspect-square overflow-hidden rounded-full bg-surface-raised", className)}>
       <Image
-        src={thumbnailUrl}
+        src={src}
         alt={`${title} channel avatar`}
         fill
-        sizes={sizes ?? "(max-width: 640px) 33vw, 120px"}
+        sizes={hint}
         className="object-cover"
         priority={priority}
+        unoptimized={isUnoptimizedSource(src)}
       />
     </div>
   );

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink, Plus, Star, Trash2 } from "lucide-react";
 import { useRankedTitles } from "@/lib/hooks/use-ranked-titles";
 import { Poster } from "@/components/movie-card/poster";
+import { isUnoptimizedSource } from "@/lib/utils/image-source";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CriteriaSection } from "@/components/criteria/criteria-section";
@@ -48,7 +49,15 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
     <div>
       <div className="relative h-56 w-full overflow-hidden bg-surface-raised sm:h-72 md:h-96">
         {details.headerImage ? (
-          <Image src={details.headerImage} alt="" fill priority className="object-cover" sizes="100vw" />
+          <Image
+            src={details.headerImage}
+            alt=""
+            fill
+            priority
+            className="object-cover"
+            sizes="100vw"
+            unoptimized={isUnoptimizedSource(details.headerImage)}
+          />
         ) : (
           <div className="h-full w-full bg-gradient-to-br from-surface-raised to-surface" />
         )}

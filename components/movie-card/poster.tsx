@@ -4,7 +4,11 @@ import { useState } from "react";
 import Image from "next/image";
 import { Clapperboard } from "lucide-react";
 import { posterSizeForDisplay, posterUrl, type PosterSize } from "@/lib/utils/tmdb-image";
-import { isUnoptimizedSource } from "@/lib/utils/image-source";
+import {
+  displayWidthFromSizes,
+  isUnoptimizedSource,
+  resizeCdnImage,
+} from "@/lib/utils/image-source";
 import { cn } from "@/lib/utils/cn";
 
 interface PosterProps {
@@ -40,9 +44,13 @@ export function Poster({
   // ask for w500 and should keep it. Everything else is a grid, and takes the
   // width its own `sizes` hint implies.
   const resolved = size ?? posterSizeForDisplay(sizes);
-  const candidates = [posterUrl(posterPath, resolved), fallbackSrc].filter(
+  const built = [posterUrl(posterPath, resolved), fallbackSrc].filter(
     (src): src is string => Boolean(src)
   );
+  // An anime cover arrives as a finished AniList url, so its size cannot be
+  // picked while building the path the way a TMDB poster's is. A caller that
+  // named a size meant it, and keeps whatever the url already says.
+  const candidates = size ? built : built.map((url) => resizeCdnImage(url, displayWidthFromSizes(sizes)));
   const [attempt, setAttempt] = useState(0);
   const src = candidates[attempt];
 
