@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Clapperboard } from "lucide-react";
 import { posterUrl, type PosterSize } from "@/lib/utils/tmdb-image";
+import { isUnoptimizedSource } from "@/lib/utils/image-source";
 import { cn } from "@/lib/utils/cn";
 
 interface PosterProps {
@@ -19,20 +20,6 @@ interface PosterProps {
    * their store capsule here rather than dropping straight to a placeholder.
    */
   fallbackSrc?: string | null;
-}
-
-/**
- * Steam art skips Next's image optimizer.
- *
- * Optimizing means the *server* fetches the CDN URL, and Next 16 refuses any
- * upstream whose hostname resolves to a private or special-use address. On a
- * NAT64 network (phone tethering, IPv6-only Wi-Fi) Steam's CDNs resolve into
- * `64:ff9b::/96`, so every cover 400s and the grid renders empty. The browser
- * has no such restriction, and these capsules already ship at display size, so
- * loading them directly costs nothing and works on any network.
- */
-function isSteamAsset(src: string): boolean {
-  return src.includes(".steamstatic.com") || src.includes(".akamaihd.net");
 }
 
 export function Poster({
@@ -78,7 +65,7 @@ export function Poster({
         sizes={sizes ?? "(max-width: 640px) 33vw, 180px"}
         className="object-cover"
         priority={priority}
-        unoptimized={isSteamAsset(src)}
+        unoptimized={isUnoptimizedSource(src)}
         onError={() => setAttempt((i) => i + 1)}
       />
     </div>
