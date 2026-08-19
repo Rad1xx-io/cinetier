@@ -135,3 +135,17 @@ describe("displayWidthFromSizes", () => {
     expect(displayWidthFromSizes(undefined, 120)).toBe(120);
   });
 });
+
+describe("resizeCdnImage — the avatar sizes each surface actually paints", () => {
+  const avatar = "https://yt3.ggpht.com/abc=s800-c-k-c0x00ffffff-no-rj";
+
+  it("takes s176 for the 56px circle on the catalogue", () => {
+    // discover-channel-card renders it at w-14; the component's own 120px
+    // fallback used to pull s240, four times the painted size.
+    expect(resizeCdnImage(avatar, 56)).toContain("=s176-");
+  });
+
+  it("keeps s240 where the circle really is 120px", () => {
+    expect(resizeCdnImage(avatar, 120)).toContain("=s240-");
+  });
+});
