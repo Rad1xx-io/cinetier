@@ -27,7 +27,16 @@ export function DiscoverChannelCard({ channel, ranked, onAdd }: DiscoverChannelC
     <div className="group flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4 transition-all duration-200 hover:scale-[1.02] hover:border-accent/40">
       <div className="flex items-start gap-3">
         <Link href={href} className="shrink-0">
-          <ChannelThumbnail thumbnailUrl={channel.thumbnailUrl} title={channel.title} className="w-14" />
+          <ChannelThumbnail
+            thumbnailUrl={channel.thumbnailUrl}
+            title={channel.title}
+            className="w-14"
+            // The circle is 56px (w-14). Without this the component falls back
+            // to its own 120px guess and fetches an avatar four times the size
+            // it paints — which mattered nothing while the optimizer re-encoded
+            // them, and is 155KB a page now that it does not.
+            sizes="56px"
+          />
         </Link>
         <div className="min-w-0 flex-1">
           <Link href={href} className="line-clamp-1 break-words text-sm font-semibold hover:text-accent">
