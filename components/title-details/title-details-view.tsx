@@ -12,6 +12,7 @@ import { AffiliateLinks } from "@/components/media/affiliate-links";
 import type { TierOrUnrated, TitleDetails } from "@/lib/types";
 import { TIER_ORDER } from "@/lib/types";
 import { backdropUrl } from "@/lib/utils/tmdb-image";
+import { isUnoptimizedSource } from "@/lib/utils/image-source";
 import { formatRating, mediaTypeLabel, releaseYear } from "@/lib/utils/format";
 import { tierColorVar, tierLabel } from "@/lib/utils/tier-style";
 import { plural } from "@/lib/utils/plural";
@@ -31,7 +32,10 @@ export function TitleDetailsView({
   const ranked = titles.find(
     (t) => t.tmdbId === details.tmdbId && t.mediaType === details.mediaType
   );
-  const backdrop = backdropUrl(details.backdropPath);
+  // w780 rather than w1280: without the optimizer there is no srcset, so one
+  // file serves phones as well, and behind the page's gradient the difference
+  // is invisible — 105KB against 206KB.
+  const backdrop = backdropUrl(details.backdropPath, "w780");
 
   function handleAdd() {
     trackItemAdded(`${details.mediaType}-${details.tmdbId}`, details.mediaType, "details");
@@ -64,7 +68,15 @@ export function TitleDetailsView({
     <div>
       <div className="relative h-56 w-full overflow-hidden sm:h-72 md:h-96">
         {backdrop ? (
-          <Image src={backdrop} alt="" fill priority className="object-cover" sizes="100vw" />
+          <Image
+            src={backdrop}
+            alt=""
+            fill
+            priority
+            className="object-cover"
+            sizes="100vw"
+            unoptimized={isUnoptimizedSource(backdrop)}
+          />
         ) : (
           <div className="h-full w-full bg-surface-raised" />
         )}

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { isUnoptimizedSource, resizeCdnImage } from "@/lib/utils/image-source";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, X } from "lucide-react";
@@ -216,7 +217,14 @@ export function GlobalSearch() {
                 >
                   <span className="relative h-10 w-8 shrink-0 overflow-hidden rounded bg-surface">
                     {r.thumbnail && (
-                      <Image src={r.thumbnail} alt="" fill sizes="32px" className="object-cover" />
+                      <Image
+                        src={resizeCdnImage(r.thumbnail, 32)}
+                        alt=""
+                        fill
+                        sizes="32px"
+                        className="object-cover"
+                        unoptimized={isUnoptimizedSource(r.thumbnail)}
+                      />
                     )}
                   </span>
                   <span className="min-w-0 flex-1">

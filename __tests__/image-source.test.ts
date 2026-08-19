@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isUnoptimizedSource } from "@/lib/utils/image-source";
+import {
+  displayWidthFromSizes,
+  isUnoptimizedSource,
+  resizeCdnImage,
+} from "@/lib/utils/image-source";
 import { posterSizeForDisplay } from "@/lib/utils/tmdb-image";
 
 describe("isUnoptimizedSource", () => {
@@ -24,7 +28,7 @@ describe("isUnoptimizedSource", () => {
 
   it("leaves everything else to the optimizer", () => {
     expect(isUnoptimizedSource("https://example.com/poster.jpg")).toBe(false);
-    expect(isUnoptimizedSource("https://yt3.ggpht.com/avatar.jpg")).toBe(false);
+    expect(isUnoptimizedSource("https://images.example.net/avatar.jpg")).toBe(false);
   });
 
   it("matches the host, not the text of the url", () => {
@@ -63,5 +67,71 @@ describe("posterSizeForDisplay", () => {
     expect(posterSizeForDisplay("(max-width: 640px) 33vw, 180px")).toBe("w185");
     expect(posterSizeForDisplay(undefined)).toBe("w185");
     expect(posterSizeForDisplay("50vw")).toBe("w185");
+  });
+});
+
+describe("isUnoptimizedSource — the hosts added after the first sweep", () => {
+  it("covers AniList, which is the whole anime catalogue", () => {
+    expect(isUnoptimizedSource("https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx1.jpg")).toBe(true);
+    expect(isUnoptimizedSource("https://s1.anilist.co/file/anilistcdn/media/anime/banner/1.jpg")).toBe(true);
+  });
+
+  it("covers MyAnimeList, which serves those covers under the Jikan source", () => {
+    expect(isUnoptimizedSource("https://cdn.myanimelist.net/images/anime/1/1.jpg")).toBe(true);
+  });
+
+  it("covers the YouTube image hosts, and only those Google hosts", () => {
+    expect(isUnoptimizedSource("https://yt3.ggpht.com/abc=s800-c-k-no-rj")).toBe(true);
+    expect(isUnoptimizedSource("https://yt3.googleusercontent.com/abc")).toBe(true);
+    // Not every googleusercontent host is ours to bypass.
+    expect(isUnoptimizedSource("https://lh3.googleusercontent.com/abc")).toBe(false);
+  });
+
+  it("covers the third Steam host the config allows", () => {
+    expect(isUnoptimizedSource("https://cdn.cloudflare.steampowered.com/steam/apps/1/x.jpg")).toBe(true);
+  });
+});
+
+describe("resizeCdnImage", () => {
+  it("caps AniList covers at the medium variant for anything grid-sized", () => {
+    const large = "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx16498-x.jpg";
+    expect(resizeCdnImage(large, 112)).toContain("/cover/medium/");
+    expect(resizeCdnImage(large, 180)).toContain("/cover/medium/");
+    // Only a genuinely large tile earns the 460px file.
+    expect(resizeCdnImage(large, 300)).toContain("/cover/large/");
+  });
+
+  it("asks YouTube for the size the circle is painted at", () => {
+    const avatar = "https://yt3.ggpht.com/abc=s800-c-k-c0x00ffffff-no-rj";
+    expect(resizeCdnImage(avatar, 32)).toBe("https://yt3.ggpht.com/abc=s88-c-k-c0x00ffffff-no-rj");
+    expect(resizeCdnImage(avatar, 120)).toBe("https://yt3.ggpht.com/abc=s240-c-k-c0x00ffffff-no-rj");
+  });
+
+  it("rewrites a TMDB width that was baked into a finished url", () => {
+    // The search dropdown stores w185 urls and paints them at 32px.
+    expect(resizeCdnImage("https://image.tmdb.org/t/p/w185/x.jpg", 32)).toBe(
+      "https://image.tmdb.org/t/p/w92/x.jpg"
+    );
+  });
+
+  it("leaves alone what it does not recognise", () => {
+    const steam = "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1/library_600x900.jpg";
+    expect(resizeCdnImage(steam, 120)).toBe(steam);
+    expect(resizeCdnImage("https://example.com/x.jpg", 50)).toBe("https://example.com/x.jpg");
+    // A YouTube banner carries no size to swap, and is 45KB as stored.
+    const banner = "https://yt3.googleusercontent.com/WKNko-abc";
+    expect(resizeCdnImage(banner, 1280)).toBe(banner);
+  });
+});
+
+describe("displayWidthFromSizes", () => {
+  it("takes the widest px in the hint", () => {
+    expect(displayWidthFromSizes("(max-width: 640px) 144px, 192px")).toBe(192);
+    expect(displayWidthFromSizes("48px")).toBe(48);
+  });
+
+  it("falls back when the hint has no pixels", () => {
+    expect(displayWidthFromSizes("100vw", 180)).toBe(180);
+    expect(displayWidthFromSizes(undefined, 120)).toBe(120);
   });
 });

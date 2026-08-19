@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { isUnoptimizedSource } from "@/lib/utils/image-source";
 import Link from "next/link";
 import { ArrowLeft, Plus, Trash2, Users, Video } from "lucide-react";
 import { useRankedChannels } from "@/lib/hooks/use-ranked-channels";
@@ -52,7 +53,15 @@ export function ChannelDetailsView({ details }: { details: ChannelDetails }) {
     <div>
       <div className="relative h-40 w-full overflow-hidden bg-surface-raised sm:h-56">
         {details.bannerUrl ? (
-          <Image src={details.bannerUrl} alt="" fill priority className="object-cover" sizes="100vw" />
+          <Image
+            src={details.bannerUrl}
+            alt=""
+            fill
+            priority
+            className="object-cover"
+            sizes="100vw"
+            unoptimized={isUnoptimizedSource(details.bannerUrl)}
+          />
         ) : (
           <div className="h-full w-full bg-gradient-to-br from-surface-raised to-surface" />
         )}
