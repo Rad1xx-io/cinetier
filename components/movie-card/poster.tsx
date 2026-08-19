@@ -3,15 +3,21 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Clapperboard } from "lucide-react";
-import { posterUrl, type PosterSize } from "@/lib/utils/tmdb-image";
+import { posterSizeForDisplay, posterUrl, type PosterSize } from "@/lib/utils/tmdb-image";
+import { isUnoptimizedSource } from "@/lib/utils/image-source";
 import { cn } from "@/lib/utils/cn";
 
 interface PosterProps {
   posterPath: string | null;
   title: string;
+  /**
+   * Overrides the width derived from `sizes`. For the pages that show one
+   * poster large, where sharpness matters more than the byte count.
+   */
   size?: PosterSize;
   className?: string;
   priority?: boolean;
+  /** How wide the card renders. Also decides which TMDB size is fetched. */
   sizes?: string;
   /**
    * Tried when the main image fails to load. Steam builds its portrait library
@@ -21,30 +27,20 @@ interface PosterProps {
   fallbackSrc?: string | null;
 }
 
-/**
- * Steam art skips Next's image optimizer.
- *
- * Optimizing means the *server* fetches the CDN URL, and Next 16 refuses any
- * upstream whose hostname resolves to a private or special-use address. On a
- * NAT64 network (phone tethering, IPv6-only Wi-Fi) Steam's CDNs resolve into
- * `64:ff9b::/96`, so every cover 400s and the grid renders empty. The browser
- * has no such restriction, and these capsules already ship at display size, so
- * loading them directly costs nothing and works on any network.
- */
-function isSteamAsset(src: string): boolean {
-  return src.includes(".steamstatic.com") || src.includes(".akamaihd.net");
-}
-
 export function Poster({
   posterPath,
   title,
-  size = "w342",
+  size,
   className,
   priority,
   sizes,
   fallbackSrc,
 }: PosterProps) {
-  const candidates = [posterUrl(posterPath, size), fallbackSrc].filter(
+  // A caller that names a size means it: the pages showing one poster large
+  // ask for w500 and should keep it. Everything else is a grid, and takes the
+  // width its own `sizes` hint implies.
+  const resolved = size ?? posterSizeForDisplay(sizes);
+  const candidates = [posterUrl(posterPath, resolved), fallbackSrc].filter(
     (src): src is string => Boolean(src)
   );
   const [attempt, setAttempt] = useState(0);
@@ -78,7 +74,7 @@ export function Poster({
         sizes={sizes ?? "(max-width: 640px) 33vw, 180px"}
         className="object-cover"
         priority={priority}
-        unoptimized={isSteamAsset(src)}
+        unoptimized={isUnoptimizedSource(src)}
         onError={() => setAttempt((i) => i + 1)}
       />
     </div>
