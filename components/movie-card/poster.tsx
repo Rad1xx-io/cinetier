@@ -3,16 +3,21 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Clapperboard } from "lucide-react";
-import { posterUrl, type PosterSize } from "@/lib/utils/tmdb-image";
+import { posterSizeForDisplay, posterUrl, type PosterSize } from "@/lib/utils/tmdb-image";
 import { isUnoptimizedSource } from "@/lib/utils/image-source";
 import { cn } from "@/lib/utils/cn";
 
 interface PosterProps {
   posterPath: string | null;
   title: string;
+  /**
+   * Overrides the width derived from `sizes`. For the pages that show one
+   * poster large, where sharpness matters more than the byte count.
+   */
   size?: PosterSize;
   className?: string;
   priority?: boolean;
+  /** How wide the card renders. Also decides which TMDB size is fetched. */
   sizes?: string;
   /**
    * Tried when the main image fails to load. Steam builds its portrait library
@@ -25,13 +30,17 @@ interface PosterProps {
 export function Poster({
   posterPath,
   title,
-  size = "w342",
+  size,
   className,
   priority,
   sizes,
   fallbackSrc,
 }: PosterProps) {
-  const candidates = [posterUrl(posterPath, size), fallbackSrc].filter(
+  // A caller that names a size means it: the pages showing one poster large
+  // ask for w500 and should keep it. Everything else is a grid, and takes the
+  // width its own `sizes` hint implies.
+  const resolved = size ?? posterSizeForDisplay(sizes);
+  const candidates = [posterUrl(posterPath, resolved), fallbackSrc].filter(
     (src): src is string => Boolean(src)
   );
   const [attempt, setAttempt] = useState(0);
