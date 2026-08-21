@@ -6,6 +6,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RANKINGS_CHANGED_EVENT } from "@/lib/storage/local-storage-repository";
 import { getRatedTitles, reorderAll } from "@/lib/storage";
 import { pullCloudTitles, pushCloudTitles } from "@/lib/storage/cloud-sync";
+import type { PullOutcome } from "@/lib/storage/sync-decision";
 import { CHANNEL_RANKINGS_CHANGED_EVENT } from "@/lib/storage/youtube/local-storage-repository";
 import { getRatedChannels, reorderAllChannels } from "@/lib/storage/youtube";
 import { pullCloudChannels, pushCloudChannels } from "@/lib/storage/youtube/cloud-sync";
@@ -16,8 +17,21 @@ import {
   stampLocalOwner,
 } from "@/lib/storage/local-owner";
 import { decideSync } from "@/lib/storage/sync-decision";
+import { registerSyncRetry, setSyncStatus } from "@/lib/storage/sync-status";
 
 const PUSH_DEBOUNCE_MS = 600;
+
+/**
+ * A cloud read is retried before it is believed.
+ *
+ * The window right after a sign-in redirect is the one where a read is most
+ * likely to come back unauthorised, and it is also the one where giving up
+ * means showing a signed-in visitor an empty board. Three tries spread over a
+ * couple of seconds cost nothing when the first one works, which is almost
+ * always.
+ */
+const PULL_ATTEMPTS = 3;
+const PULL_BACKOFF_MS = [400, 1200];
 
 /**
  * Renders nothing — mounted once in the root layout to keep localStorage and
@@ -67,16 +81,29 @@ export function CloudSyncProvider() {
       }
     }
 
+    /** Retries a read a few times before its failure is taken as an answer. */
+    async function pullWithRetry<T>(read: () => Promise<PullOutcome<T>>): Promise<PullOutcome<T>> {
+      let last: PullOutcome<T> = { status: "failed", reason: "not attempted" };
+      for (let attempt = 0; attempt < PULL_ATTEMPTS; attempt++) {
+        last = await read();
+        if (last.status === "ok") return last;
+        const wait = PULL_BACKOFF_MS[attempt];
+        if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+      }
+      return last;
+    }
+
     async function syncDown(userId: string) {
       syncingDownRef.current = true;
+      setSyncStatus({ state: "syncing" });
       try {
         const localTitles = getRatedTitles();
         const localChannels = getRatedChannels();
         const owner = ensureLocalOwner(localTitles.length > 0 || localChannels.length > 0);
 
         const [titlePull, channelPull] = await Promise.all([
-          pullCloudTitles(userId),
-          pullCloudChannels(userId),
+          pullWithRetry(() => pullCloudTitles(userId)),
+          pullWithRetry(() => pullCloudChannels(userId)),
         ]);
 
         const titles = decideSync(owner, titlePull, localTitles.length, userId);
@@ -88,11 +115,11 @@ export function CloudSyncProvider() {
          * in a state neither the cloud nor this browser ever held.
          */
         if (titles.action === "abort" || channels.action === "abort") {
-          console.error(
-            "TierListOnline: sign-in sync aborted, local board left untouched —",
-            titles.reason,
-            channels.reason
-          );
+          const reason = titles.action === "abort" ? titles.reason : channels.reason;
+          console.error("TierListOnline: sign-in sync aborted, local board left untouched —", reason);
+          // Said out loud rather than logged: on a device this account has not
+          // used, the untouched board is an empty one.
+          setSyncStatus({ state: "failed", reason });
           return;
         }
 
@@ -107,6 +134,7 @@ export function CloudSyncProvider() {
 
         // Whatever is on the board now is this account's.
         stampLocalOwner(userId);
+        setSyncStatus({ state: "idle" });
       } finally {
         syncingDownRef.current = false;
       }
@@ -127,6 +155,7 @@ export function CloudSyncProvider() {
     function releaseSession() {
       userIdRef.current = null;
       cancelPendingPushes();
+      setSyncStatus({ state: "idle" });
 
       const owner = readLocalOwner();
       if (owner?.kind === "user") clearLocalBoards();
@@ -175,6 +204,12 @@ export function CloudSyncProvider() {
       }
     });
 
+    // "Try again" needs the session, which only this component has.
+    registerSyncRetry(() => {
+      const userId = userIdRef.current;
+      if (userId) void syncDown(userId);
+    });
+
     window.addEventListener(RANKINGS_CHANGED_EVENT, scheduleTitlesPush);
     window.addEventListener(CHANNEL_RANKINGS_CHANGED_EVENT, scheduleChannelsPush);
 
@@ -182,6 +217,7 @@ export function CloudSyncProvider() {
       subscription.unsubscribe();
       window.removeEventListener(RANKINGS_CHANGED_EVENT, scheduleTitlesPush);
       window.removeEventListener(CHANNEL_RANKINGS_CHANGED_EVENT, scheduleChannelsPush);
+      registerSyncRetry(null);
       cancelPendingPushes();
     };
   }, []);

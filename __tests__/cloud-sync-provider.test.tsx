@@ -33,6 +33,7 @@ vi.mock("@/lib/supabase/client", () => ({
 import { CloudSyncProvider } from "@/components/auth/cloud-sync-provider";
 import { getRatedTitles, reorderAll } from "@/lib/storage";
 import { stampLocalOwner, readLocalOwner } from "@/lib/storage/local-owner";
+import { getSyncStatus, retrySync, setSyncStatus } from "@/lib/storage/sync-status";
 
 const A = "aaaaaaaa-0000-0000-0000-000000000001";
 const B = "bbbbbbbb-0000-0000-0000-000000000002";
@@ -58,6 +59,7 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
   localStorage.clear();
+  setSyncStatus({ state: "idle" });
   vi.clearAllMocks();
   pullCloudTitles.mockResolvedValue({ status: "ok", items: [] });
   pullCloudChannels.mockResolvedValue({ status: "ok", items: [] });
@@ -96,30 +98,36 @@ describe("account switch on a shared browser", () => {
 
 describe("a failed cloud read", () => {
   it("does not adopt the local board when the read returned an error", async () => {
+    // Fake timers on purpose: the read is retried with backoff, so asserting
+    // before that finishes would pass while the sync was still running.
+    vi.useFakeTimers();
     reorderAll(board(5));
     stampLocalOwner(null); // a genuine guest — the one case that may adopt
     pullCloudTitles.mockResolvedValue({ status: "failed", reason: "401" });
 
     render(<CloudSyncProvider />);
     signIn(B);
-    await settle();
+    await vi.advanceTimersByTimeAsync(3000);
 
     expect(pushCloudTitles).not.toHaveBeenCalled();
     // and it must not clear either — nothing is known, so nothing moves.
     expect(getRatedTitles()).toHaveLength(5);
+    vi.useRealTimers();
   });
 
   it("stops both halves when only the channel read failed", async () => {
+    vi.useFakeTimers();
     reorderAll(board(5));
     stampLocalOwner(null);
     pullCloudChannels.mockResolvedValue({ status: "failed", reason: "network" });
 
     render(<CloudSyncProvider />);
     signIn(B);
-    await settle();
+    await vi.advanceTimersByTimeAsync(3000);
 
     expect(pushCloudTitles).not.toHaveBeenCalled();
     expect(getRatedTitles()).toHaveLength(5);
+    vi.useRealTimers();
   });
 });
 
@@ -201,6 +209,72 @@ describe("a second tab handing the browser to someone else", () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     expect(pushCloudTitles).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+});
+
+describe("what the visitor is told when the cloud cannot be read", () => {
+  it("retries before believing a failure, and says nothing when a retry works", async () => {
+    vi.useFakeTimers();
+    pullCloudTitles
+      .mockResolvedValueOnce({ status: "failed", reason: "401" })
+      .mockResolvedValue({ status: "ok", items: board(3) });
+
+    render(<CloudSyncProvider />);
+    signIn(B);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(pullCloudTitles.mock.calls.length).toBeGreaterThan(1);
+    expect(getSyncStatus().state).toBe("idle");
+    expect(getRatedTitles()).toHaveLength(3);
+    vi.useRealTimers();
+  });
+
+  it("raises a visible failure once the retries are spent", async () => {
+    vi.useFakeTimers();
+    pullCloudTitles.mockResolvedValue({ status: "failed", reason: "401" });
+
+    render(<CloudSyncProvider />);
+    signIn(B);
+    await vi.advanceTimersByTimeAsync(3000);
+
+    const status = getSyncStatus();
+    expect(status.state).toBe("failed");
+    expect(status.state === "failed" && status.reason).toContain("401");
+    vi.useRealTimers();
+  });
+
+  it("recovers when the visitor presses Try again", async () => {
+    vi.useFakeTimers();
+    pullCloudTitles.mockResolvedValue({ status: "failed", reason: "401" });
+
+    render(<CloudSyncProvider />);
+    signIn(B);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(getSyncStatus().state).toBe("failed");
+
+    pullCloudTitles.mockResolvedValue({ status: "ok", items: board(2) });
+    retrySync();
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(getSyncStatus().state).toBe("idle");
+    expect(getRatedTitles()).toHaveLength(2);
+    vi.useRealTimers();
+  });
+
+  it("clears the warning when the session ends", async () => {
+    vi.useFakeTimers();
+    pullCloudTitles.mockResolvedValue({ status: "failed", reason: "401" });
+
+    render(<CloudSyncProvider />);
+    signIn(B);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(getSyncStatus().state).toBe("failed");
+
+    listener("SIGNED_OUT" as AuthChangeEvent, null);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(getSyncStatus().state).toBe("idle");
     vi.useRealTimers();
   });
 });

@@ -5,6 +5,7 @@ import { MobileHeader } from "@/components/navigation/mobile-header";
 import { BottomNav } from "@/components/navigation/bottom-nav";
 import { Analytics } from "@vercel/analytics/next";
 import { CloudSyncProvider } from "@/components/auth/cloud-sync-provider";
+import { SyncStatusBanner } from "@/components/auth/sync-status-banner";
 import { ChromeGate } from "@/components/layout/chrome-gate";
 import { PageViewTracker } from "@/components/analytics/page-view-tracker";
 import { SignupTracker } from "@/components/analytics/signup-tracker";
@@ -81,6 +82,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <CloudSyncProvider />
+        <SyncStatusBanner />
         <PostHogProvider />
         <PageViewTracker />
         <SignupTracker />
