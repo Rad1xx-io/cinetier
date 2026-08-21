@@ -1,6 +1,7 @@
 "use client";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { PullOutcome } from "@/lib/storage/sync-decision";
 import type { RankedChannel } from "@/lib/types/youtube";
 
 interface RankedChannelRow {
@@ -44,9 +45,10 @@ function fromRow(row: RankedChannelRow): RankedChannel {
   };
 }
 
-export async function pullCloudChannels(userId: string): Promise<RankedChannel[]> {
+/** Same contract as pullCloudTitles: a failure is not an empty account. */
+export async function pullCloudChannels(userId: string): Promise<PullOutcome<RankedChannel>> {
   const supabase = getSupabaseBrowserClient();
-  if (!supabase) return [];
+  if (!supabase) return { status: "failed", reason: "cloud accounts are not configured" };
 
   const { data, error } = await supabase
     .from("ranked_channels")
@@ -55,10 +57,10 @@ export async function pullCloudChannels(userId: string): Promise<RankedChannel[]
 
   if (error || !data) {
     console.error("TierListOnline: failed to pull cloud channel rankings", error);
-    return [];
+    return { status: "failed", reason: error?.message ?? "no data returned" };
   }
 
-  return data.map(fromRow);
+  return { status: "ok", items: data.map(fromRow) };
 }
 
 export async function pushCloudChannels(userId: string, channels: RankedChannel[]): Promise<void> {

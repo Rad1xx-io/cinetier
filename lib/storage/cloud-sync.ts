@@ -2,6 +2,7 @@
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
+import type { PullOutcome } from "@/lib/storage/sync-decision";
 
 interface RankedTitleRow {
   tmdb_id: number;
@@ -47,10 +48,16 @@ function fromRow(row: RankedTitleRow): RankedTitle {
   };
 }
 
-/** Fetches everything this user has stored in the cloud. Empty array if not configured or on error. */
-export async function pullCloudTitles(userId: string): Promise<RankedTitle[]> {
+/**
+ * Fetches everything this user has stored in the cloud.
+ *
+ * Reports a failure rather than an empty list. The two used to be the same
+ * answer here, which let a dropped request stand in for "new account with
+ * nothing saved" — and that is the branch that pushes the local board up.
+ */
+export async function pullCloudTitles(userId: string): Promise<PullOutcome<RankedTitle>> {
   const supabase = getSupabaseBrowserClient();
-  if (!supabase) return [];
+  if (!supabase) return { status: "failed", reason: "cloud accounts are not configured" };
 
   const { data, error } = await supabase
     .from("ranked_titles")
@@ -59,10 +66,10 @@ export async function pullCloudTitles(userId: string): Promise<RankedTitle[]> {
 
   if (error || !data) {
     console.error("TierListOnline: failed to pull cloud rankings", error);
-    return [];
+    return { status: "failed", reason: error?.message ?? "no data returned" };
   }
 
-  return data.map(fromRow);
+  return { status: "ok", items: data.map(fromRow) };
 }
 
 /**

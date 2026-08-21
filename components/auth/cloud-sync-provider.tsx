@@ -9,6 +9,13 @@ import { pullCloudTitles, pushCloudTitles } from "@/lib/storage/cloud-sync";
 import { CHANNEL_RANKINGS_CHANGED_EVENT } from "@/lib/storage/youtube/local-storage-repository";
 import { getRatedChannels, reorderAllChannels } from "@/lib/storage/youtube";
 import { pullCloudChannels, pushCloudChannels } from "@/lib/storage/youtube/cloud-sync";
+import {
+  clearLocalOwner,
+  ensureLocalOwner,
+  readLocalOwner,
+  stampLocalOwner,
+} from "@/lib/storage/local-owner";
+import { decideSync } from "@/lib/storage/sync-decision";
 
 const PUSH_DEBOUNCE_MS = 600;
 
@@ -16,13 +23,13 @@ const PUSH_DEBOUNCE_MS = 600;
  * Renders nothing — mounted once in the root layout to keep localStorage and
  * Supabase in sync while signed in. Local-first: localStorage stays the
  * synchronous source of truth the UI reads; this only mirrors it to the cloud
- * in the background and pulls down on sign-in. Handles every ranking
- * category (movies/TV, YouTube channels, ...) off the same auth session —
- * one listener, independent debounced push per category.
+ * in the background and pulls down on sign-in.
  *
- * On first sign-in: cloud empty + local has data -> push local up (adopt the
- * guest session into the account). Otherwise cloud wins and overwrites local
- * — kept deliberately simple for v1, no field-by-field merge across devices.
+ * Every write here answers one question first: whose board is this? The
+ * rankings carry an owner marker (see lib/storage/local-owner) because the
+ * cloud being empty says nothing about that — it used to be read as "this must
+ * be your guest board", which in a browser somebody else had signed into
+ * copied their board into the account that had just arrived.
  */
 export function CloudSyncProvider() {
   const userIdRef = useRef<string | null>(null);
@@ -34,30 +41,96 @@ export function CloudSyncProvider() {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
 
+    /*
+     * Settle ownership before any auth event can arrive. A browser that is
+     * empty right now becomes a guest, so a first-time visitor's board is
+     * attributable from its first entry and still adopts correctly when they
+     * sign up.
+     */
+    ensureLocalOwner(getRatedTitles().length > 0 || getRatedChannels().length > 0);
+
+    function cancelPendingPushes() {
+      if (titlesPushTimeoutRef.current) clearTimeout(titlesPushTimeoutRef.current);
+      if (channelsPushTimeoutRef.current) clearTimeout(channelsPushTimeoutRef.current);
+      titlesPushTimeoutRef.current = null;
+      channelsPushTimeoutRef.current = null;
+    }
+
+    /** Wipes the board without letting the write escape to anyone's cloud. */
+    function clearLocalBoards() {
+      syncingDownRef.current = true;
+      try {
+        reorderAll([]);
+        reorderAllChannels([]);
+      } finally {
+        syncingDownRef.current = false;
+      }
+    }
+
     async function syncDown(userId: string) {
       syncingDownRef.current = true;
       try {
-        const [cloudTitles, cloudChannels] = await Promise.all([
+        const localTitles = getRatedTitles();
+        const localChannels = getRatedChannels();
+        const owner = ensureLocalOwner(localTitles.length > 0 || localChannels.length > 0);
+
+        const [titlePull, channelPull] = await Promise.all([
           pullCloudTitles(userId),
           pullCloudChannels(userId),
         ]);
 
-        const localTitles = getRatedTitles();
-        if (cloudTitles.length === 0 && localTitles.length > 0) {
-          await pushCloudTitles(userId, localTitles);
-        } else {
-          reorderAll(cloudTitles);
+        const titles = decideSync(owner, titlePull, localTitles.length, userId);
+        const channels = decideSync(owner, channelPull, localChannels.length, userId);
+
+        /*
+         * One failed read stops both halves. A dropped request is not evidence
+         * of an empty account, and applying half a sync would leave the board
+         * in a state neither the cloud nor this browser ever held.
+         */
+        if (titles.action === "abort" || channels.action === "abort") {
+          console.error(
+            "TierListOnline: sign-in sync aborted, local board left untouched —",
+            titles.reason,
+            channels.reason
+          );
+          return;
         }
 
-        const localChannels = getRatedChannels();
-        if (cloudChannels.length === 0 && localChannels.length > 0) {
-          await pushCloudChannels(userId, localChannels);
-        } else {
-          reorderAllChannels(cloudChannels);
-        }
+        if (titles.action === "adopt") await pushCloudTitles(userId, localTitles);
+        else if (titles.action === "replace" && titlePull.status === "ok") reorderAll(titlePull.items);
+        else if (titles.action === "discard-local") reorderAll([]);
+
+        if (channels.action === "adopt") await pushCloudChannels(userId, localChannels);
+        else if (channels.action === "replace" && channelPull.status === "ok") {
+          reorderAllChannels(channelPull.items);
+        } else if (channels.action === "discard-local") reorderAllChannels([]);
+
+        // Whatever is on the board now is this account's.
+        stampLocalOwner(userId);
       } finally {
         syncingDownRef.current = false;
       }
+    }
+
+    /**
+     * Ends the session's claim on this browser.
+     *
+     * Called for a real sign-out and for arriving with no session at all,
+     * which is what a closed tab, a crash or an expired token looks like from
+     * here. The board goes with it: it is safe in that account's cloud, and
+     * leaving it on screen is what let the next person to sign in inherit it.
+     *
+     * The identity is dropped before anything else so the clear cannot be
+     * mistaken for an edit and pushed up — that push would delete the departing
+     * account's rankings from the cloud.
+     */
+    function releaseSession() {
+      userIdRef.current = null;
+      cancelPendingPushes();
+
+      const owner = readLocalOwner();
+      if (owner?.kind === "user") clearLocalBoards();
+      clearLocalOwner();
     }
 
     function scheduleTitlesPush() {
@@ -65,6 +138,7 @@ export function CloudSyncProvider() {
       if (titlesPushTimeoutRef.current) clearTimeout(titlesPushTimeoutRef.current);
       const userId = userIdRef.current;
       titlesPushTimeoutRef.current = setTimeout(() => {
+        if (!ownsThisSession(userId)) return;
         void pushCloudTitles(userId, getRatedTitles());
       }, PUSH_DEBOUNCE_MS);
     }
@@ -74,8 +148,20 @@ export function CloudSyncProvider() {
       if (channelsPushTimeoutRef.current) clearTimeout(channelsPushTimeoutRef.current);
       const userId = userIdRef.current;
       channelsPushTimeoutRef.current = setTimeout(() => {
+        if (!ownsThisSession(userId)) return;
         void pushCloudChannels(userId, getRatedChannels());
       }, PUSH_DEBOUNCE_MS);
+    }
+
+    /**
+     * Re-checks, at the moment of writing, that the board still belongs to the
+     * account this push was scheduled for. Half a second is long enough for a
+     * sign-out, or for another tab to hand the browser to somebody else.
+     */
+    function ownsThisSession(userId: string): boolean {
+      if (userIdRef.current !== userId) return false;
+      const owner = readLocalOwner();
+      return owner?.kind === "user" && owner.userId === userId;
     }
 
     const {
@@ -85,7 +171,7 @@ export function CloudSyncProvider() {
         userIdRef.current = session.user.id;
         void syncDown(session.user.id);
       } else {
-        userIdRef.current = null;
+        releaseSession();
       }
     });
 
@@ -96,8 +182,7 @@ export function CloudSyncProvider() {
       subscription.unsubscribe();
       window.removeEventListener(RANKINGS_CHANGED_EVENT, scheduleTitlesPush);
       window.removeEventListener(CHANNEL_RANKINGS_CHANGED_EVENT, scheduleChannelsPush);
-      if (titlesPushTimeoutRef.current) clearTimeout(titlesPushTimeoutRef.current);
-      if (channelsPushTimeoutRef.current) clearTimeout(channelsPushTimeoutRef.current);
+      cancelPendingPushes();
     };
   }, []);
 
