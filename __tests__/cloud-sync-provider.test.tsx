@@ -26,6 +26,11 @@ vi.mock("@/lib/supabase/client", () => ({
         listener = cb;
         return { data: { subscription: { unsubscribe: () => {} } } };
       },
+      // The provider reads this when a sync aborts, to record whether the
+      // browser even had a session at the moment the read was refused.
+      getSession: async () => ({
+        data: { session: { expires_at: Math.round(Date.now() / 1000) + 3600 } },
+      }),
     },
   }),
 }));

@@ -116,7 +116,21 @@ export function CloudSyncProvider() {
          */
         if (titles.action === "abort" || channels.action === "abort") {
           const reason = titles.action === "abort" ? titles.reason : channels.reason;
-          console.error("TierListOnline: sign-in sync aborted, local board left untouched —", reason);
+          /*
+           * Logged with the state of the session, not just the message. A read
+           * that comes back unauthorised is either a token that had already
+           * expired when it was sent or one the browser never had; those need
+           * different fixes, and the message alone does not say which.
+           */
+          const { data } = await supabase.auth.getSession();
+          const expiresIn = data.session?.expires_at
+            ? Math.round(data.session.expires_at - Date.now() / 1000)
+            : null;
+          console.error(
+            "TierListOnline: sign-in sync aborted, local board left untouched —",
+            reason,
+            { hasSession: Boolean(data.session), tokenExpiresInSeconds: expiresIn }
+          );
           // Said out loud rather than logged: on a device this account has not
           // used, the untouched board is an empty one.
           setSyncStatus({ state: "failed", reason });
