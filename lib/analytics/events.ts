@@ -245,3 +245,51 @@ export function trackWidgetViewed({ tierListId, theme, isCompact }: WidgetView):
     is_compact: isCompact,
   });
 }
+
+/**
+ * How the local board was labelled when a sign-in decided what to do with it.
+ *
+ * A category rather than an id: "other-user" is the state the ownership marker
+ * exists to catch, and naming the other account would file one person's id
+ * under another person's events for no diagnostic gain.
+ */
+export type SyncOwnerBefore = "none" | "guest" | "unknown" | "same-user" | "other-user";
+
+/** How much a store held — or that the question was never answered. */
+export type SyncStoreCount = number | "failed" | "not-pulled";
+
+export interface SyncDecisionProperties {
+  authEvent: string;
+  userId: string | null;
+  ownerBefore: SyncOwnerBefore;
+  localTitles: number;
+  localChannels: number;
+  cloudTitles: SyncStoreCount;
+  cloudChannels: SyncStoreCount;
+  titlesAction: string;
+  channelsAction: string;
+  reason?: string;
+}
+
+/**
+ * What a sign-in did with the board that was already on the device.
+ *
+ * One event with the outcome as a property, not an event per outcome: "how
+ * often is a board adopted, and what did the marker say when it was" is a
+ * single breakdown, and it stops being one as soon as the outcomes are filed
+ * under separate names.
+ */
+export function trackSyncDecision(props: SyncDecisionProperties): void {
+  trackEvent("sync_decision", {
+    auth_event: props.authEvent,
+    sync_user_id: props.userId,
+    owner_before: props.ownerBefore,
+    local_titles: props.localTitles,
+    local_channels: props.localChannels,
+    cloud_titles: props.cloudTitles,
+    cloud_channels: props.cloudChannels,
+    titles_action: props.titlesAction,
+    channels_action: props.channelsAction,
+    ...(props.reason ? { reason: props.reason } : {}),
+  });
+}

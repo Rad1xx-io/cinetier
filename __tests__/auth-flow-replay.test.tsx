@@ -34,6 +34,7 @@ vi.mock("@/lib/supabase/client", () => ({
 import { CloudSyncProvider } from "@/components/auth/cloud-sync-provider";
 import { getRatedTitles } from "@/lib/storage";
 import { readLocalOwner } from "@/lib/storage/local-owner";
+import { readSyncTrace } from "@/lib/storage/sync-trace";
 
 const A = "aaaaaaaa-0000-0000-0000-00000000000a";
 const B = "20148627-7cad-4935-8d03-cdce3387b22b";
@@ -69,6 +70,7 @@ function redirect() {
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   vi.clearAllMocks();
   pullCloudChannels.mockResolvedValue({ status: "ok", items: [] });
   pushCloudTitles.mockResolvedValue(undefined);
@@ -147,5 +149,35 @@ describe("ownership is claimed before the board is written", () => {
     // A page that dies between these two writes must not come back looking
     // like an unowned board — that is the state adoption acts on.
     expect(owner).toBeLessThan(rankings);
+  });
+});
+
+describe("the trace is readable after the fact", () => {
+  it("holds the whole sign-in, across the reloads that clear the console", async () => {
+    pullCloudTitles.mockResolvedValue({ status: "ok", items: [] });
+    await pageLoad(null);
+
+    redirect();
+    pullCloudTitles.mockResolvedValue({ status: "ok", items: board(59) });
+    await pageLoad({ id: A });
+
+    listener("SIGNED_OUT" as AuthChangeEvent, null);
+    await new Promise((r) => setTimeout(r, 10));
+
+    redirect();
+    pullCloudTitles.mockResolvedValue({ status: "ok", items: [] });
+    await pageLoad({ id: B });
+
+    // Nobody armed Preserve Log; nobody kept a tab open. The sequence is still
+    // there to be read, with the marker each decision was made on.
+    const trace = readSyncTrace();
+    expect(trace.map((e) => [e.authEvent, e.ownerBefore, e.titlesAction])).toEqual([
+      // A first load with nobody signed in: an empty board, kept as it is.
+      ["INITIAL_SESSION", "guest", "kept"],
+      ["INITIAL_SESSION", "guest", "replace"],
+      // The board belonged to the session being ended, and went with it.
+      ["SIGNED_OUT", "same-user", "cleared"],
+      ["INITIAL_SESSION", "guest", "replace"],
+    ]);
   });
 });

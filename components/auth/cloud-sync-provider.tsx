@@ -17,6 +17,7 @@ import {
   stampLocalOwner,
 } from "@/lib/storage/local-owner";
 import { decideSync } from "@/lib/storage/sync-decision";
+import { describeCount, describeOwner, recordSyncTrace } from "@/lib/storage/sync-trace";
 import { registerSyncRetry, setSyncStatus } from "@/lib/storage/sync-status";
 
 const PUSH_DEBOUNCE_MS = 600;
@@ -93,7 +94,7 @@ export function CloudSyncProvider() {
       return last;
     }
 
-    async function syncDown(userId: string) {
+    async function syncDown(userId: string, authEvent = "retry") {
       syncingDownRef.current = true;
       setSyncStatus({ state: "syncing" });
       try {
@@ -109,17 +110,24 @@ export function CloudSyncProvider() {
         const titles = decideSync(owner, titlePull, localTitles.length, userId);
         const channels = decideSync(owner, channelPull, localChannels.length, userId);
 
-        // Every ownership decision is on the record. A board arriving in the
-        // wrong account is not something to reconstruct from its aftermath.
-        console.info("TierListOnline sync:", {
+        // Every ownership decision is on the record, and on a record that
+        // outlives the page. A board arriving in the wrong account should be
+        // read off a trace, not reconstructed from its aftermath.
+        recordSyncTrace({
+          authEvent,
           userId,
-          ownerBefore: owner,
+          ownerBefore: describeOwner(owner, userId),
           localTitles: localTitles.length,
           localChannels: localChannels.length,
-          cloudTitles: titlePull.status === "ok" ? titlePull.items.length : titlePull.status,
-          cloudChannels: channelPull.status === "ok" ? channelPull.items.length : channelPull.status,
-          titles: titles.action,
-          channels: channels.action,
+          cloudTitles: describeCount(titlePull),
+          cloudChannels: describeCount(channelPull),
+          titlesAction: titles.action,
+          channelsAction: channels.action,
+          ...(titles.action === "abort"
+            ? { reason: titles.reason }
+            : channels.action === "abort"
+              ? { reason: channels.reason }
+              : {}),
         });
 
         /*
@@ -190,14 +198,33 @@ export function CloudSyncProvider() {
      * mistaken for an edit and pushed up — that push would delete the departing
      * account's rankings from the cloud.
      */
-    function releaseSession() {
+    function releaseSession(authEvent = "SIGNED_OUT") {
+      // Read before it is dropped: comparing the board's owner against the
+      // session being ended is what makes "this account's own board" and
+      // "somebody else's, still here" different lines in the trace.
+      const releasing = userIdRef.current;
       userIdRef.current = null;
       cancelPendingPushes();
       setSyncStatus({ state: "idle" });
 
       const owner = readLocalOwner();
-      if (owner?.kind === "user") clearLocalBoards();
+      const clearing = owner?.kind === "user";
+      if (clearing) clearLocalBoards();
       clearLocalOwner();
+
+      // Whether signing out emptied the board is exactly what nobody could
+      // answer without watching it happen. Now it answers itself.
+      recordSyncTrace({
+        authEvent,
+        userId: releasing,
+        ownerBefore: describeOwner(owner, releasing),
+        localTitles: getRatedTitles().length,
+        localChannels: getRatedChannels().length,
+        cloudTitles: "not-pulled",
+        cloudChannels: "not-pulled",
+        titlesAction: clearing ? "cleared" : "kept",
+        channelsAction: clearing ? "cleared" : "kept",
+      });
     }
 
     function scheduleTitlesPush() {
@@ -233,12 +260,12 @@ export function CloudSyncProvider() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (session?.user) {
         userIdRef.current = session.user.id;
-        void syncDown(session.user.id);
+        void syncDown(session.user.id, event);
       } else {
-        releaseSession();
+        releaseSession(event);
       }
     });
 
