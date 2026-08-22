@@ -109,6 +109,19 @@ export function CloudSyncProvider() {
         const titles = decideSync(owner, titlePull, localTitles.length, userId);
         const channels = decideSync(owner, channelPull, localChannels.length, userId);
 
+        // Every ownership decision is on the record. A board arriving in the
+        // wrong account is not something to reconstruct from its aftermath.
+        console.info("TierListOnline sync:", {
+          userId,
+          ownerBefore: owner,
+          localTitles: localTitles.length,
+          localChannels: localChannels.length,
+          cloudTitles: titlePull.status === "ok" ? titlePull.items.length : titlePull.status,
+          cloudChannels: channelPull.status === "ok" ? channelPull.items.length : channelPull.status,
+          titles: titles.action,
+          channels: channels.action,
+        });
+
         /*
          * One failed read stops both halves. A dropped request is not evidence
          * of an empty account, and applying half a sync would leave the board
@@ -137,6 +150,19 @@ export function CloudSyncProvider() {
           return;
         }
 
+        /*
+         * The marker is written first, and that order is the point.
+         *
+         * It used to be stamped at the end, after both stores had been dealt
+         * with — which left a window where the board already held this
+         * account's rankings while the marker still said `guest`. Anything
+         * that ended the page in that window (a navigation, a thrown request,
+         * a closed tab) froze the browser in the one state that adoption reads
+         * as consent: somebody else's board, labelled as nobody's. Claiming
+         * ownership before touching the data cannot leave that behind.
+         */
+        stampLocalOwner(userId);
+
         if (titles.action === "adopt") await pushCloudTitles(userId, localTitles);
         else if (titles.action === "replace" && titlePull.status === "ok") reorderAll(titlePull.items);
         else if (titles.action === "discard-local") reorderAll([]);
@@ -146,8 +172,6 @@ export function CloudSyncProvider() {
           reorderAllChannels(channelPull.items);
         } else if (channels.action === "discard-local") reorderAllChannels([]);
 
-        // Whatever is on the board now is this account's.
-        stampLocalOwner(userId);
         setSyncStatus({ state: "idle" });
       } finally {
         syncingDownRef.current = false;
