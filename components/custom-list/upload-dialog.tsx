@@ -6,6 +6,7 @@ import type { CustomTierRow } from "@/lib/types/custom-list";
 import { MAX_UPLOAD_BYTES } from "@/lib/custom-lists/uploads";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { trackCustomItemUploaded } from "@/lib/analytics/events";
 
 interface UploadDialogProps {
   listId: string;
@@ -65,6 +66,13 @@ export function UploadDialog({ listId, rows, onUploaded }: UploadDialogProps) {
         setError(body.error ?? "The picture could not be uploaded.");
         return;
       }
+      // Measured from the file that was actually accepted, not from the form:
+      // the size is what the storage forecast is built on.
+      trackCustomItemUploaded({
+        byteSize: file.size,
+        contentType: file.type,
+        placedInTier: rowId !== "",
+      });
       reset();
       setOpen(false);
       onUploaded();

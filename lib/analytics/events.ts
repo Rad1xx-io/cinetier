@@ -293,3 +293,23 @@ export function trackSyncDecision(props: SyncDecisionProperties): void {
     ...(props.reason ? { reason: props.reason } : {}),
   });
 }
+
+/**
+ * A picture accepted onto a custom board.
+ *
+ * Carries the byte size because the question this answers is not "how popular
+ * is the feature" but "when does the storage plan run out" — and that cannot be
+ * worked out from a count of uploads without knowing how big they are.
+ */
+export function trackCustomItemUploaded(props: {
+  byteSize: number;
+  contentType: string;
+  /** Whether it went straight to a tier or waited in the unsorted pool. */
+  placedInTier: boolean;
+}): void {
+  trackEvent("custom_item_uploaded", {
+    byte_size: props.byteSize,
+    content_type: props.contentType,
+    placed_in_tier: props.placedInTier,
+  });
+}

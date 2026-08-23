@@ -200,6 +200,12 @@ begin
     raise exception 'Sign in to upload a picture.' using errcode = '42501';
   end if;
 
+  -- Counting and then inserting is two steps, and two requests arriving
+  -- together would both read the same count and both be allowed. One lock per
+  -- person, held to the end of the transaction, makes the daily limit a limit
+  -- rather than a strong suggestion.
+  perform pg_advisory_xact_lock(hashtext(v_user::text));
+
   if p_rights_confirmed is not true then
     raise exception 'Confirm you have the right to use this image.' using errcode = '22023';
   end if;
@@ -264,6 +270,7 @@ declare
   v_user uuid := auth.uid();
   v_grant public.upload_grants%rowtype;
   v_size bigint;
+  v_mimetype text;
   v_item uuid;
 begin
   select * into v_grant
@@ -284,6 +291,27 @@ begin
 
   if v_size > 2 * 1024 * 1024 then
     raise exception 'Images must be under 2 MB.' using errcode = '22023';
+  end if;
+
+  /*
+   * The recorded type decides how the file comes back down the wire, and that
+   * makes it a security control rather than a label. An SVG is a document: it
+   * can carry <script>, and served as image/svg+xml at a signed url it would
+   * run that script on the storage origin. Served as image/png it is a broken
+   * picture and nothing more.
+   *
+   * The uploader chooses this value, so it is not evidence of what the file is
+   * — the leading bytes are, and those are read by the upload route. What this
+   * guarantees is narrower and still worth having: whatever a card points at
+   * is served as one of three image types, so a file that slipped past the
+   * route is inert rather than executable.
+   */
+  select o.metadata ->> 'mimetype' into v_mimetype
+  from storage.objects o
+  where o.bucket_id = 'custom-uploads' and o.name = p_path;
+
+  if coalesce(v_mimetype, '') not in ('image/jpeg', 'image/png', 'image/webp') then
+    raise exception 'Images must be JPEG, PNG or WebP.' using errcode = '22023';
   end if;
 
   update public.upload_grants set consumed_at = now() where id = v_grant.id;
