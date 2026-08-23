@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Density } from "@/lib/hooks/use-density";
 import type { SortMode } from "@/lib/utils/tier-grouping";
-import { CATEGORY_FILTERS, type CategoryFilter } from "@/lib/utils/content-type";
+import { type CategoryFilter } from "@/lib/utils/content-type";
+import { TierListPicker, type CatalogCounts } from "@/components/tier-list/tier-list-picker";
 import { cn } from "@/lib/utils/cn";
 
 interface ToolbarProps {
@@ -13,6 +14,8 @@ interface ToolbarProps {
   onSearchChange: (value: string) => void;
   mediaFilter: CategoryFilter;
   onMediaFilterChange: (value: CategoryFilter) => void;
+  /** Sizes the picker's counts — the board already knows them. */
+  counts: CatalogCounts;
   sort: SortMode;
   onSortChange: (value: SortMode) => void;
   density: Density;
@@ -22,15 +25,12 @@ interface ToolbarProps {
   saved: boolean;
 }
 
-// Shared with the public list so both places name the catalogs identically —
-// "youtube" included, which the board now holds alongside RankedTitle rows.
-const MEDIA_OPTIONS = CATEGORY_FILTERS;
-
 export function Toolbar({
   search,
   onSearchChange,
   mediaFilter,
   onMediaFilterChange,
+  counts,
   sort,
   onSortChange,
   density,
@@ -64,29 +64,7 @@ export function Toolbar({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Six labels do not fit one line on a 375px screen, and the row is the
-              widest thing on the page — wrapping keeps it inside the viewport
-              instead of giving the whole document a horizontal scrollbar. */}
-          <div
-            className="flex flex-wrap rounded-lg border border-border p-0.5"
-            role="group"
-            aria-label="Filter by type"
-          >
-            {MEDIA_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => onMediaFilterChange(opt.value)}
-                className={cn(
-                  "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                  mediaFilter === opt.value ? "bg-accent text-accent-foreground" : "text-muted hover:text-foreground"
-                )}
-                aria-pressed={mediaFilter === opt.value}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <TierListPicker value={mediaFilter} onChange={onMediaFilterChange} counts={counts} />
 
           <div className="flex rounded-lg border border-border p-0.5" role="group" aria-label="Display density">
             <button

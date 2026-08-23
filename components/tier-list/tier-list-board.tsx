@@ -35,6 +35,7 @@ import { applyDrop, flattenBuckets, tierCollisionDetection } from "@/lib/utils/t
 import { TierRow } from "@/components/tier-list/tier-row";
 import { Toolbar } from "@/components/tier-list/toolbar";
 import { TierListActions } from "@/components/tier-list/tier-list-actions";
+import type { CatalogCounts } from "@/components/tier-list/tier-list-picker";
 import { Toast } from "@/components/ui/toast";
 import { useToast } from "@/lib/hooks/use-toast";
 import { Poster } from "@/components/movie-card/poster";
@@ -155,6 +156,17 @@ export function TierListBoard() {
   );
 
   const isDefaultFilters = search === "" && mediaFilter === "all" && sort === "manual";
+
+  /*
+   * What each catalog holds, for the list picker. Counted over everything
+   * ranked rather than over what the current filter shows, so the numbers keep
+   * meaning the same thing while switching between lists.
+   */
+  const catalogCounts = useMemo<CatalogCounts>(() => {
+    const counts: CatalogCounts = { movie: 0, tv: 0, anime: 0, game: 0, youtube: channels.length };
+    for (const title of titles) counts[title.mediaType] += 1;
+    return counts;
+  }, [titles, channels]);
 
   /**
    * A media tab or a search term only *hides* cards — the ones still on screen
@@ -352,6 +364,7 @@ export function TierListBoard() {
 
       <div className="mt-4 px-4 md:px-0">
         <Toolbar
+          counts={catalogCounts}
           search={search}
           onSearchChange={setSearch}
           mediaFilter={mediaFilter}
