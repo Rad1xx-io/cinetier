@@ -30,7 +30,7 @@ import {
   type BoardBuckets,
   type BoardItem,
 } from "@/lib/utils/board-item";
-import { type CategoryFilter } from "@/lib/utils/content-type";
+import { firstStockedCatalog, type ContentType } from "@/lib/utils/content-type";
 import { applyDrop, flattenBuckets, tierCollisionDetection } from "@/lib/utils/tier-dnd";
 import { TierRow } from "@/components/tier-list/tier-row";
 import { Toolbar } from "@/components/tier-list/toolbar";
@@ -79,6 +79,7 @@ export function TierListBoard() {
   const { titles, hydrated, remove, setTier, reorderAll } = useRankedTitles();
   const {
     channels,
+    hydrated: channelsHydrated,
     remove: removeChannel,
     setTier: setChannelTier,
     reorderAll: reorderAllChannels,
@@ -108,7 +109,9 @@ export function TierListBoard() {
   }, [notify]);
 
   const [search, setSearch] = useState("");
-  const [mediaFilter, setMediaFilter] = useState<CategoryFilter>("all");
+  // Null until there is something to choose from: the answer depends on what
+  // has been ranked, and that is not known until both stores have hydrated.
+  const [mediaFilter, setMediaFilter] = useState<ContentType | null>(null);
   const [sort, setSort] = useState<SortMode>("manual");
 
   /**
@@ -155,7 +158,10 @@ export function TierListBoard() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const isDefaultFilters = search === "" && mediaFilter === "all" && sort === "manual";
+  // The chosen catalog is not part of this. With no "everything" option there
+  // is no neutral value to return to, and resetting the filters out from under
+  // somebody who picked a list would be a reset they did not ask for.
+  const isDefaultFilters = search === "" && sort === "manual";
 
   /*
    * What each catalog holds, for the list picker. Counted over everything
@@ -167,6 +173,23 @@ export function TierListBoard() {
     for (const title of titles) counts[title.mediaType] += 1;
     return counts;
   }, [titles, channels]);
+
+  /*
+   * Settles which list opens, once, during the first render that has data to
+   * answer from — the same during-render adjustment the feed uses for its tabs,
+   * rather than an effect, which would render an empty board first and then
+   * replace it.
+   *
+   * Once set it is never recomputed: ranking a film later must not move
+   * somebody off the list they are looking at.
+   */
+  if (mediaFilter === null && hydrated && channelsHydrated) {
+    setMediaFilter(firstStockedCatalog(catalogCounts));
+  }
+
+  // Only stands in for the render before hydration settles the answer, which
+  // shows a skeleton rather than a board.
+  const activeCatalog = mediaFilter ?? firstStockedCatalog(catalogCounts);
 
   /**
    * A media tab or a search term only *hides* cards — the ones still on screen
@@ -305,7 +328,6 @@ export function TierListBoard() {
 
   function handleReset() {
     setSearch("");
-    setMediaFilter("all");
     setSort("manual");
   }
 
@@ -314,12 +336,12 @@ export function TierListBoard() {
     for (const tier of TIER_ORDER) {
       result[tier] = filterAndSortBoardItems(containers[tier], {
         search,
-        category: mediaFilter,
+        category: activeCatalog,
         sort,
       });
     }
     return result;
-  }, [containers, search, mediaFilter, sort]);
+  }, [containers, search, activeCatalog, sort]);
 
   const activeItem = activeId
     ? TIER_ORDER.flatMap((t) => containers[t]).find((i) => boardItemKey(i) === activeId)
@@ -367,7 +389,7 @@ export function TierListBoard() {
           counts={catalogCounts}
           search={search}
           onSearchChange={setSearch}
-          mediaFilter={mediaFilter}
+          mediaFilter={activeCatalog}
           onMediaFilterChange={setMediaFilter}
           sort={sort}
           onSortChange={setSort}
