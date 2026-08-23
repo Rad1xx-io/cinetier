@@ -45,12 +45,23 @@ export function CustomTierRow({
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function uploadLabelImage(file: File) {
+    // A tier picture is an upload like any other, so it is asked the same
+    // question. Answered here rather than in a dialog because this control is
+    // one icon in a narrow column — but it is asked, and the server refuses an
+    // upload that says no.
+    const confirmed = window.confirm(
+      "Do you have the right to use this image, and does it follow the site's rules?"
+    );
+    if (!confirmed) {
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+
     setUploading(true);
     const form = new FormData();
     form.set("file", file);
     form.set("listId", listId);
     form.set("tierRowId", row.id);
-    // The same question the card upload asks; a tier picture is an upload too.
     form.set("rightsConfirmed", "true");
     try {
       const res = await fetch("/api/custom-uploads", { method: "POST", body: form });

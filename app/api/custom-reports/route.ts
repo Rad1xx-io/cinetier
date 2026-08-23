@@ -15,6 +15,38 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const SUBJECT_TYPES = new Set(["custom_item", "custom_list"]);
 
+/**
+ * Tells somebody, if there is somebody to tell.
+ *
+ * A log line is only a notification if a person is watching the logs, and the
+ * point of a report is that it reaches whoever can act on it. Any webhook that
+ * accepts a JSON body works — Slack and Discord both do — and with no url
+ * configured this does nothing, so the report is still filed either way.
+ *
+ * Failure here is swallowed on purpose: the report is already in the database,
+ * and losing the ping is better than answering the person who reported it with
+ * an error.
+ */
+async function notify(report: { subjectType: string; subjectId: string; reason: string }) {
+  const url = process.env.CONTENT_REPORT_WEBHOOK_URL;
+  if (!url) return;
+
+  const text = `TierListOnline: ${report.subjectType} reported
+${report.subjectId}
+${report.reason}`;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // `text` and `content` together: the first is what Slack reads, the
+      // second is what Discord reads, and an unknown endpoint gets both.
+      body: JSON.stringify({ text, content: text, ...report }),
+    });
+  } catch {
+    // See above.
+  }
+}
+
 export async function POST(request: Request) {
   const supabase = await getSupabaseServerClient();
   if (!supabase) return NextResponse.json({ error: "Not configured." }, { status: 503 });
@@ -64,6 +96,8 @@ export async function POST(request: Request) {
   // event here that wants somebody's attention today rather than in a weekly
   // digest, and error level is what the deployment's alerting watches.
   console.error("TierListOnline: content reported —", { subjectType, subjectId, reason });
+
+  await notify({ subjectType, subjectId, reason });
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }
