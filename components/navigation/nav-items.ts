@@ -7,6 +7,7 @@ import {
   ListChecks,
   SquarePlay,
   MessagesSquare,
+  Images,
 } from "lucide-react";
 
 export interface NavItem {
@@ -23,6 +24,9 @@ const YOUTUBE: NavItem = { href: "/youtube", label: "YouTube", icon: SquarePlay 
 const GAMES: NavItem = { href: "/games", label: "Games", icon: Gamepad2 };
 const FEED: NavItem = { href: "/feed", label: "Feed", icon: MessagesSquare };
 const SETTINGS: NavItem = { href: "/settings", label: "Settings", icon: Settings };
+// Boards built from uploaded pictures rather than from a catalogue, so it sits
+// apart from the catalogue row rather than in it.
+const CUSTOM: NavItem = { href: "/custom", label: "Custom", icon: Images };
 
 /**
  * The tab the whole app exists for. It gets the centre slot of the desktop
@@ -62,7 +66,7 @@ export const DESKTOP_NAV_LEFT: NavItem[] = [FEED, MOVIES, ANIME];
 export const DESKTOP_NAV_RIGHT: NavItem[] = [YOUTUBE, GAMES];
 
 /** Categories that don't get a primary header slot yet — rendered under "More" once non-empty. */
-export const NAV_OVERFLOW_ITEMS: NavItem[] = [];
+export const NAV_OVERFLOW_ITEMS: NavItem[] = [CUSTOM];
 
 /** `/` only matches exactly; other routes also match their nested sub-pages (e.g. /youtube/tier-list). */
 export function isNavItemActive(pathname: string, href: string): boolean {
