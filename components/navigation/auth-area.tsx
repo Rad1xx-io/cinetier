@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Download, ListChecks, LogOut, Settings as SettingsIcon, User } from "lucide-react";
+import { ChevronDown, Download, ListChecks, LogOut, Settings as SettingsIcon, User, Images } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MagicLinkForm } from "@/components/auth/magic-link-form";
@@ -127,6 +127,9 @@ function AccountMenu({ email, compact }: { email: string; compact: boolean }) {
           <p className="truncate px-2.5 py-1.5 text-xs text-muted lg:hidden">{email}</p>
           <MenuLink href="/profile" icon={User} label="Profile" onClick={() => setOpen(false)} />
           <MenuLink href="/tier-list" icon={ListChecks} label="My rankings" onClick={() => setOpen(false)} />
+          {/* Also in the desktop overflow, but the account menu is the only way
+              to reach it from a phone — the tab bar is full. */}
+          <MenuLink href="/custom" icon={Images} label="Custom lists" onClick={() => setOpen(false)} />
           <MenuLink href="/settings" icon={SettingsIcon} label="Settings" onClick={() => setOpen(false)} />
           <MenuLink href="/settings#export" icon={Download} label="Export data" onClick={() => setOpen(false)} />
           <div className="my-1 h-px bg-border" />
