@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { TierListPicker, type CatalogCounts } from "@/components/tier-list/tier-list-picker";
-import type { CategoryFilter } from "@/lib/utils/content-type";
+import { firstStockedCatalog, type ContentType } from "@/lib/utils/content-type";
 
 const counts: CatalogCounts = { movie: 8, tv: 0, anime: 3, game: 0, youtube: 2 };
 
-function renderPicker(value: CategoryFilter = "all") {
+function renderPicker(value: ContentType = "movie") {
   const onChange = vi.fn();
   render(<TierListPicker value={value} onChange={onChange} counts={counts} />);
   const trigger = screen.getByRole("button", { name: /choose a list/i });
@@ -20,13 +20,25 @@ describe("choosing which list the board shows", () => {
     expect(screen.getByRole("button", { name: /showing anime/i })).toBeTruthy();
   });
 
-  it("totals every catalog behind the All entry", () => {
+  it("offers the five catalogs and nothing that mixes them", () => {
     const { open } = renderPicker();
     open();
 
-    const all = screen.getByRole("menuitemradio", { name: /^all/i });
-    expect(all.textContent).toContain("13");
-    expect(all.getAttribute("aria-checked")).toBe("true");
+    const options = screen.getAllByRole("menuitemradio").map((el) => el.textContent ?? "");
+    expect(options).toHaveLength(5);
+    // A tier holding films, games and channels together ranks them against each
+    // other, which is not a comparison anybody made.
+    expect(options.some((label) => /^all/i.test(label))) .toBe(false);
+    expect(screen.queryByRole("menuitemradio", { name: /^all/i })).toBeNull();
+  });
+
+  it("marks the open list as the chosen one", () => {
+    const { open } = renderPicker("movie");
+    open();
+
+    expect(
+      screen.getByRole("menuitemradio", { name: /films/i }).getAttribute("aria-checked")
+    ).toBe("true");
   });
 
   it("shows an empty catalog as empty rather than hiding it", () => {
@@ -63,5 +75,20 @@ describe("choosing which list the board shows", () => {
     fireEvent.pointerDown(document.body);
 
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+});
+
+describe("which list opens first", () => {
+  it("opens on the first catalog that actually holds something", () => {
+    expect(firstStockedCatalog({ movie: 0, tv: 0, anime: 4, game: 2, youtube: 0 })).toBe("anime");
+    expect(firstStockedCatalog({ movie: 0, tv: 0, anime: 0, game: 0, youtube: 7 })).toBe("youtube");
+  });
+
+  it("prefers films when several hold something, so the order is predictable", () => {
+    expect(firstStockedCatalog({ movie: 1, tv: 9, anime: 9, game: 9, youtube: 9 })).toBe("movie");
+  });
+
+  it("falls back to films for somebody who has ranked nothing at all", () => {
+    expect(firstStockedCatalog({ movie: 0, tv: 0, anime: 0, game: 0, youtube: 0 })).toBe("movie");
   });
 });

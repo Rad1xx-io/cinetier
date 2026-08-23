@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Clapperboard, Drama, Gamepad2, Layers, SquarePlay, Tv } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Drama, Gamepad2, SquarePlay, Tv } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { CATEGORY_FILTERS, type CategoryFilter, type ContentType } from "@/lib/utils/content-type";
+import { CATALOG_FILTERS, type ContentType } from "@/lib/utils/content-type";
 import { cn } from "@/lib/utils/cn";
 
 /** How many ranked entries each catalog holds, for the counts beside the names. */
 export type CatalogCounts = Record<ContentType, number>;
 
-const ICONS: Record<CategoryFilter, LucideIcon> = {
-  all: Layers,
+const ICONS: Record<ContentType, LucideIcon> = {
   movie: Clapperboard,
   tv: Tv,
   anime: Drama,
@@ -18,21 +17,16 @@ const ICONS: Record<CategoryFilter, LucideIcon> = {
   youtube: SquarePlay,
 };
 
-function countFor(value: CategoryFilter, counts: CatalogCounts): number {
-  if (value !== "all") return counts[value];
-  return Object.values(counts).reduce((sum, n) => sum + n, 0);
-}
-
 interface TierListPickerProps {
-  value: CategoryFilter;
-  onChange: (value: CategoryFilter) => void;
+  value: ContentType;
+  onChange: (value: ContentType) => void;
   counts: CatalogCounts;
 }
 
 /**
  * Which list the board is showing.
  *
- * Replaces a row of six chips. Six labels do not fit one line on a phone, so
+ * Replaces a row of chips. Six labels do not fit one line on a phone, so
  * the row wrapped and became the widest thing on the page — and it read as six
  * filters of equal weight rather than as one question with one answer. A
  * trigger that names the current list answers that question before it is asked,
@@ -68,7 +62,7 @@ export function TierListPicker({ value, onChange, counts }: TierListPickerProps)
     };
   }, [open]);
 
-  const current = CATEGORY_FILTERS.find((o) => o.value === value) ?? CATEGORY_FILTERS[0];
+  const current = CATALOG_FILTERS.find((o) => o.value === value) ?? CATALOG_FILTERS[0];
   const CurrentIcon = ICONS[current.value];
 
   return (
@@ -84,7 +78,7 @@ export function TierListPicker({ value, onChange, counts }: TierListPickerProps)
       >
         <CurrentIcon className="h-3.5 w-3.5 text-muted" aria-hidden />
         {current.label}
-        <span className="text-muted">{countFor(current.value, counts)}</span>
+        <span className="text-muted">{counts[current.value]}</span>
         <ChevronDown
           className={cn("h-3.5 w-3.5 text-muted transition-transform", open && "rotate-180")}
           aria-hidden
@@ -97,10 +91,10 @@ export function TierListPicker({ value, onChange, counts }: TierListPickerProps)
           aria-label="Choose a list"
           className="absolute right-0 z-40 mt-1 w-52 overflow-hidden rounded-xl border border-border bg-surface-raised p-1 shadow-lg"
         >
-          {CATEGORY_FILTERS.map((option) => {
+          {CATALOG_FILTERS.map((option) => {
             const Icon = ICONS[option.value];
             const selected = option.value === value;
-            const count = countFor(option.value, counts);
+            const count = counts[option.value];
             return (
               <button
                 key={option.value}

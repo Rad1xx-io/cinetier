@@ -5,15 +5,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Density } from "@/lib/hooks/use-density";
 import type { SortMode } from "@/lib/utils/tier-grouping";
-import { type CategoryFilter } from "@/lib/utils/content-type";
+import { type ContentType } from "@/lib/utils/content-type";
 import { TierListPicker, type CatalogCounts } from "@/components/tier-list/tier-list-picker";
 import { cn } from "@/lib/utils/cn";
 
 interface ToolbarProps {
   search: string;
   onSearchChange: (value: string) => void;
-  mediaFilter: CategoryFilter;
-  onMediaFilterChange: (value: CategoryFilter) => void;
+  mediaFilter: ContentType;
+  onMediaFilterChange: (value: ContentType) => void;
   /** Sizes the picker's counts — the board already knows them. */
   counts: CatalogCounts;
   sort: SortMode;

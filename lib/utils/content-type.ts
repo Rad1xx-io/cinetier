@@ -109,11 +109,37 @@ export function rankedCatalogsLabel(types: Iterable<MediaType>): string | null {
 /** "all" plus every catalog — the vocabulary any category filter draws from. */
 export type CategoryFilter = "all" | ContentType;
 
-export const CATEGORY_FILTERS: { value: CategoryFilter; label: string }[] = [
-  { value: "all", label: "All" },
+/**
+ * The catalogs themselves, in the order they are offered.
+ *
+ * The board picks one of these and shows that list. There is deliberately no
+ * "everything at once" entry: a single tier holding films, games and YouTube
+ * channels side by side compares things that were never ranked against each
+ * other, and the row it produces is not a ranking of anything.
+ */
+export const CATALOG_FILTERS: { value: ContentType; label: string }[] = [
   { value: "movie", label: "Films" },
   { value: "tv", label: "TV" },
   { value: "anime", label: "Anime" },
   { value: "game", label: "Games" },
   { value: "youtube", label: "YouTube" },
 ];
+
+/** The same catalogs plus "all", for the places that still filter rather than choose. */
+export const CATEGORY_FILTERS: { value: CategoryFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  ...CATALOG_FILTERS,
+];
+
+/**
+ * Which list to open on.
+ *
+ * The first catalog holding anything, in the order above — falling back to
+ * films for somebody who has ranked nothing yet, who has no better answer
+ * available. A fixed catalog would greet anyone who only ranks games with an
+ * empty board every single visit, and an unexpectedly empty board is the one
+ * thing this app must never show without meaning it.
+ */
+export function firstStockedCatalog(counts: Record<ContentType, number>): ContentType {
+  return CATALOG_FILTERS.find((entry) => counts[entry.value] > 0)?.value ?? "movie";
+}
