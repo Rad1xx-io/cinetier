@@ -19,13 +19,7 @@ import type { RankedTitle } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
 import { shareUrl } from "@/lib/seo/site";
 import { describeExportFailure } from "@/lib/utils/export-error";
-
-/** Stands in for a cover the browser could not fetch. 1x1, fully transparent. */
-const TRANSPARENT_PIXEL =
-  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-
-/** The board is transparent by design; the export paints this behind it. */
-const BOARD_BACKGROUND = "#09090b";
+import { BOARD_BACKGROUND, boardSvgOptions } from "@/lib/utils/board-export";
 
 /** Retina-ish scale for the poster art. */
 const EXPORT_SCALE = 2;
@@ -123,41 +117,7 @@ export function TierListActions({
        * What follows is what the library's toCanvas does, minus that frame.
        */
       const render = (async () => {
-        const svg = await toSvg(node, {
-          backgroundColor: BOARD_BACKGROUND,
-          // Controls are hidden for the shot via the data attribute below.
-          filter: (el) => !(el instanceof HTMLElement && el.dataset.exportHide !== undefined),
-          /*
-           * One cover that will not load must not cost the whole board.
-           *
-           * The library inlines every image as a data URI before it rasterises
-           * anything. When a fetch fails — TMDB genuinely 404s a few posters,
-           * and the optimiser answers a burst of parallel requests with rate
-           * limits — it falls back to this placeholder, and without one it
-           * assigns an empty src instead, which fires an error event that
-           * rejects the entire export. `onImageErrorHandler` catches the same
-           * thing one step later, for an image that loads to something the
-           * browser then refuses to decode.
-           */
-          imagePlaceholder: TRANSPARENT_PIXEL,
-          onImageErrorHandler: () => {},
-          /*
-           * Every cover on the board is one `/_next/image` request, and they
-           * differ only in the query. The library caches what it inlines, and
-           * its key drops the query unless this is set — so all of them share
-           * one entry. Within a single export the fetches start together and
-           * each card still gets its own picture, but the entry keeps whichever
-           * finished last, and the *next* export in the same tab hands that one
-           * image to every card. Filters looked like the trigger only because
-           * changing one is what makes somebody export twice.
-           */
-          includeQueryParams: true,
-          // Without this the library walks every stylesheet and inlines each web
-          // font as a data URI before it will rasterise anything — on a slow link
-          // that step alone can outlast the user's patience, and it buys nothing
-          // here because the export is a picture of posters, not of typography.
-          skipFonts: true,
-        });
+        const svg = await toSvg(node, boardSvgOptions());
 
         const image = new Image();
         image.decoding = "async";
