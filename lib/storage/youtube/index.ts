@@ -2,6 +2,7 @@ import { localStorageChannelRepository } from "@/lib/storage/youtube/local-stora
 import type { ChannelRankingRepository } from "@/lib/storage/youtube/repository";
 import type { TierOrUnrated } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
+import { rememberCatalogIfUnset } from "@/lib/storage/last-catalog";
 
 export { CHANNEL_RANKINGS_CHANGED_EVENT } from "@/lib/storage/youtube/local-storage-repository";
 export type { AddChannelInput, ChannelRankingRepository } from "@/lib/storage/youtube/repository";
@@ -19,6 +20,7 @@ export function getRankedChannel(channelId: string): RankedChannel | undefined {
 export function addChannel(
   input: Parameters<ChannelRankingRepository["add"]>[0]
 ): RankedChannel {
+  rememberCatalogIfUnset("youtube");
   return channelRepository.add(input);
 }
 
