@@ -16,6 +16,18 @@ const TRANSPARENT_PIXEL =
 /** The board is transparent by design; the export paints this behind it. */
 const BOARD_BACKGROUND = "#09090b";
 
+/** Retina-ish scale for the artwork. */
+const EXPORT_SCALE = 2;
+
+/**
+ * Browsers stop honouring a canvas past roughly this on a side and return a
+ * blank one, so a very tall board is scaled down rather than exported empty.
+ */
+const MAX_CANVAS_SIDE = 16_384;
+
+/** How long to wait before giving up, so a stalled capture is not forever. */
+export const EXPORT_TIMEOUT_MS = 20_000;
+
 export { TRANSPARENT_PIXEL, BOARD_BACKGROUND };
 
 export function boardSvgOptions(): Options {
@@ -73,4 +85,65 @@ export function boardSvgOptions(): Options {
     // here because the export is a picture of posters, not of typography.
     skipFonts: true,
   };
+}
+
+/**
+ * Rasterises a board element and hands back a PNG data url.
+ *
+ * `toPng` is deliberately not used. It ends in the library's own
+ * `createImage`, which resolves inside a `requestAnimationFrame` — and a tab
+ * that is not compositing is never given a frame, so the promise never settles
+ * and the export dies on the timeout with nothing to show. What follows is
+ * what the library's `toCanvas` does, minus that frame.
+ */
+export async function renderBoardPng(node: HTMLElement): Promise<string> {
+  // Imported here rather than at module scope: the library is only needed the
+  // moment somebody actually exports, and it is far from small.
+  const { toSvg } = await import("html-to-image");
+
+  const render = (async () => {
+    const svg = await toSvg(node, boardSvgOptions());
+
+    const image = new Image();
+    image.decoding = "async";
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("the board could not be rasterised"));
+      image.src = svg;
+    });
+
+    // The SVG carries the size the library measured, so the canvas takes it
+    // from the image rather than measuring the board a second time.
+    const width = image.naturalWidth || node.clientWidth;
+    const height = image.naturalHeight || node.clientHeight;
+    const scale = Math.min(EXPORT_SCALE, MAX_CANVAS_SIDE / Math.max(width, height));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.floor(width * scale);
+    canvas.height = Math.floor(height * scale);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("this browser offered no canvas to draw on");
+
+    // The board is transparent by design, so without this the PNG comes out
+    // see-through, which reads as black in most viewers.
+    context.fillStyle = BOARD_BACKGROUND;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL();
+  })();
+
+  return Promise.race([
+    render,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("export-timeout")), EXPORT_TIMEOUT_MS)
+    ),
+  ]);
+}
+
+/** Offers a rendered board to the browser as a file to save. */
+export function downloadPng(dataUrl: string, name: string): void {
+  const link = document.createElement("a");
+  link.download = `${name}-${new Date().toISOString().slice(0, 10)}.png`;
+  link.href = dataUrl;
+  link.click();
 }

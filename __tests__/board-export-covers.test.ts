@@ -166,3 +166,50 @@ describe("every card in the exported board carries its cover", () => {
     expect(covers[2]).toMatch(/^data:image\/jpeg;base64,/);
   });
 });
+
+describe("covers that live in a private bucket", () => {
+  it("inlines signed Supabase urls the same way, token and all", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        seen.push(url);
+        // Storage answers `Access-Control-Allow-Origin: *` and honours the
+        // preflight, so a cors fetch is allowed — but the page's own `<img>`
+        // fetched it without cors first, and that cached entry cannot answer
+        // one. Only a request told to skip the cache gets through.
+        if (init?.cache !== "reload") throw new TypeError("Failed to fetch");
+        return {
+          status: 200,
+          url,
+          headers: new Headers({ "Content-Type": "image/jpeg" }),
+          blob: async () => new Blob([COVER_BYTES], { type: "image/jpeg" }),
+        } as unknown as Response;
+      })
+    );
+
+    const board = document.createElement("div");
+    for (let i = 0; i < 3; i += 1) {
+      const cover = document.createElement("img");
+      // The real shape: a path under the bucket plus an expiring token.
+      cover.src =
+        `https://lsxnqqzejyvmpwxmagtd.supabase.co/storage/v1/object/sign/custom-uploads/` +
+        `owner/list/signed-${i}.jpg?token=eyJhbGciOiJIUzI1NiJ9.signed-${i}`;
+      cover.alt = `Card ${i}`;
+      board.appendChild(cover);
+    }
+    document.body.appendChild(board);
+
+    const covers = coversInExport(await toSvg(board, { ...boardSvgOptions(), width: 400, height: 600 }));
+
+    expect(covers).toHaveLength(3);
+    for (const cover of covers) {
+      expect(cover).not.toBe(TRANSPARENT_PIXEL);
+      expect(cover).toMatch(/^data:image\/jpeg;base64,/);
+    }
+    // The token is part of what identifies a cover, so it has to survive into
+    // the request — and into the cache key, or three cards share one picture.
+    expect(seen.every((url) => url.includes("token="))).toBe(true);
+    expect(new Set(seen).size).toBe(3);
+  });
+});
