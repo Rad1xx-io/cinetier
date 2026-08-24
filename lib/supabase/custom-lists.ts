@@ -239,6 +239,18 @@ export async function addTierRow(
     .insert({ list_id: listId, position, label: "New tier", color: "#8b5cf6" });
 }
 
+/**
+ * Takes the picture off a tier, leaving the tier itself alone.
+ *
+ * The file is not removed from the bucket, and does not need to be: nothing is
+ * served out of there without a row pointing at it, so an unreferenced object
+ * is already unreachable. Clearing the reference is the whole of the removal,
+ * and it cannot fail halfway.
+ */
+export async function clearTierRowImage(supabase: SupabaseClient, rowId: string): Promise<void> {
+  await supabase.from("custom_tier_rows").update({ image_path: null }).eq("id", rowId);
+}
+
 export async function deleteTierRow(supabase: SupabaseClient, rowId: string): Promise<void> {
   // The cards are not deleted with it: the foreign key sets them adrift into
   // the pool, which is recoverable, and losing a picture is not.

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
-import { ImagePlus, Trash2 } from "lucide-react";
+import { ImageOff, ImagePlus, Trash2 } from "lucide-react";
 import type { CustomItem, CustomTierRow as TierRowModel } from "@/lib/types/custom-list";
 import { CustomCard } from "@/components/custom-list/custom-card";
 import { cn } from "@/lib/utils/cn";
@@ -16,6 +16,8 @@ interface CustomTierRowProps {
   onRename: (rowId: string, label: string) => void;
   onRecolor: (rowId: string, color: string) => void;
   onDeleteRow: (rowId: string) => void;
+  /** Takes the picture off the tier, keeping the tier. */
+  onClearImage: (rowId: string) => void;
   onUploaded: () => void;
   onHideItem: (item: CustomItem, hidden: boolean) => void;
   onDeleteItem: (item: CustomItem) => void;
@@ -36,6 +38,7 @@ export function CustomTierRow({
   onRename,
   onRecolor,
   onDeleteRow,
+  onClearImage,
   onUploaded,
   onHideItem,
   onDeleteItem,
@@ -107,10 +110,12 @@ export function CustomTierRow({
           <div className="relative z-10 flex items-center gap-1">
             <label
               className="cursor-pointer rounded p-0.5 text-white/80 hover:text-white"
-              title="Use a picture for this tier"
+              title={row.imageUrl ? "Replace this tier's picture" : "Use a picture for this tier"}
             >
               <ImagePlus className="h-3.5 w-3.5" aria-hidden />
-              <span className="sr-only">Use a picture for this tier</span>
+              <span className="sr-only">
+                {row.imageUrl ? "Replace this tier's picture" : "Use a picture for this tier"}
+              </span>
               <input
                 ref={fileRef}
                 type="file"
@@ -123,6 +128,23 @@ export function CustomTierRow({
                 }}
               />
             </label>
+            {row.imageUrl && (
+              /*
+               * Only shown once there is a picture to take off, because an
+               * always-present control would be a fourth identical icon in a
+               * row already too crowded to aim at. Its absence is what sent
+               * somebody to the neighbouring bin and cost them a tier.
+               */
+              <button
+                type="button"
+                onClick={() => onClearImage(row.id)}
+                className="rounded p-0.5 text-white/80 hover:text-white"
+                aria-label="Remove this tier's picture"
+                title="Remove this tier's picture — the tier stays"
+              >
+                <ImageOff className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            )}
             <input
               type="color"
               value={row.color}
