@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { publishCustomBoard, type CustomBoard } from "@/lib/supabase/custom-lists";
+import { publishCustomBoard } from "@/lib/supabase/custom-lists";
+import type { CustomBoard } from "@/lib/types/custom-list";
 import { PublishBoardDialog } from "@/components/custom-list/publish-board-dialog";
 
 afterEach(cleanup);
@@ -30,7 +31,9 @@ describe("a board whose name is shorter than a post title may be", () => {
   });
 
   it("does not reject a name that only looks short because of spaces", async () => {
-    const insert = vi.fn(() => ({ select: () => ({ single: async () => ({ data: { id: "p1" }, error: null }) }) }));
+    const insert = vi.fn((_row: Record<string, unknown>) => ({
+      select: () => ({ single: async () => ({ data: { id: "p1" }, error: null }) }),
+    }));
     const from = vi.fn(() => ({ insert }));
     const supabase = { from } as unknown as SupabaseClient;
 
