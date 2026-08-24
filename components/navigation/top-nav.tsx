@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Clapperboard, Settings } from "lucide-react";
+import { Clapperboard, Settings } from "lucide-react";
 import {
   DESKTOP_NAV_LEFT,
   DESKTOP_NAV_RIGHT,
-  NAV_OVERFLOW_ITEMS,
   TIER_LIST_NAV_ITEM,
   isNavItemActive,
   type NavItem,
@@ -54,7 +52,6 @@ export function TopNav() {
             {DESKTOP_NAV_RIGHT.map((item) => (
               <CategoryLink key={item.href} item={item} pathname={pathname} />
             ))}
-            {NAV_OVERFLOW_ITEMS.length > 0 && <MoreMenu pathname={pathname} />}
           </nav>
 
           <div className="ml-2 flex shrink-0 items-center gap-1">
@@ -124,65 +121,3 @@ function TierListTab({ pathname }: { pathname: string }) {
 }
 
 /** Scaffolding for future categories (Games, Books, ...) — hidden entirely while NAV_OVERFLOW_ITEMS is empty. */
-function MoreMenu({ pathname }: { pathname: string }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handlePointerDown(e: PointerEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
-
-  const anyActive = NAV_OVERFLOW_ITEMS.some((item) => isNavItemActive(pathname, item.href));
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="true"
-        aria-expanded={open}
-        className={cn(
-          "flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-          anyActive ? "bg-surface-raised text-foreground" : "text-muted hover:text-foreground"
-        )}
-      >
-        More
-        <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-xl border border-border bg-surface-raised p-1.5 shadow-xl">
-          {NAV_OVERFLOW_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const active = isNavItemActive(pathname, item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-surface",
-                  active && "text-accent"
-                )}
-              >
-                <Icon className="h-4 w-4" aria-hidden />
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Globe, Lock } from "lucide-react";
+import { Images } from "lucide-react";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { listMyCustomBoards } from "@/lib/supabase/custom-lists";
+import { listMyCustomBoardSummaries } from "@/lib/supabase/custom-lists";
 import { CreateBoardForm } from "@/components/custom-list/create-board-form";
+import { BoardGrid } from "@/components/custom-list/board-grid";
 
 /** Same reasoning as the board itself: these pages stay out of search results. */
 export const metadata: Metadata = {
@@ -29,49 +29,46 @@ export default async function CustomListsPage() {
     );
   }
 
-  const boards = await listMyCustomBoards(supabase, user.id);
+  const boards = await listMyCustomBoardSummaries(supabase, user.id);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 md:px-6">
-      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Custom tier lists</h1>
-      <p className="mt-1 text-sm text-muted">
-        Boards built from your own pictures, with tiers you name yourself.
-      </p>
+    <div className="mx-auto max-w-5xl px-4 py-8 md:px-6">
+      <header className="flex items-start gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+          <Images className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Custom tier lists</h1>
+          <p className="mt-1 text-sm text-muted">
+            Boards built from your own pictures, with tiers you name yourself.
+          </p>
+        </div>
+      </header>
 
       <div className="mt-6">
         <CreateBoardForm />
       </div>
 
-      <ul className="mt-6 space-y-2">
-        {boards.map((board) => (
-          <li key={board.id}>
-            <Link
-              href={`/custom/${board.id}`}
-              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-3 transition-colors hover:border-accent/50"
-            >
-              <span className="truncate text-sm font-medium">{board.title}</span>
-              <span className="flex shrink-0 items-center gap-1 text-xs text-muted">
-                {board.isPublic ? (
-                  <>
-                    <Globe className="h-3.5 w-3.5" aria-hidden />
-                    Anyone with the link
-                  </>
-                ) : (
-                  <>
-                    <Lock className="h-3.5 w-3.5" aria-hidden />
-                    Only me
-                  </>
-                )}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-
-      {boards.length === 0 && (
-        <p className="mt-6 text-sm text-muted">
-          Nothing here yet. Name a board above and start adding pictures.
-        </p>
+      {boards.length > 0 ? (
+        <>
+          <h2 className="mt-8 text-xs font-semibold uppercase tracking-wide text-muted">
+            {boards.length === 1 ? "Your board" : `Your boards — ${boards.length}`}
+          </h2>
+          <div className="mt-3">
+            <BoardGrid boards={boards} />
+          </div>
+        </>
+      ) : (
+        <div className="mt-8 rounded-2xl border border-border bg-surface/50 px-6 py-12 text-center">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-raised text-muted">
+            <Images className="h-6 w-6" aria-hidden />
+          </span>
+          <p className="mt-3 text-sm font-medium">No boards yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
+            Name one above and start adding pictures. Anything can be a tier list — holidays,
+            haircuts, every sandwich you had this year.
+          </p>
+        </div>
       )}
     </div>
   );
