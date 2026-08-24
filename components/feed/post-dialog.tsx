@@ -24,11 +24,21 @@ import { DonateButton } from "@/components/profile/donate-button";
 import { titlesCountLabel } from "@/lib/utils/plural";
 import type { RankedTitle } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
+import { CustomPostBoard } from "@/components/feed/custom-post-board";
+import type { PublishedBoard } from "@/lib/supabase/custom-lists";
 
 interface PostDialogProps {
   post: FeedPost | null;
   /** The author's board in full — the dialog shows every tier, uncapped. */
   titles: RankedTitle[];
+  /**
+   * Present instead of `titles` when the post is a board of uploaded pictures.
+   *
+   * Without this the dialog fell back to the author's ranked titles whatever
+   * the post was about, so opening a board of somebody's photographs showed
+   * their film list, or an empty frame if they had never ranked a film.
+   */
+  published?: PublishedBoard;
   onClose: () => void;
   liked: boolean;
   onToggleLike: (post: FeedPost) => void;
@@ -45,6 +55,7 @@ function formatWhen(iso: string): string {
 export function PostDialog({
   post,
   titles,
+  published,
   onClose,
   liked,
   onToggleLike,
@@ -129,13 +140,24 @@ export function PostDialog({
     >
       {post && (
         <div className="p-4 sm:p-5">
-          {rows.length > 0 && (
+          {published ? (
             <section className="mb-4 rounded-xl bg-surface-raised p-2">
-              <TierBoard rows={rows} variant="full" />
-              <p className="mt-2 text-center text-[11px] text-muted">
-                {titlesCountLabel(total)} across {rows.length === 1 ? "one tier" : `${rows.length} tiers`}
-              </p>
+              {/* No count underneath, deliberately. The published one counts
+                  pictures that a takedown or a deletion may since have emptied
+                  out of the board, and a count of what is left would report the
+                  moderation of somebody else's board as if it were its size.
+                  The tiers show what there is. */}
+              <CustomPostBoard board={published} variant="full" />
             </section>
+          ) : (
+            rows.length > 0 && (
+              <section className="mb-4 rounded-xl bg-surface-raised p-2">
+                <TierBoard rows={rows} variant="full" />
+                <p className="mt-2 text-center text-[11px] text-muted">
+                  {titlesCountLabel(total)} across {rows.length === 1 ? "one tier" : `${rows.length} tiers`}
+                </p>
+              </section>
+            )
           )}
 
           <div className="flex items-start justify-between gap-3">
@@ -201,7 +223,9 @@ export function PostDialog({
               className="ml-auto"
             />
 
-            {post.isPublic && (
+            {/* Same reasoning as on the card: this opens the author's ranked
+                titles, which a board of their own photographs is not. */}
+            {post.category !== "custom" && post.isPublic && (
               <Button asChild size="sm" variant="secondary">
                 <Link href={`/u/${post.username}`}>
                   <GitFork className="h-3.5 w-3.5" aria-hidden />

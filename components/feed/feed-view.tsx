@@ -252,6 +252,7 @@ export function FeedView() {
       <PostDialog
         post={openPost}
         titles={openPost ? (authorTitles.get(openPost.userId) ?? []) : []}
+        published={openPost ? published.get(openPost.id) : undefined}
         onClose={() => setOpenPost(null)}
         liked={openPost ? likes.has(openPost.id) : false}
         onToggleLike={handleToggleLike}
