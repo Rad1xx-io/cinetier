@@ -13,13 +13,14 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { Download, Globe, Lock, Plus } from "lucide-react";
+import { Download, Globe, Lock, Plus, Send } from "lucide-react";
 import type { CustomBoard as Board, CustomItem } from "@/lib/types/custom-list";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   addTierRow,
   deleteItem,
   clearTierRowImage,
+  publishCustomBoard,
   deleteTierRow,
   moveItem,
   setBoardVisibility,
@@ -121,6 +122,29 @@ export function CustomBoard({ board }: CustomBoardProps) {
    * opaque cache entry the page's own `<img>` left behind, which is the thing
    * that turned every cover transparent the last time.
    */
+  const [publishing, setPublishing] = useState(false);
+
+  /*
+   * Publishing takes a copy of the board's shape and nothing else.
+   *
+   * The post keeps the tiers, the order and the captions as they are now, and
+   * looks the pictures up live every time somebody reads it — so editing this
+   * board afterwards leaves the post alone, while hiding a card, or having one
+   * taken down, empties it out of the post immediately.
+   */
+  async function handlePublish() {
+    if (!supabase || publishing) return;
+    setPublishing(true);
+    setNotice("");
+    const outcome = await publishCustomBoard(supabase, { ...board, rows, items }, "");
+    setPublishing(false);
+    setNotice(
+      "error" in outcome
+        ? outcome.error
+        : "Published to the feed. Editing this board from now on will not change the post."
+    );
+  }
+
   async function handleExport() {
     const node = boardRef.current;
     if (!node || exporting) return;
@@ -287,6 +311,10 @@ export function CustomBoard({ board }: CustomBoardProps) {
                 )}
               </Button>
               <UploadDialog listId={board.list.id} rows={rows} onUploaded={refresh} />
+              <Button variant="secondary" size="sm" onClick={handlePublish} disabled={publishing}>
+                <Send className="mr-1.5 h-4 w-4" aria-hidden />
+                {publishing ? "Publishing…" : "Publish"}
+              </Button>
             </>
           )}
           <Button variant="secondary" size="sm" onClick={handleExport} disabled={exporting}>

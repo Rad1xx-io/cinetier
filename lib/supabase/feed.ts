@@ -6,7 +6,12 @@ import { safeDonationUrl } from "@/lib/utils/donation-url";
 import type { MediaType, RankedTitle } from "@/lib/types";
 
 /** The categories a post can be filed under. `mixed` is for a board of everything. */
-export type PostCategory = MediaType | "youtube" | "mixed";
+/**
+ * What a post is about. "custom" is a board of the author's own photographs,
+ * which belongs to none of the catalogues and is rendered from a published
+ * snapshot rather than from their ranked titles.
+ */
+export type PostCategory = MediaType | "youtube" | "mixed" | "custom";
 
 export interface FeedPost {
   id: string;
