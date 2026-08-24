@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
-import { ImageOff, ImagePlus, Trash2 } from "lucide-react";
+import { ImagePlus, Trash2, X } from "lucide-react";
 import type { CustomItem, CustomTierRow as TierRowModel } from "@/lib/types/custom-list";
 import { CustomCard } from "@/components/custom-list/custom-card";
 import { cn } from "@/lib/utils/cn";
@@ -76,7 +76,7 @@ export function CustomTierRow({
   }
 
   return (
-    <div className="flex overflow-hidden rounded-xl border border-border">
+    <div className="relative flex overflow-hidden rounded-xl border border-border">
       <div
         className="relative flex w-24 shrink-0 flex-col items-center justify-center gap-1 p-2 text-center sm:w-28"
         style={{ backgroundColor: row.imageUrl ? undefined : row.color }}
@@ -93,6 +93,29 @@ export function CustomTierRow({
         {/* Over a photograph a plain label is unreadable half the time; the
             scrim costs nothing when there is no photograph to sit on. */}
         {row.imageUrl && <div className="absolute inset-0 bg-black/45" aria-hidden />}
+
+        {canEdit && row.imageUrl && (
+          /*
+           * On the corner of the picture, the way every "remove this
+           * attachment" control in the world sits on the corner of its
+           * attachment. In the icon row it was a third small glyph among
+           * small glyphs, and nobody could tell what it was for — which is
+           * how the last person ended up reaching for the bin instead.
+           *
+           * Opaque rather than translucent because it lands on a photograph
+           * of somebody's choosing, and a control that disappears against
+           * the wrong background is not a control.
+           */
+          <button
+            type="button"
+            onClick={() => onClearImage(row.id)}
+            className="absolute right-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-background text-foreground shadow ring-1 ring-border transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            aria-label="Remove this tier's picture"
+            title="Remove this tier's picture — the tier stays"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        )}
 
         {canEdit ? (
           <input
@@ -128,23 +151,6 @@ export function CustomTierRow({
                 }}
               />
             </label>
-            {row.imageUrl && (
-              /*
-               * Only shown once there is a picture to take off, because an
-               * always-present control would be a fourth identical icon in a
-               * row already too crowded to aim at. Its absence is what sent
-               * somebody to the neighbouring bin and cost them a tier.
-               */
-              <button
-                type="button"
-                onClick={() => onClearImage(row.id)}
-                className="rounded p-0.5 text-white/80 hover:text-white"
-                aria-label="Remove this tier's picture"
-                title="Remove this tier's picture — the tier stays"
-              >
-                <ImageOff className="h-3.5 w-3.5" aria-hidden />
-              </button>
-            )}
             <input
               type="color"
               value={row.color}
@@ -152,23 +158,34 @@ export function CustomTierRow({
               aria-label="Tier colour"
               className="h-4 w-4 cursor-pointer border-0 bg-transparent p-0"
             />
-            <button
-              type="button"
-              onClick={() => onDeleteRow(row.id)}
-              className="rounded p-0.5 text-white/80 hover:text-red-300"
-              aria-label={`Delete the ${row.label} tier`}
-              title="Delete this tier — its cards go back to the pool"
-            >
-              <Trash2 className="h-3.5 w-3.5" aria-hidden />
-            </button>
           </div>
         )}
       </div>
 
+      {canEdit && (
+        /*
+         * Deliberately far from the rest.
+         *
+         * Every control used to share one row four pixels apart, and the one
+         * that destroys a tier sat next to the one people reach for to change
+         * its picture. Distance is the fix that does not depend on anybody
+         * reading a tooltip first.
+         */
+        <button
+          type="button"
+          onClick={() => onDeleteRow(row.id)}
+          className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-md bg-background/85 text-muted shadow-sm backdrop-blur transition-colors hover:bg-background hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          aria-label={`Delete the ${row.label} tier`}
+          title="Delete this tier — its cards go back to the pool"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden />
+        </button>
+      )}
+
       <div
         ref={setNodeRef}
         className={cn(
-          "flex min-h-[124px] flex-1 flex-wrap content-start gap-2 bg-surface p-2 transition-colors",
+          "flex min-h-[124px] flex-1 flex-wrap content-start gap-2 bg-surface p-2 pr-11 transition-colors",
           isOver && "bg-surface-raised"
         )}
       >

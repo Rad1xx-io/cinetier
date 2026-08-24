@@ -106,3 +106,31 @@ describe("taking a picture off a tier", () => {
     expect(screen.getByText("best game")).toBeTruthy();
   });
 });
+
+describe("the bin is kept away from everything else", () => {
+  it("shares no parent with the controls people reach for", () => {
+    render(<CustomBoard board={board({ rowHasPicture: true })} />);
+
+    const bin = screen.getByLabelText("Delete the S tier");
+    const clear = screen.getByLabelText("Remove this tier's picture");
+    const chooser = screen.getByText("Replace this tier's picture").closest("label")!;
+
+    // They used to be siblings four pixels apart in one row, which is how
+    // somebody deleted a tier while trying to take a picture off it.
+    expect(bin.parentElement).not.toBe(clear.parentElement);
+    expect(bin.parentElement).not.toBe(chooser.parentElement);
+    // The bin belongs to the whole row; the other two belong to the label
+    // column, so nothing can put them side by side again by accident.
+    expect(clear.parentElement).toBe(chooser.parentElement?.parentElement);
+  });
+
+  it("gives both controls a target bigger than the old fourteen-pixel glyphs", () => {
+    render(<CustomBoard board={board({ rowHasPicture: true })} />);
+
+    for (const label of ["Delete the S tier", "Remove this tier's picture"]) {
+      const control = screen.getByLabelText(label);
+      // jsdom does no layout, so the size is read from the classes that set it.
+      expect(control.className).toMatch(/h-[67] w-[67]/);
+    }
+  });
+});
