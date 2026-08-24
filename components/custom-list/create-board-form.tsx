@@ -35,13 +35,13 @@ export function CreateBoardForm() {
       return;
     }
 
-    const id = await createCustomBoard(supabase, user.id, title.trim());
+    const outcome = await createCustomBoard(supabase, user.id, title.trim());
     setBusy(false);
-    if (!id) {
-      setError("The board could not be created.");
+    if ("error" in outcome) {
+      setError(outcome.error);
       return;
     }
-    router.push(`/custom/${id}`);
+    router.push(`/custom/${outcome.id}`);
   }
 
   return (
