@@ -10,8 +10,19 @@ import type { MediaType, RankedTitle } from "@/lib/types";
  * What a post is about. "custom" is a board of the author's own photographs,
  * which belongs to none of the catalogues and is rendered from a published
  * snapshot rather than from their ranked titles.
+ *
+ * The list comes first and the type is read off it, rather than the other way
+ * round. Written as a union with a separate array to validate against, the two
+ * drifted the day "custom" was added: the type knew about it, the array did
+ * not, and since a shorter array is still a valid `PostCategory[]`, nothing
+ * complained. Every custom post was quietly relabelled `mixed` on its way out
+ * of the database, so the feed rendered it as a film list and said the author
+ * had published nothing. Derived this way, a category cannot exist in one
+ * place and not the other.
  */
-export type PostCategory = MediaType | "youtube" | "mixed" | "custom";
+export const POST_CATEGORIES = ["movie", "tv", "anime", "game", "youtube", "mixed", "custom"] as const;
+
+export type PostCategory = (typeof POST_CATEGORIES)[number];
 
 export interface FeedPost {
   id: string;
@@ -59,10 +70,8 @@ interface FeedRow {
   created_at: string;
 }
 
-const CATEGORIES: PostCategory[] = ["movie", "tv", "anime", "game", "youtube", "mixed"];
-
 function toCategory(value: string): PostCategory {
-  return (CATEGORIES as string[]).includes(value) ? (value as PostCategory) : "mixed";
+  return (POST_CATEGORIES as readonly string[]).includes(value) ? (value as PostCategory) : "mixed";
 }
 
 function fromRow(row: FeedRow): FeedPost {
