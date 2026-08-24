@@ -30,6 +30,7 @@ import {
 import { CustomCard } from "@/components/custom-list/custom-card";
 import { CustomTierRow } from "@/components/custom-list/custom-tier-row";
 import { UploadDialog } from "@/components/custom-list/upload-dialog";
+import { PublishBoardDialog } from "@/components/custom-list/publish-board-dialog";
 import { ReportButton } from "@/components/custom-list/report-button";
 import { Button } from "@/components/ui/button";
 import { downloadPng, renderBoardPng } from "@/lib/utils/board-export";
@@ -123,6 +124,7 @@ export function CustomBoard({ board }: CustomBoardProps) {
    * that turned every cover transparent the last time.
    */
   const [publishing, setPublishing] = useState(false);
+  const [askingToPublish, setAskingToPublish] = useState(false);
 
   /*
    * Publishing takes a copy of the board's shape and nothing else.
@@ -132,12 +134,13 @@ export function CustomBoard({ board }: CustomBoardProps) {
    * board afterwards leaves the post alone, while hiding a card, or having one
    * taken down, empties it out of the post immediately.
    */
-  async function handlePublish() {
+  async function handlePublish(title: string, description: string) {
     if (!supabase || publishing) return;
     setPublishing(true);
     setNotice("");
-    const outcome = await publishCustomBoard(supabase, { ...board, rows, items }, "");
+    const outcome = await publishCustomBoard(supabase, { ...board, rows, items }, title, description);
     setPublishing(false);
+    if (!("error" in outcome)) setAskingToPublish(false);
     setNotice(
       "error" in outcome
         ? outcome.error
@@ -311,7 +314,12 @@ export function CustomBoard({ board }: CustomBoardProps) {
                 )}
               </Button>
               <UploadDialog listId={board.list.id} rows={rows} onUploaded={refresh} />
-              <Button variant="secondary" size="sm" onClick={handlePublish} disabled={publishing}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setAskingToPublish(true)}
+                disabled={publishing}
+              >
                 <Send className="mr-1.5 h-4 w-4" aria-hidden />
                 {publishing ? "Publishing…" : "Publish"}
               </Button>
@@ -332,6 +340,15 @@ export function CustomBoard({ board }: CustomBoardProps) {
       </div>
 
       {notice && <p className="mt-2 text-xs text-muted">{notice}</p>}
+
+      {askingToPublish && (
+        <PublishBoardDialog
+          boardTitle={board.list.title}
+          busy={publishing}
+          onCancel={() => setAskingToPublish(false)}
+          onPublish={(title, description) => void handlePublish(title, description)}
+        />
+      )}
 
       <DndContext
         sensors={sensors}

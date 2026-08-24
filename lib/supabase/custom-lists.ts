@@ -7,6 +7,7 @@ import type {
 } from "@/lib/types/custom-list";
 import { STARTER_ROWS } from "@/lib/types/custom-list";
 import { describeWriteFailure } from "@/lib/supabase/write-failure";
+import { validatePost } from "@/lib/feed/post-preview";
 
 /**
  * Reading and writing custom boards.
@@ -354,14 +355,33 @@ export type PublishOutcome = { postId: string } | { error: string };
 export async function publishCustomBoard(
   supabase: SupabaseClient,
   board: CustomBoard,
+  title: string,
   description: string
 ): Promise<PublishOutcome> {
+  /*
+   * The post's title is asked for rather than taken from the board.
+   *
+   * It used to be the board's name, which reads as the same thing and is not:
+   * a board may be called anything from one character up, a post title must be
+   * at least three, and the two rules were written in different migrations
+   * without either knowing about the other. A board called "ez" therefore
+   * published fine right up to the database, which refused it in its own words
+   * — `violates check constraint "posts_title_check"` — with nothing to do
+   * about it, since the name that offended was not on the screen anywhere.
+   *
+   * Checked here against the same rules the feed's own dialog uses, so the
+   * answer arrives before the write and says something a person can act on.
+   */
+  const postTitle = title.trim();
+  const validation = validatePost(postTitle, description);
+  if (!validation.ok) return { error: validation.error };
+
   const { data, error } = await supabase
     .from("posts")
     .insert({
       user_id: board.list.userId,
-      title: board.list.title,
-      description,
+      title: postTitle,
+      description: description.trim(),
       category: "custom",
     })
     .select("id")
