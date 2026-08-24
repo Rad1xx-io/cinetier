@@ -1,4 +1,5 @@
 import { localStorageRepository } from "@/lib/storage/local-storage-repository";
+import { rememberCatalogIfUnset } from "@/lib/storage/last-catalog";
 import type { RankingRepository } from "@/lib/storage/repository";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { CriterionScore } from "@/lib/types/criteria";
@@ -23,6 +24,10 @@ export function getRankedTitle(tmdbId: number, mediaType: MediaType): RankedTitl
 }
 
 export function addTitle(input: Parameters<RankingRepository["add"]>[0]): RankedTitle {
+  // Ranking something is a statement about which list matters, and for
+  // somebody who has never picked one it is the only statement available.
+  // It does not overwrite a choice already made — see rememberCatalogIfUnset.
+  rememberCatalogIfUnset(input.mediaType);
   return repository.add(input);
 }
 

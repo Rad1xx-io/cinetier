@@ -89,7 +89,13 @@ export function TierListActions({
 
   const handleExport = useCallback(async () => {
     const node = boardRef.current;
-    if (!node) return;
+    if (!node) {
+      // Reachable since the board stopped rendering rows for an empty list:
+      // there is genuinely nothing to photograph, and a button that does
+      // nothing at all reads as broken.
+      onNotify("There is nothing on this list to export.");
+      return;
+    }
 
     const itemsCount = titles.length + channels.length;
 

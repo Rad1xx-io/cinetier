@@ -31,6 +31,8 @@ import {
   type BoardItem,
 } from "@/lib/utils/board-item";
 import { firstStockedCatalog, type ContentType } from "@/lib/utils/content-type";
+import { openingCatalog, rememberCatalog } from "@/lib/storage/last-catalog";
+import { CatalogEmptyState } from "@/components/tier-list/catalog-empty-state";
 import { applyDrop, flattenBuckets, tierCollisionDetection } from "@/lib/utils/tier-dnd";
 import { TierRow } from "@/components/tier-list/tier-row";
 import { Toolbar } from "@/components/tier-list/toolbar";
@@ -180,16 +182,28 @@ export function TierListBoard() {
    * rather than an effect, which would render an empty board first and then
    * replace it.
    *
-   * Once set it is never recomputed: ranking a film later must not move
-   * somebody off the list they are looking at.
+   * The list somebody left the board on wins, even when it is empty today.
+   * Opening somewhere else because that list happens to be empty is the
+   * behaviour this replaced: it moves people between lists for a reason they
+   * never asked for, and an empty list is better answered by saying so — see
+   * CatalogEmptyState, which is the way out that keeps this honest.
+   *
+   * Only somebody with nothing remembered gets the guess. Once set it is never
+   * recomputed: ranking a film later must not move somebody off the list they
+   * are looking at.
    */
   if (mediaFilter === null && hydrated && channelsHydrated) {
-    setMediaFilter(firstStockedCatalog(catalogCounts));
+    setMediaFilter(openingCatalog(catalogCounts));
   }
 
   // Only stands in for the render before hydration settles the answer, which
   // shows a skeleton rather than a board.
   const activeCatalog = mediaFilter ?? firstStockedCatalog(catalogCounts);
+
+  const handleCatalogChange = useCallback((next: ContentType) => {
+    setMediaFilter(next);
+    rememberCatalog(next);
+  }, []);
 
   /**
    * A media tab or a search term only *hides* cards — the ones still on screen
@@ -390,7 +404,7 @@ export function TierListBoard() {
           search={search}
           onSearchChange={setSearch}
           mediaFilter={activeCatalog}
-          onMediaFilterChange={setMediaFilter}
+          onMediaFilterChange={handleCatalogChange}
           sort={sort}
           onSortChange={setSort}
           density={density}
@@ -401,72 +415,82 @@ export function TierListBoard() {
         />
       </div>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={tierCollisionDetection}
-        // The board no longer mutates mid-drag (see handleDragEnd), so one
-        // measurement per drag is both correct and enough. `Always` would
-        // re-measure on every render, which is what let the old live preview
-        // ping-pong a card between two rows until React gave up.
-        measuring={{ droppable: { strategy: MeasuringStrategy.BeforeDragging } }}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragCancel={handleDragCancel}
-      >
-        <div ref={boardRef} className="relative mt-4 space-y-3 bg-background px-4 py-2 md:px-0">
-          {TIER_ORDER.map((tier) => (
-            <TierRow
-              key={tier}
-              tier={tier}
-              items={displayContainers[tier]}
-              itemIds={displayContainers[tier].map(boardItemKey)}
-              draggable={dragEnabled}
-              filtersActive={!isDefaultFilters}
-              density={density}
-              onRemoveTitle={handleRemove}
-              onRemoveChannel={handleRemoveChannel}
-              onTitleTier={handleQuickTierChange}
-              onChannelTier={handleChannelTierChange}
-            />
-          ))}
-          {/* Invisible on screen; the export handler reveals it for the shot.
-              The address is spelled out under the wordmark rather than left
-              implied: a name alone sends anyone who liked the picture to a
-              search box, and there is an unrelated site on a near-identical
-              domain waiting at the end of that search. */}
-          <div
-            data-export-watermark
-            className="pointer-events-none absolute bottom-1 right-3 flex flex-col items-end leading-tight opacity-0"
-          >
-            <span className="text-xs font-semibold tracking-tight">
-              TierList<span className="text-accent">Online</span>
-            </span>
-            <span className="text-[10px] font-medium tracking-tight text-muted">{SITE_HOST}</span>
-          </div>
-        </div>
-
-        <DragOverlay>
-          {activeItem ? (
-            <div className={density === "compact" ? "w-16 sm:w-20" : "w-24 sm:w-28"}>
-              {activeItem.kind === "title" ? (
-                <Poster
-                  posterPath={activeItem.title.posterPath}
-                  title={activeItem.title.title}
-                  sizes="120px"
-                  className="shadow-xl ring-2 ring-accent"
-                />
-              ) : (
-                <ChannelThumbnail
-                  thumbnailUrl={activeItem.channel.thumbnailUrl}
-                  title={activeItem.channel.title}
-                  sizes="120px"
-                  className="shadow-xl ring-2 ring-accent"
-                />
-              )}
+      {/* An empty list is shown as an empty list, with a way out — never as a
+          board that silently has no rows in it. */}
+      {catalogCounts[activeCatalog] === 0 ? (
+        <CatalogEmptyState
+          catalog={activeCatalog}
+          counts={catalogCounts}
+          onPick={handleCatalogChange}
+        />
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={tierCollisionDetection}
+          // The board no longer mutates mid-drag (see handleDragEnd), so one
+          // measurement per drag is both correct and enough. `Always` would
+          // re-measure on every render, which is what let the old live preview
+          // ping-pong a card between two rows until React gave up.
+          measuring={{ droppable: { strategy: MeasuringStrategy.BeforeDragging } }}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <div ref={boardRef} className="relative mt-4 space-y-3 bg-background px-4 py-2 md:px-0">
+            {TIER_ORDER.map((tier) => (
+              <TierRow
+                key={tier}
+                tier={tier}
+                items={displayContainers[tier]}
+                itemIds={displayContainers[tier].map(boardItemKey)}
+                draggable={dragEnabled}
+                filtersActive={!isDefaultFilters}
+                density={density}
+                onRemoveTitle={handleRemove}
+                onRemoveChannel={handleRemoveChannel}
+                onTitleTier={handleQuickTierChange}
+                onChannelTier={handleChannelTierChange}
+              />
+            ))}
+            {/* Invisible on screen; the export handler reveals it for the shot.
+                The address is spelled out under the wordmark rather than left
+                implied: a name alone sends anyone who liked the picture to a
+                search box, and there is an unrelated site on a near-identical
+                domain waiting at the end of that search. */}
+            <div
+              data-export-watermark
+              className="pointer-events-none absolute bottom-1 right-3 flex flex-col items-end leading-tight opacity-0"
+            >
+              <span className="text-xs font-semibold tracking-tight">
+                TierList<span className="text-accent">Online</span>
+              </span>
+              <span className="text-[10px] font-medium tracking-tight text-muted">{SITE_HOST}</span>
             </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+          </div>
+
+          <DragOverlay>
+            {activeItem ? (
+              <div className={density === "compact" ? "w-16 sm:w-20" : "w-24 sm:w-28"}>
+                {activeItem.kind === "title" ? (
+                  <Poster
+                    posterPath={activeItem.title.posterPath}
+                    title={activeItem.title.title}
+                    sizes="120px"
+                    className="shadow-xl ring-2 ring-accent"
+                  />
+                ) : (
+                  <ChannelThumbnail
+                    thumbnailUrl={activeItem.channel.thumbnailUrl}
+                    title={activeItem.channel.title}
+                    sizes="120px"
+                    className="shadow-xl ring-2 ring-accent"
+                  />
+                )}
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      )}
 
       <Toast toast={toast} />
     </div>
