@@ -48,3 +48,8 @@ next-env.d.ts
 *.p12
 *.pfx
 serviceAccountKey.json
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/

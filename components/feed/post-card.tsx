@@ -130,7 +130,10 @@ export function PostCard({ post, titles, published, liked, onOpen, onToggleLike 
           className="ml-auto"
         />
 
-        {post.isPublic && post.allowFork && (
+        {/* Not offered on a board of photographs: it links to the author's
+            ranked titles, which is a different board entirely, and nothing
+            about somebody's own pictures can be forked into a list. */}
+        {post.category !== "custom" && post.isPublic && post.allowFork && (
           <Link
             href={`/u/${post.username}`}
             className={cn(

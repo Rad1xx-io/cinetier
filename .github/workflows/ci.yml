@@ -62,3 +62,28 @@ jobs:
       - name: Test
         if: '!cancelled()'
         run: npm test
+
+  # Kept separate from the unit job so a browser download never delays the
+  # verdict on typing, linting and the suite — and so a failure here names
+  # itself rather than hiding inside a longer run.
+  browser:
+    name: Browser test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - run: npm ci
+
+      # Only chromium. The suite here is one page rendered one way, and the
+      # other two engines would triple the download for nothing.
+      - run: npx playwright install --with-deps chromium
+
+      # Builds and serves the app itself; every request it makes to Supabase is
+      # intercepted in the test, so this needs no database and no secrets.
+      - run: npm run test:e2e
