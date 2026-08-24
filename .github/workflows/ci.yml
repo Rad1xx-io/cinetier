@@ -3,8 +3,15 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every pull request, whatever it is aimed at. Restricted to main, this
+  # skipped any pull request stacked on another branch — which is exactly the
+  # kind that most wants checking, since it is built on code that is not
+  # settled yet. One such pull request went through review and merged without a
+  # single check having run, and nothing said so.
+  #
+  # `push` stays pinned to main on purpose: a branch with an open pull request
+  # would otherwise be verified twice for every commit.
   pull_request:
-    branches: [main]
 
 # A branch that gets two pushes in a minute should not run twice. The in-flight
 # run is cancelled, except on main, where every commit deserves its own verdict.
