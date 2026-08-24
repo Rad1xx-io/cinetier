@@ -6,6 +6,7 @@ import type {
   CustomTierRow,
 } from "@/lib/types/custom-list";
 import { STARTER_ROWS } from "@/lib/types/custom-list";
+import { describeWriteFailure } from "@/lib/supabase/write-failure";
 
 /**
  * Reading and writing custom boards.
@@ -166,20 +167,27 @@ export async function listMyCustomBoards(
  * is never briefly a board with no tiers — the page has somewhere to put a card
  * from the first render.
  */
+export type CreateBoardOutcome = { id: string } | { error: string };
+
 export async function createCustomBoard(
   supabase: SupabaseClient,
   userId: string,
   title: string
-): Promise<string | null> {
+): Promise<CreateBoardOutcome> {
   const { data, error } = await supabase
     .from("custom_tier_lists")
     .insert({ user_id: userId, title })
     .select("id")
     .single();
-  if (error || !data) return null;
+  if (error || !data) {
+    // Logged as well as returned: the sentence shown to the reader is
+    // deliberately shorter than the one worth having in a bug report.
+    console.error("TierListOnline: creating a board failed —", error);
+    return { error: describeWriteFailure(error) };
+  }
 
   const listId = data.id as string;
-  await supabase.from("custom_tier_rows").insert(
+  const { error: rowsError } = await supabase.from("custom_tier_rows").insert(
     STARTER_ROWS.map((row, index) => ({
       list_id: listId,
       position: index,
@@ -187,7 +195,14 @@ export async function createCustomBoard(
       color: row.color,
     }))
   );
-  return listId;
+  if (rowsError) {
+    // The board exists but has no tiers to drop anything into, which is worse
+    // than no board at all: it looks finished and is not.
+    console.error("TierListOnline: a board was created without its tiers —", rowsError);
+    return { error: describeWriteFailure(rowsError) };
+  }
+
+  return { id: listId };
 }
 
 export async function renameCustomBoard(
