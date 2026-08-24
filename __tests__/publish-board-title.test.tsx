@@ -31,7 +31,7 @@ describe("a board whose name is shorter than a post title may be", () => {
   });
 
   it("does not reject a name that only looks short because of spaces", async () => {
-    const insert = vi.fn((_row: Record<string, unknown>) => ({
+    const insert = vi.fn((row: Record<string, unknown>) => ({ row,
       select: () => ({ single: async () => ({ data: { id: "p1" }, error: null }) }),
     }));
     const from = vi.fn(() => ({ insert }));

@@ -22,8 +22,8 @@ export function BottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                // Six tabs leave ~62px each at 375px, so the label is clamped to
-                // one line rather than wrapping and pushing the bar taller.
+                // Seven tabs leave ~53px each at 375px, so the label is clamped
+                // to one line rather than wrapping and pushing the bar taller.
                 "flex min-w-0 flex-col items-center gap-1 px-0.5 py-2.5 text-[10px] font-medium transition-colors",
                 active ? "text-accent" : "text-muted"
               )}

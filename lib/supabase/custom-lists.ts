@@ -149,6 +149,92 @@ export async function getCustomBoard(
   return { list, rows, items, canEdit: viewerId === list.userId };
 }
 
+/** A board as the index page shows it: what it is called, and a look at it. */
+export interface CustomBoardSummary extends CustomTierList {
+  /** The first picture on the board, signed like any other cover. */
+  coverUrl: string | null;
+  itemCount: number;
+}
+
+/**
+ * The boards someone owns, each with enough of itself to be recognised.
+ *
+ * A list of names is a filing cabinet, and these are boards of photographs —
+ * the one thing that tells them apart at a glance is what is on them. Costs one
+ * extra query over the cards and one signing call for the covers, both of them
+ * bounded by how many boards a person has made.
+ */
+/** How many candidates per board are signed while looking for one that works. */
+const COVER_CANDIDATES = 4;
+
+export async function listMyCustomBoardSummaries(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<CustomBoardSummary[]> {
+  const lists = await listMyCustomBoards(supabase, userId);
+  if (lists.length === 0) return [];
+
+  const listIds = lists.map((list) => list.id);
+  const [rowsResult, itemsResult] = await Promise.all([
+    supabase.from("custom_tier_rows").select("id, list_id, position").in("list_id", listIds),
+    supabase
+      .from("custom_items")
+      .select("list_id, row_id, image_path, position")
+      .in("list_id", listIds),
+  ]);
+
+  // Where each tier sits, so cards can be read in the order they are seen.
+  const rowOrder = new Map<string, number>();
+  for (const row of (rowsResult.data ?? []) as { id: string; position: number }[]) {
+    rowOrder.set(row.id, row.position);
+  }
+
+  const items = (itemsResult.data ?? []) as {
+    list_id: string;
+    row_id: string | null;
+    image_path: string | null;
+    position: number;
+  }[];
+
+  const counts = new Map<string, number>();
+  const candidates = new Map<string, { rank: number; position: number; path: string }[]>();
+  for (const item of items) {
+    counts.set(item.list_id, (counts.get(item.list_id) ?? 0) + 1);
+    const path = item.image_path?.trim();
+    // A card with no picture on it is not a cover, and neither is a card in a
+    // tier that no longer exists.
+    if (!path) continue;
+    const rank = item.row_id ? (rowOrder.get(item.row_id) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+    const list = candidates.get(item.list_id) ?? [];
+    list.push({ rank, position: item.position, path });
+    candidates.set(item.list_id, list);
+  }
+
+  /*
+   * Reading order, top tier first, and the unsorted pool last.
+   *
+   * The cover is the first card somebody would see on opening the board, which
+   * is not the same as the first row the database happened to return: tiers are
+   * ordered by their own position, and a board whose top tiers are empty should
+   * show whatever its first filled one holds rather than nothing at all.
+   */
+  const wanted = new Map<string, string[]>();
+  for (const [listId, found] of candidates) {
+    found.sort((a, b) => a.rank - b.rank || a.position - b.position);
+    wanted.set(listId, found.slice(0, COVER_CANDIDATES).map((entry) => entry.path));
+  }
+
+  const covers = await signCovers(supabase, [...wanted.values()].flat());
+
+  return lists.map((list) => ({
+    ...list,
+    // The first candidate that actually produced a url. One that did not is a
+    // picture taken down or otherwise gone, and the next card stands in for it.
+    coverUrl: (wanted.get(list.id) ?? []).map((path) => covers.get(path)).find(Boolean) ?? null,
+    itemCount: counts.get(list.id) ?? 0,
+  }));
+}
+
 export async function listMyCustomBoards(
   supabase: SupabaseClient,
   userId: string

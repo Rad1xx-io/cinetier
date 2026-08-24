@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Settings,
   Clapperboard,
   Drama,
   Gamepad2,
@@ -23,9 +22,10 @@ const ANIME: NavItem = { href: "/anime", label: "Anime", icon: Drama };
 const YOUTUBE: NavItem = { href: "/youtube", label: "YouTube", icon: SquarePlay };
 const GAMES: NavItem = { href: "/games", label: "Games", icon: Gamepad2 };
 const FEED: NavItem = { href: "/feed", label: "Feed", icon: MessagesSquare };
-const SETTINGS: NavItem = { href: "/settings", label: "Settings", icon: Settings };
-// Boards built from uploaded pictures rather than from a catalogue, so it sits
-// apart from the catalogue row rather than in it.
+// Boards built from uploaded pictures rather than from a catalogue. It sits in
+// the row with the catalogues all the same: it is somewhere you go, and burying
+// it under a "More" menu holding one item made it look like an afterthought
+// while costing a click to reach.
 const CUSTOM: NavItem = { href: "/custom", label: "Custom", icon: Images };
 
 /**
@@ -44,6 +44,12 @@ export const TIER_LIST_NAV_ITEM: NavItem = {
  * on a phone the ranking board is what you actually open the app for, and the
  * home page stays one tap away through the logo in the mobile header.
  *
+ * Seven, and seven is the ceiling: at 375px an eighth leaves each tab too
+ * narrow for its label. Settings is the one left out — it is a place you visit
+ * rarely and deliberately, reachable from the desktop header and by its own
+ * address, where the six catalogues and the board are what a thumb reaches for
+ * repeatedly.
+ *
  * Its length drives BottomNav's column count; keep the two in step.
  */
 export const NAV_ITEMS: NavItem[] = [
@@ -53,7 +59,7 @@ export const NAV_ITEMS: NavItem[] = [
   ANIME,
   YOUTUBE,
   GAMES,
-  SETTINGS,
+  CUSTOM,
 ];
 
 /**
@@ -63,10 +69,8 @@ export const NAV_ITEMS: NavItem[] = [
  * pixel-matched.
  */
 export const DESKTOP_NAV_LEFT: NavItem[] = [FEED, MOVIES, ANIME];
-export const DESKTOP_NAV_RIGHT: NavItem[] = [YOUTUBE, GAMES];
+export const DESKTOP_NAV_RIGHT: NavItem[] = [YOUTUBE, GAMES, CUSTOM];
 
-/** Categories that don't get a primary header slot yet — rendered under "More" once non-empty. */
-export const NAV_OVERFLOW_ITEMS: NavItem[] = [CUSTOM];
 
 /** `/` only matches exactly; other routes also match their nested sub-pages (e.g. /youtube/tier-list). */
 export function isNavItemActive(pathname: string, href: string): boolean {
