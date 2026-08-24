@@ -19,6 +19,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   addTierRow,
   deleteItem,
+  clearTierRowImage,
   deleteTierRow,
   moveItem,
   setBoardVisibility,
@@ -151,7 +152,27 @@ export function CustomBoard({ board }: CustomBoardProps) {
 
   async function handleDeleteRow(rowId: string) {
     if (!supabase) return;
+    /*
+     * Asked before, not undone after.
+     *
+     * This sits one icon away from the colour swatch and the picture chooser,
+     * all three of them fourteen pixels wide, and it used to destroy a tier on
+     * a single click with nothing to say and no way back. Somebody looking for
+     * a way to remove a tier's picture found this instead and lost the tier.
+     */
+    const row = rows.find((r) => r.id === rowId);
+    const confirmed = window.confirm(
+      `Delete the ${row?.label ?? ""} tier? Its cards go back to the unsorted pool, and the tier itself cannot be brought back.`
+    );
+    if (!confirmed) return;
     await deleteTierRow(supabase, rowId);
+    refresh();
+  }
+
+  async function handleClearRowImage(rowId: string) {
+    if (!supabase) return;
+    await clearTierRowImage(supabase, rowId);
+    setRows((current) => current.map((r) => (r.id === rowId ? { ...r, imagePath: null, imageUrl: null } : r)));
     refresh();
   }
 
@@ -173,6 +194,12 @@ export function CustomBoard({ board }: CustomBoardProps) {
 
   async function handleDeleteItem(item: CustomItem) {
     if (!supabase) return;
+    // The picture is gone for good, and the button is a hover target on a card
+    // the size of a thumbnail.
+    const confirmed = window.confirm(
+      `Delete ${item.caption ? `“${item.caption}”` : "this card"}? The picture cannot be brought back.`
+    );
+    if (!confirmed) return;
     setItems((current) => current.filter((i) => i.id !== item.id));
     await deleteItem(supabase, item.id);
   }
@@ -243,6 +270,7 @@ export function CustomBoard({ board }: CustomBoardProps) {
               onRename={handleRename}
               onRecolor={handleRecolor}
               onDeleteRow={handleDeleteRow}
+              onClearImage={handleClearRowImage}
               onUploaded={refresh}
               onHideItem={handleHideItem}
               onDeleteItem={handleDeleteItem}
