@@ -6,6 +6,8 @@ import { MessagesSquare, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PostCard } from "@/components/feed/post-card";
+import { getPublishedBoards, type PublishedBoard } from "@/lib/supabase/custom-lists";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PostDialog } from "@/components/feed/post-dialog";
 import {
   getAuthorTitles,
@@ -43,6 +45,7 @@ export function FeedView() {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [authorTitles, setAuthorTitles] = useState<Map<string, RankedTitle[]>>(new Map());
   const [likes, setLikes] = useState<Set<string>>(new Set());
+  const [published, setPublished] = useState<Map<string, PublishedBoard>>(new Map());
   const [category, setCategory] = useState<PostCategory | "all">("all");
   const [openPost, setOpenPost] = useState<FeedPost | null>(null);
   const { user } = useSupabaseSession();
@@ -69,19 +72,32 @@ export function FeedView() {
       if (rows.length === 0) {
         setAuthorTitles(new Map());
         setLikes(new Set());
+        setPublished(new Map());
         return;
       }
 
       // Both follow-ups are for decoration on cards already on screen, so they
       // are not awaited together with the feed itself.
       const authorIds = [...new Set(rows.map((post) => post.userId))];
-      const [titles, myLikes] = await Promise.all([
+      /*
+       * Boards of uploaded pictures come from their own snapshot rather than
+       * from the author's ranked titles, and their covers are signed there and
+       * then — which is what lets a card taken down since publication fall out
+       * of a post that was frozen weeks ago.
+       */
+      const supabase = getSupabaseBrowserClient();
+      const customPostIds = rows.filter((post) => post.category === "custom").map((post) => post.id);
+      const [titles, myLikes, boards] = await Promise.all([
         getAuthorTitles(authorIds),
         getMyLikes(rows.map((post) => post.id)),
+        supabase && customPostIds.length > 0
+          ? getPublishedBoards(supabase, customPostIds)
+          : Promise.resolve(new Map<string, PublishedBoard>()),
       ]);
       if (cancelled) return;
       setAuthorTitles(titlesByAuthor(titles));
       setLikes(myLikes);
+      setPublished(boards);
     })().catch(() => {
       if (!cancelled) setState("unavailable");
     });
@@ -224,6 +240,7 @@ export function FeedView() {
               key={post.id}
               post={post}
               titles={authorTitles.get(post.userId) ?? []}
+              published={published.get(post.id)}
               liked={likes.has(post.id)}
               onOpen={handleOpenPost}
               onToggleLike={handleToggleLike}

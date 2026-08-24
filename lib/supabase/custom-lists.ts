@@ -305,3 +305,145 @@ export async function setItemHidden(
 export async function deleteItem(supabase: SupabaseClient, itemId: string): Promise<void> {
   await supabase.from("custom_items").delete().eq("id", itemId);
 }
+
+/* ------------------------------------------------------------ publishing -- */
+
+/** A tier as it stood when Publish was pressed. */
+export interface SnapshotRow {
+  id: string;
+  label: string;
+  color: string;
+  position: number;
+}
+
+/** A card as it stood then — no picture, deliberately. See below. */
+export interface SnapshotItem {
+  id: string;
+  rowId: string | null;
+  position: number;
+  caption: string;
+}
+
+export interface BoardSnapshot {
+  rows: SnapshotRow[];
+  items: SnapshotItem[];
+}
+
+/**
+ * The shape of a board, and only the shape.
+ *
+ * No image paths and no copies of anything: a published post looks its cards up
+ * live every time it renders, so a card that is later hidden, blocked or
+ * deleted has nothing here to be rendered from. That is what keeps a takedown
+ * working after publication — the frozen half cannot outlive the moderated
+ * half if the frozen half never held a picture.
+ */
+export function buildSnapshot(rows: CustomTierRow[], items: CustomItem[]): BoardSnapshot {
+  return {
+    rows: rows
+      .map((r) => ({ id: r.id, label: r.label, color: r.color, position: r.position }))
+      .sort((a, b) => a.position - b.position),
+    items: items
+      .map((i) => ({ id: i.id, rowId: i.rowId, position: i.position, caption: i.caption }))
+      .sort((a, b) => a.position - b.position),
+  };
+}
+
+export type PublishOutcome = { postId: string } | { error: string };
+
+export async function publishCustomBoard(
+  supabase: SupabaseClient,
+  board: CustomBoard,
+  description: string
+): Promise<PublishOutcome> {
+  const { data, error } = await supabase
+    .from("posts")
+    .insert({
+      user_id: board.list.userId,
+      title: board.list.title,
+      description,
+      category: "custom",
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    console.error("TierListOnline: publishing a board failed —", error);
+    return { error: describeWriteFailure(error) };
+  }
+
+  const postId = data.id as string;
+  const { error: snapshotError } = await supabase.from("custom_list_publications").insert({
+    post_id: postId,
+    list_id: board.list.id,
+    snapshot: buildSnapshot(board.rows, board.items),
+  });
+  if (snapshotError) {
+    // A post with no snapshot would render as an empty board for everyone, so
+    // it is taken back rather than left in the feed as a puzzle.
+    await supabase.from("posts").delete().eq("id", postId);
+    console.error("TierListOnline: the snapshot failed, so the post was withdrawn —", snapshotError);
+    return { error: describeWriteFailure(snapshotError) };
+  }
+
+  return { postId };
+}
+
+/** A published board, ready to render: frozen shape, covers resolved just now. */
+export interface PublishedBoard {
+  postId: string;
+  listId: string;
+  rows: SnapshotRow[];
+  items: (SnapshotItem & { imageUrl: string | null })[];
+}
+
+/**
+ * Resolves published boards for a batch of posts.
+ *
+ * The shape comes from the snapshot; the pictures come from the cards as they
+ * are right now, through the same row-level security every other read goes
+ * through. A card that has since been hidden, blocked or deleted simply is not
+ * in the lookup, so it drops out of the post — the structure still says where
+ * it sat, and nothing renders there.
+ */
+export async function getPublishedBoards(
+  supabase: SupabaseClient,
+  postIds: string[]
+): Promise<Map<string, PublishedBoard>> {
+  const boards = new Map<string, PublishedBoard>();
+  if (postIds.length === 0) return boards;
+
+  const { data, error } = await supabase
+    .from("custom_list_publications")
+    .select("post_id, list_id, snapshot")
+    .in("post_id", postIds);
+  if (error || !data) return boards;
+
+  const publications = data as { post_id: string; list_id: string; snapshot: BoardSnapshot }[];
+  const itemIds = publications.flatMap((p) => (p.snapshot.items ?? []).map((i) => i.id));
+  if (itemIds.length === 0) return boards;
+
+  const { data: liveItems } = await supabase
+    .from("custom_items")
+    .select("id, image_path")
+    .in("id", itemIds);
+
+  const paths = new Map<string, string>();
+  for (const item of (liveItems ?? []) as { id: string; image_path: string }[]) {
+    paths.set(item.id, item.image_path);
+  }
+  const covers = await signCovers(supabase, [...paths.values()]);
+
+  for (const publication of publications) {
+    boards.set(publication.post_id, {
+      postId: publication.post_id,
+      listId: publication.list_id,
+      rows: publication.snapshot.rows ?? [],
+      items: (publication.snapshot.items ?? []).map((item) => {
+        const path = paths.get(item.id);
+        return { ...item, imageUrl: path ? (covers.get(path) ?? null) : null };
+      }),
+    });
+  }
+
+  return boards;
+}

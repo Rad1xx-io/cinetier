@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Eye, GitFork, Heart, MessageCircle } from "lucide-react";
 import { ContentTypeBadge } from "@/components/ui/content-type-badge";
 import { TierBoard } from "@/components/feed/tier-board";
+import { CustomPostBoard } from "@/components/feed/custom-post-board";
+import type { PublishedBoard } from "@/lib/supabase/custom-lists";
 import { DonateButton } from "@/components/profile/donate-button";
 import { avatarInitials, buildMiniBoard } from "@/lib/feed/post-preview";
 import { titlesCountLabel } from "@/lib/utils/plural";
@@ -15,12 +17,14 @@ interface PostCardProps {
   post: FeedPost;
   /** The author's board, unabridged — the card decides how much of it fits. */
   titles: RankedTitle[];
+  /** Present instead of `titles` when the post is a board of uploaded pictures. */
+  published?: PublishedBoard;
   liked: boolean;
   onOpen: (post: FeedPost) => void;
   onToggleLike: (post: FeedPost) => void;
 }
 
-export function PostCard({ post, titles, liked, onOpen, onToggleLike }: PostCardProps) {
+export function PostCard({ post, titles, published, liked, onOpen, onToggleLike }: PostCardProps) {
   const displayName = post.displayName || `@${post.username}`;
   const board = buildMiniBoard(titles);
 
@@ -36,7 +40,9 @@ export function PostCard({ post, titles, liked, onOpen, onToggleLike }: PostCard
             than a strip of posters: the coloured plates are what make a tier
             list recognisable at a glance, and a flat row loses that entirely. */}
         <div className="bg-surface-raised p-2">
-          {board.rows.length === 0 ? (
+          {published ? (
+            <CustomPostBoard board={published} variant="compact" />
+          ) : board.rows.length === 0 ? (
             <p className="flex h-24 items-center justify-center text-xs text-muted">
               This author has not published their list
             </p>
@@ -44,7 +50,7 @@ export function PostCard({ post, titles, liked, onOpen, onToggleLike }: PostCard
             <TierBoard rows={board.rows} variant="compact" />
           )}
 
-          {board.hiddenCount > 0 && (
+          {!published && board.hiddenCount > 0 && (
             // Inside the button that opens the post, so it reads as the way to
             // see the rest — which is exactly what tapping it does.
             <p className="mt-1 rounded bg-background/60 px-2 py-0.5 text-center text-[10px] text-muted">
@@ -75,7 +81,13 @@ export function PostCard({ post, titles, liked, onOpen, onToggleLike }: PostCard
           <span className="min-w-0 truncate">{displayName}</span>
         </Link>
 
-        <ContentTypeBadge type={post.category === "mixed" ? "movie" : post.category} />
+        {post.category === "custom" ? (
+          <span className="rounded-full border border-border bg-surface-raised px-2 py-0.5 text-[10px] font-medium text-muted">
+            Photos
+          </span>
+        ) : (
+          <ContentTypeBadge type={post.category === "mixed" ? "movie" : post.category} />
+        )}
       </div>
 
       <div className="flex items-center gap-1 border-t border-border px-2 py-1.5 text-xs text-muted">
