@@ -53,6 +53,30 @@ export function CustomBoard({ board }: CustomBoardProps) {
   const [items, setItems] = useState<CustomItem[]>(board.items);
   const [isPublic, setIsPublic] = useState(board.list.isPublic);
   const [rows, setRows] = useState(board.rows);
+
+  /*
+   * Adopt the board the server just sent.
+   *
+   * These three start as copies of the props and then live on their own, so a
+   * drag can move a card before the write that records it has finished. The
+   * cost is that `useState` reads its argument once and ignores it ever after:
+   * uploading a picture called `router.refresh()`, the server re-rendered with
+   * the new card in it, the props arrived — and the board went on showing the
+   * list it had copied at mount. The picture was in the database, in the
+   * bucket, and in the markup, and still nobody could see it without reloading
+   * the page by hand.
+   *
+   * Adjusted during the render that brings the new props rather than in an
+   * effect afterwards: React drops this render and starts again immediately,
+   * so the board is never painted holding the stale copy.
+   */
+  const [rendered, setRendered] = useState(board);
+  if (rendered !== board) {
+    setRendered(board);
+    setItems(board.items);
+    setRows(board.rows);
+    setIsPublic(board.list.isPublic);
+  }
   const supabase = getSupabaseBrowserClient();
   const canEdit = board.canEdit && supabase !== null;
 

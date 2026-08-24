@@ -52,7 +52,16 @@ export function CustomCard({ item, canEdit, onHide, onDelete }: CustomCardProps)
           <img
             src={item.imageUrl}
             alt={item.caption || "Custom card"}
-            loading="lazy"
+            /*
+             * Loaded eagerly, like the tier pictures beside it.
+             *
+             * A board holds a handful of pictures and every one of them is the
+             * point of the page, so there is nothing here worth deferring. And
+             * a deferred one does not always arrive: an image that is waiting
+             * for the viewport never loads in a tab that is not drawing
+             * frames, which is what a screenshot tool, a background tab and an
+             * export all are. That reads as a card with nothing in it.
+             */
             className="h-full w-full object-cover"
           />
         ) : (
