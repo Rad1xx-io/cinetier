@@ -109,6 +109,7 @@ export function CustomTierRow({
           <button
             type="button"
             onClick={() => onClearImage(row.id)}
+            data-export-hide
             className="absolute right-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-background text-foreground shadow ring-1 ring-border transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             aria-label="Remove this tier's picture"
             title="Remove this tier's picture — the tier stays"
@@ -130,7 +131,7 @@ export function CustomTierRow({
         )}
 
         {canEdit && (
-          <div className="relative z-10 flex items-center gap-1">
+          <div data-export-hide className="relative z-10 flex items-center gap-1">
             <label
               className="cursor-pointer rounded p-0.5 text-white/80 hover:text-white"
               title={row.imageUrl ? "Replace this tier's picture" : "Use a picture for this tier"}
@@ -174,6 +175,7 @@ export function CustomTierRow({
         <button
           type="button"
           onClick={() => onDeleteRow(row.id)}
+          data-export-hide
           className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-md bg-background/85 text-muted shadow-sm backdrop-blur transition-colors hover:bg-background hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           aria-label={`Delete the ${row.label} tier`}
           title="Delete this tier — its cards go back to the pool"

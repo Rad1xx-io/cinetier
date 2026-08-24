@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -13,7 +13,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { Globe, Lock, Plus } from "lucide-react";
+import { Download, Globe, Lock, Plus } from "lucide-react";
 import type { CustomBoard as Board, CustomItem } from "@/lib/types/custom-list";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -31,6 +31,10 @@ import { CustomTierRow } from "@/components/custom-list/custom-tier-row";
 import { UploadDialog } from "@/components/custom-list/upload-dialog";
 import { ReportButton } from "@/components/custom-list/report-button";
 import { Button } from "@/components/ui/button";
+import { downloadPng, renderBoardPng } from "@/lib/utils/board-export";
+import { describeExportFailure } from "@/lib/utils/export-error";
+import { SITE_HOST } from "@/lib/seo/site";
+import { trackImageExported } from "@/lib/analytics/events";
 import { tierCollisionDetection } from "@/lib/utils/tier-dnd";
 
 /** The pool of cards not yet given a tier. Its own droppable, like any row. */
@@ -101,6 +105,47 @@ export function CustomBoard({ board }: CustomBoardProps) {
   }, [items, rows]);
 
   const refresh = useCallback(() => router.refresh(), [router]);
+
+  const boardRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  /*
+   * The same pipeline the film and game boards use, pointed at this one.
+   *
+   * Worth saying why it works unchanged on pictures that live in a private
+   * bucket: every cover here is a signed Supabase url, and the export inlines
+   * each one with a cors `fetch` before it rasterises. Storage answers
+   * `Access-Control-Allow-Origin: *` and honours the preflight, so the request
+   * is allowed — and `cache: "reload"` in the shared options steps past the
+   * opaque cache entry the page's own `<img>` left behind, which is the thing
+   * that turned every cover transparent the last time.
+   */
+  async function handleExport() {
+    const node = boardRef.current;
+    if (!node || exporting) return;
+
+    setExporting(true);
+    setNotice("");
+    const watermark = node.querySelector<HTMLElement>("[data-export-watermark]");
+    if (watermark) watermark.style.opacity = "1";
+    try {
+      downloadPng(await renderBoardPng(node), "tierlistonline-board");
+      trackImageExported({ itemsCount: items.length, succeeded: true });
+      setNotice("Image saved");
+    } catch (err) {
+      const reason = describeExportFailure(err);
+      trackImageExported({ itemsCount: items.length, succeeded: false, reason: reason.slice(0, 120) });
+      setNotice(
+        reason === "export-timeout"
+          ? "The image did not finish rendering. Try again in a moment."
+          : `Could not create the image (${reason.slice(0, 80)}).`
+      );
+    } finally {
+      if (watermark) watermark.style.opacity = "0";
+      setExporting(false);
+    }
+  }
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -244,6 +289,10 @@ export function CustomBoard({ board }: CustomBoardProps) {
               <UploadDialog listId={board.list.id} rows={rows} onUploaded={refresh} />
             </>
           )}
+          <Button variant="secondary" size="sm" onClick={handleExport} disabled={exporting}>
+            <Download className="mr-1.5 h-4 w-4" aria-hidden />
+            {exporting ? "Rendering…" : "Download PNG"}
+          </Button>
           {!canEdit && (
             <ReportButton
               subjectType="custom_list"
@@ -254,12 +303,14 @@ export function CustomBoard({ board }: CustomBoardProps) {
         </div>
       </div>
 
+      {notice && <p className="mt-2 text-xs text-muted">{notice}</p>}
+
       <DndContext
         sensors={sensors}
         collisionDetection={tierCollisionDetection}
         onDragEnd={handleDragEnd}
       >
-        <div className="mt-4 space-y-3">
+        <div ref={boardRef} className="relative mt-4 space-y-3 bg-background">
           {rows.map((row) => (
             <CustomTierRow
               key={row.id}
@@ -276,6 +327,18 @@ export function CustomBoard({ board }: CustomBoardProps) {
               onDeleteItem={handleDeleteItem}
             />
           ))}
+
+          {/* Sits in the DOM at zero opacity so it never disturbs the live
+              layout, and is turned up for the length of the capture. */}
+          <div
+            data-export-watermark
+            className="pointer-events-none absolute bottom-1 right-3 flex flex-col items-end leading-tight opacity-0"
+          >
+            <span className="text-xs font-semibold tracking-tight">
+              TierList<span className="text-accent">Online</span>
+            </span>
+            <span className="text-[10px] font-medium tracking-tight text-muted">{SITE_HOST}</span>
+          </div>
         </div>
 
         {canEdit && (

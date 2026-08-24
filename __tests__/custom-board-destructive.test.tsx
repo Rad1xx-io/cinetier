@@ -70,7 +70,7 @@ describe("destroying something asks first", () => {
   });
 
   it("says what deleting a tier will do to the cards in it", async () => {
-    const asked = vi.fn((_message?: string) => false);
+    const asked = vi.fn((message?: string) => String(message ?? ""));
     vi.stubGlobal("confirm", asked);
     render(<CustomBoard board={board()} />);
 

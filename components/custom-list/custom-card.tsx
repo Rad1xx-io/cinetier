@@ -72,7 +72,7 @@ export function CustomCard({ item, canEdit, onHide, onDelete }: CustomCardProps)
         )}
 
         {canEdit && (
-          <div className="absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+          <div data-export-hide className="absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
