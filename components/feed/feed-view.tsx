@@ -161,6 +161,17 @@ export function FeedView() {
     [user]
   );
 
+  /** Drops a post the author has just removed, without refetching the feed. */
+  const handlePostDeleted = useCallback((postId: string) => {
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    setPublished((prev) => {
+      if (!prev.has(postId)) return prev;
+      const next = new Map(prev);
+      next.delete(postId);
+      return next;
+    });
+  }, []);
+
   const handleCommentAdded = useCallback((postId: string) => {
     setPosts((prev) =>
       prev.map((p) => (p.id === postId ? { ...p, commentsCount: p.commentsCount + 1 } : p))
@@ -253,6 +264,7 @@ export function FeedView() {
         post={openPost}
         titles={openPost ? (authorTitles.get(openPost.userId) ?? []) : []}
         published={openPost ? published.get(openPost.id) : undefined}
+        onDeleted={handlePostDeleted}
         onClose={() => setOpenPost(null)}
         liked={openPost ? likes.has(openPost.id) : false}
         onToggleLike={handleToggleLike}

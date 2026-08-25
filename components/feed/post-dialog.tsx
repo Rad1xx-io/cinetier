@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Eye, GitFork, Heart, Loader2, MessageCircle, Send, X } from "lucide-react";
+import { Eye, GitFork, Heart, Loader2, MessageCircle, Send, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   addComment,
+  deletePost,
   getAuthorTitles,
   getComments,
   registerPostView,
@@ -43,6 +44,8 @@ interface PostDialogProps {
   liked: boolean;
   onToggleLike: (post: FeedPost) => void;
   onCommentAdded: (postId: string) => void;
+  /** Called once the author has removed their own post. */
+  onDeleted: (postId: string) => void;
 }
 
 function formatWhen(iso: string): string {
@@ -60,12 +63,14 @@ export function PostDialog({
   liked,
   onToggleLike,
   onCommentAdded,
+  onDeleted,
 }: PostDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const { user } = useSupabaseSession();
   const [comments, setComments] = useState<PostComment[] | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   /**
    * The feed loads a bounded slice per author to keep one screen to one query.
    * The dialog promises the whole board, so it fetches the rest on open and
@@ -124,6 +129,23 @@ export function PostDialog({
       setDraft("");
       onCommentAdded(post.id);
     }
+  }
+
+  async function handleDelete() {
+    if (!post || deleting) return;
+    // Asked the way every other irreversible thing here is asked.
+    const confirmed = window.confirm(
+      `Delete “${post.title}”? It goes out of the feed for everyone, along with its comments. Your board itself is not touched.`
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    const removed = await deletePost(post.id);
+    setDeleting(false);
+    if (!removed) return;
+
+    onDeleted(post.id);
+    onClose();
   }
 
   const rows = buildTierRows(fullTitles ?? titles);
@@ -222,6 +244,16 @@ export function PostDialog({
               variant="compact"
               className="ml-auto"
             />
+
+            {/* Offered to the author and nobody else. Publishing used to be
+                one-way: hiding the board emptied the pictures out of the post
+                and left its title in the feed for good. */}
+            {user?.id === post.userId && (
+              <Button size="sm" variant="secondary" onClick={handleDelete} disabled={deleting}>
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                {deleting ? "Deleting…" : "Delete post"}
+              </Button>
+            )}
 
             {/* Same reasoning as on the card: this opens the author's ranked
                 titles, which a board of their own photographs is not. */}
