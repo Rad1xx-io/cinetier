@@ -338,3 +338,28 @@ export async function registerPostView(postId: string): Promise<void> {
   if (!supabase) return;
   await supabase.rpc("increment_post_views", { p_post_id: postId });
 }
+
+/**
+ * Takes a post back out of the feed.
+ *
+ * Publishing was one-way until now: an author could make the board private,
+ * which emptied the pictures out of their post, but the post itself stayed in
+ * the feed under its title with nothing behind it and no way to remove it.
+ * For a board of somebody's own photographs that is the wrong default — the
+ * person who put it there should be able to take it back.
+ *
+ * The database has allowed this since the feed was built (`for delete using
+ * (auth.uid() = user_id)`); what was missing was anywhere to ask. Any
+ * publication attached to the post goes with it, by the foreign key.
+ */
+export async function deletePost(postId: string): Promise<boolean> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return false;
+
+  const { error } = await supabase.from("posts").delete().eq("id", postId);
+  if (error) {
+    console.error("TierListOnline: deleting a post failed —", error);
+    return false;
+  }
+  return true;
+}

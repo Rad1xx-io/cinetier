@@ -250,7 +250,7 @@ export function CustomBoard({ board }: CustomBoardProps) {
 
   async function handleAddRow() {
     if (!supabase) return;
-    await addTierRow(supabase, board.list.id, rows.length);
+    await addTierRow(supabase, board.list.id);
     refresh();
   }
 

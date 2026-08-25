@@ -314,8 +314,69 @@ export async function setBoardVisibility(
     .eq("id", listId);
 }
 
+/**
+ * Removes pictures from the bucket once nothing points at them any more.
+ *
+ * Called *after* the row is gone, never before and never instead: the deletion
+ * somebody asked for is the part that must not fail, and a bucket that keeps a
+ * file too long costs storage, while one that drops it too early costs the
+ * picture. Every failure here is swallowed for the same reason — a card that
+ * will not disappear because a file could not be deleted is a worse bug than
+ * the one this fixes.
+ *
+ * A path belongs to exactly one row today, and the database is what makes that
+ * true rather than convention: `upload_grants.image_path` is unique, so a path
+ * can be granted once in the lifetime of the project, and `attach_upload`
+ * spends that grant on either one tier or one new card and marks it consumed.
+ * Duplicating a card would break the invariant, which is why this asks the
+ * database what still refers to each path instead of trusting the arithmetic.
+ * Keep the question, and a future duplicate cannot quietly tear the picture out
+ * of a card that is still on the board.
+ */
+async function removeUnreferencedFiles(supabase: SupabaseClient, paths: (string | null)[]): Promise<void> {
+  const candidates = [...new Set(paths.filter((path): path is string => Boolean(path)))];
+  if (candidates.length === 0) return;
+
+  try {
+    const [items, rows] = await Promise.all([
+      supabase.from("custom_items").select("image_path").in("image_path", candidates),
+      supabase.from("custom_tier_rows").select("image_path").in("image_path", candidates),
+    ]);
+
+    // A failed lookup means "unknown", and unknown is not a licence to delete.
+    if (items.error || rows.error) return;
+
+    const stillReferenced = new Set<string>();
+    for (const row of [...(items.data ?? []), ...(rows.data ?? [])]) {
+      const path = (row as { image_path: string | null }).image_path;
+      if (path) stillReferenced.add(path);
+    }
+
+    const orphans = candidates.filter((path) => !stillReferenced.has(path));
+    if (orphans.length === 0) return;
+
+    await supabase.storage.from(BUCKET).remove(orphans);
+  } catch {
+    // Storage is allowed to be unavailable. The row is already gone, which is
+    // what the reader asked for; the file becomes litter, not a broken board.
+  }
+}
+
 export async function deleteCustomBoard(supabase: SupabaseClient, listId: string): Promise<void> {
-  await supabase.from("custom_tier_lists").delete().eq("id", listId);
+  // Collected first: the delete cascades, and afterwards there is nothing left
+  // to ask which files the board was using.
+  const [rows, items] = await Promise.all([
+    supabase.from("custom_tier_rows").select("image_path").eq("list_id", listId),
+    supabase.from("custom_items").select("image_path").eq("list_id", listId),
+  ]);
+  const paths = [...(rows.data ?? []), ...(items.data ?? [])].map(
+    (row) => (row as { image_path: string | null }).image_path
+  );
+
+  const { error } = await supabase.from("custom_tier_lists").delete().eq("id", listId);
+  if (error) return;
+
+  await removeUnreferencedFiles(supabase, paths);
 }
 
 export async function updateTierRow(
@@ -331,32 +392,70 @@ export async function updateTierRow(
   await supabase.from("custom_tier_rows").update(update).eq("id", rowId);
 }
 
-export async function addTierRow(
-  supabase: SupabaseClient,
-  listId: string,
-  position: number
-): Promise<void> {
+export async function addTierRow(supabase: SupabaseClient, listId: string): Promise<void> {
+  /*
+   * The next position is asked for, not counted.
+   *
+   * It used to be the number of tiers on the board, which is the same thing
+   * only while nothing has ever been deleted. Delete one and the count falls
+   * back onto a position already taken: a board that had lost a tier grew a
+   * second tier at position 4, and the order between the two was whatever the
+   * database felt like that day. Positions are deliberately not unique — a
+   * reorder rewrites several at once and would trip over a constraint — so
+   * nothing was there to complain.
+   */
+  const { data } = await supabase
+    .from("custom_tier_rows")
+    .select("position")
+    .eq("list_id", listId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const next = data ? ((data as { position: number }).position ?? 0) + 1 : 0;
   await supabase
     .from("custom_tier_rows")
-    .insert({ list_id: listId, position, label: "New tier", color: "#8b5cf6" });
+    .insert({ list_id: listId, position: next, label: "New tier", color: "#8b5cf6" });
 }
 
 /**
  * Takes the picture off a tier, leaving the tier itself alone.
  *
- * The file is not removed from the bucket, and does not need to be: nothing is
- * served out of there without a row pointing at it, so an unreferenced object
- * is already unreachable. Clearing the reference is the whole of the removal,
- * and it cannot fail halfway.
+ * The file goes too. Unreferenced, it was already unreachable — nothing is
+ * served out of the bucket without a row pointing at it — but unreachable and
+ * gone are different things on a plan that charges by the gigabyte, and
+ * somebody who removes a picture means removed.
  */
 export async function clearTierRowImage(supabase: SupabaseClient, rowId: string): Promise<void> {
-  await supabase.from("custom_tier_rows").update({ image_path: null }).eq("id", rowId);
+  const { data } = await supabase
+    .from("custom_tier_rows")
+    .select("image_path")
+    .eq("id", rowId)
+    .maybeSingle();
+
+  const { error } = await supabase
+    .from("custom_tier_rows")
+    .update({ image_path: null })
+    .eq("id", rowId);
+  if (error) return;
+
+  await removeUnreferencedFiles(supabase, [(data as { image_path: string | null } | null)?.image_path ?? null]);
 }
 
 export async function deleteTierRow(supabase: SupabaseClient, rowId: string): Promise<void> {
-  // The cards are not deleted with it: the foreign key sets them adrift into
-  // the pool, which is recoverable, and losing a picture is not.
-  await supabase.from("custom_tier_rows").delete().eq("id", rowId);
+  // Only the tier's own picture is collected. Its cards are not deleted with
+  // it — the foreign key sets them adrift into the pool — so their files are
+  // still spoken for, and the reference check below would refuse them anyway.
+  const { data } = await supabase
+    .from("custom_tier_rows")
+    .select("image_path")
+    .eq("id", rowId)
+    .maybeSingle();
+
+  const { error } = await supabase.from("custom_tier_rows").delete().eq("id", rowId);
+  if (error) return;
+
+  await removeUnreferencedFiles(supabase, [(data as { image_path: string | null } | null)?.image_path ?? null]);
 }
 
 /** Where a card sits now — the one write a drag produces. */
@@ -390,7 +489,16 @@ export async function setItemHidden(
 }
 
 export async function deleteItem(supabase: SupabaseClient, itemId: string): Promise<void> {
-  await supabase.from("custom_items").delete().eq("id", itemId);
+  const { data } = await supabase
+    .from("custom_items")
+    .select("image_path")
+    .eq("id", itemId)
+    .maybeSingle();
+
+  const { error } = await supabase.from("custom_items").delete().eq("id", itemId);
+  if (error) return;
+
+  await removeUnreferencedFiles(supabase, [(data as { image_path: string | null } | null)?.image_path ?? null]);
 }
 
 /* ------------------------------------------------------------ publishing -- */
