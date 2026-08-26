@@ -1,85 +1,56 @@
-# Clear List now respects the active catalog filter
-
-## Cause
-
-`/tier-list` never has an "everything at once" view — the catalog picker has
-no "all" entry by design (`CATALOG_FILTERS`, deliberately: a tier holding
-films, games and channels side by side was never a ranking of anything).
-`activeCatalog` is always exactly one of Films/TV/Anime/Games/YouTube.
-
-Clear List never read it. It closed over the whole board's `titles`/`channels`
-and wiped both stores completely, while its own dialog said the number that
-made this look intentional: looking at Films with 5 titles and 3 more ranked
-under TV, it asked to remove "8 titles" — the true total — while the person
-asking had 3 in view.
-
-## Fix
-
-`TierListActions` now takes the active catalog as a prop. Clear List:
-
-- **Films/TV/Anime/Games** — reads the store fresh (`getRatedTitles()`), keeps
-  everything not in the active catalog, writes that back with `reorderAll`.
-  Every other title's tier, order and criteria are untouched — they are never
-  read, only titles matching the *other* catalogs are.
-- **YouTube** — clears channels only (`clearAllChannels()`); titles are never
-  touched, since YouTube has no catalog to split further.
-- The confirmation dialog names the catalog and its own count: "Remove all 3
-  Film titles from this list? Everything else on the board stays where it
-  is." The old "the tiers stay, empty" line is gone — no longer accurate once
-  a tier can still hold titles from every other catalog.
-- The menu item disappears when the *active* catalog is empty, even if other
-  catalogs have plenty — the old check summed both stores regardless of what
-  was on screen.
-- Nothing is cached: the count is computed fresh every render from the
-  catalog and the live arrays, and the write reads the store again at click
-  time rather than trusting whatever this component mounted with.
-
-## Verified
-
-**Unit** — `__tests__/tier-list-actions-custom-clear.test.tsx`, rewritten (the
-old version asserted the bug — a whole-board clear — as the correct
-behaviour). Covers: menu hidden on an empty active catalog with other
-catalogs stocked; dialog names the right catalog and count, not the board
-total; decline changes nothing; only the active catalog's titles are removed,
-survivors compared by value; the count is read live rather than from mount
-props; YouTube clears channels and leaves every title alone; singular wording
-for exactly one.
-
-Two negative controls, both confirmed by reverting the fix locally: the
-visibility check and the "removes only the active catalog" check both fail
-without it.
-
-**E2E** — `e2e/tier-list-clear-and-menu.spec.ts`, extended with the exact
-production shape: a board holding both Films and TV. Confirms the dialog text,
-that TV survives untouched, that switching the filter to TV before opening
-the menu changes what gets cleared (proving nothing is cached), and that the
-menu item is absent on an empty catalog with titles elsewhere. Reverting the
-fix and running just these: **4 of 6 fail** — the exact production bug,
-reproduced and caught.
-
-10/10 e2e tests pass with the fix in place. 894 unit tests, lint, typecheck
-and build clean.
-
-## Screenshots
-
-`.ai/reports/shots/clear-list-before.png` — board with Films(3) + TV(5),
-Films active. `clear-list-after.png` — after confirming Clear List: Films
-tier empty, TV untouched. Confirm text captured live for both catalogs:
-
-- Films: `Remove all 3 Film titles from this list? Everything else on the
-  board stays where it is. This cannot be undone.`
-- TV: `Remove all 5 TV titles from this list? Everything else on the board
-  stays where it is. This cannot be undone.`
+# Freeze regular tier-list posts, add a Download menu, and a Custom feed tab
 
 ## PR and CI
 
-**PR #44 — https://github.com/Rad1xx-io/cinetier/pull/44**
+**PR #45 — https://github.com/Rad1xx-io/cinetier/pull/45**
 
-| check | status |
-| --- | --- |
-| `Typecheck, lint and test` | success (20:46:40 → 20:47:46) |
-| `Browser test` | success (20:46:40 → 20:47:55) |
-| `Vercel Preview Comments` | success |
+*(status filled in below once the latest commit's checks have run — see the note at the bottom)*
 
-`state: open`, `merged: false`, `mergeable_state: clean`, base `main`, 1
-commit, 7 files changed, +343/−63.
+## What changed
+
+### 1 · A post used to keep rewriting itself
+
+A post carried no ranking data of its own — it was rendered by re-reading the author's live `ranked_titles` every time. Re-tier a title, un-rank it, and every post ever made about that board quietly changed with it.
+
+Migration `014_ranked_title_publications.sql` mirrors 013's `custom_list_publications` for this kind of post: freezes which title sat in which tier, in what order, at the moment Publish was pressed — **not** the titles themselves. No name, no poster, no release date: those are catalogue facts, resolved live from `ranked_titles` at render time, the same way a custom board's pictures are. A title the author has since un-ranked is simply not found and drops out — a gap, not an error.
+
+`ranked_titles` already gates a stranger's read on the author's own `is_public` flag (migration 004), so "take a whole board down" already had a lever — nothing new was added for it.
+
+- `publishPost` now freezes the board actually on screen (like `publishCustomBoard` does), not a fresh database read. A failed snapshot insert withdraws the post rather than leaving one with nothing behind it.
+- No UPDATE policy, self-checked exactly as 013 is.
+- `getAuthorTitles` gained `.order("id", { ascending: true })` ahead of its 40-per-author cap — requested mid-review, after the plan was approved, because an undetermined cap meant "missing from this batch" could be pure chance rather than the author's own action, and a snapshot now reads that absence as "taken down."
+- Posts published before this migration have no row here and keep rendering live until deleted and republished. **Confirmed on production: 2 such posts** (movie, game category) — untouched by this migration, as agreed.
+
+### 2 · Downloading a post
+
+The same `OverflowMenu` from #41/#42, in the post dialog: **Download** next to **Delete post**, offered to any viewer. Reuses `renderBoardPng`/`downloadPng` unchanged — the ref points at whichever board is already rendered (resolved snapshot for a regular post, published board for a custom one), so there was no format to adapt.
+
+Added the watermark `TierBoard` and `CustomPostBoard` were missing relative to every other export in the app, gated to the dialog's `full` variant so the feed-card thumbnail is untouched.
+
+### 3 · A Custom tab in the feed
+
+One entry in `CATEGORY_TABS`. A showcase, not a moderation boundary — reporting a custom photo is still a manual `console.error` today, unchanged by this.
+
+### Found along the way: the test harness had gone stale
+
+`supabase/testing/run.sh` only ever applied migration `012` and only ever ran `10_rls_checks.sql`. `013` and its own `11_publication_checks.sql` (from #33) were never wired in — 013's self-check requires `009` first and would have failed the moment this script was actually run end to end. Fixed: `run.sh` now applies `009/012/013/014` and runs every numbered check file present. `ranked_titles` itself lives in `supabase/schema.sql`, outside the numbered migrations, so `00_platform.sql` gained a stand-in for it, including the 004 `is_public` read policy 014 leans on.
+
+## Verified
+
+- **911 unit tests** (17 new), lint, typecheck and build clean.
+- **10 browser tests, all pre-existing and untouched** — confirms the post-dialog reshuffle (Delete post moving behind the menu) broke nothing already covered.
+- Every new unit test has a **negative control**: `resolveSnapshotTitles`'s merge/gap logic, `getAuthorTitles`'s ordering, the publish rollback, the Custom tab, and the watermark reveal each demonstrably fail when the behaviour they check is removed.
+- **RLS harness re-run clean end to end**, including `--negative` mode. `12_ranked_title_publication_checks.sql` (new, 7 checks) passed against a real PostgreSQL 16; the no-UPDATE check was separately confirmed to *fail* when that policy is temporarily reopened in the same session.
+- `.ai/DECISIONS.md` and `.ai/ARCHITECTURE.md` updated with the snapshot design and the `ranked_titles`-lives-outside-migrations gotcha, so the next session does not rediscover either by hand.
+
+## Screenshots
+
+`.ai/reports/shots/`:
+- `post-dialog-download-menu.png` — the post dialog's overflow menu open, showing **Download** alongside **Delete post**.
+- `feed-tabs-with-custom.png` — the feed's category tabs with **Custom** added, selected.
+
+Captured with Playwright against a temporary route (deleted before this was committed), the same approach used for #41/#42's toolbar screenshots — the in-app browser pane does not composite frames reliably enough to screenshot from directly.
+
+## Not verified live
+
+Publishing itself needs a signed-in session, which cannot be exercised here — the RLS harness proves the database side end to end (all 7 new checks, plus the existing 13 re-verified in the same run), but nobody has clicked Publish on a real account since this shipped.
