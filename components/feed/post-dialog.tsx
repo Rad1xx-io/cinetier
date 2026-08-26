@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Eye, GitFork, Heart, Loader2, MessageCircle, Send, Trash2, X } from "lucide-react";
+import { Download, Eye, GitFork, Heart, Loader2, MessageCircle, Send, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -27,6 +27,10 @@ import type { RankedTitle } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 import { CustomPostBoard } from "@/components/feed/custom-post-board";
 import type { PublishedBoard } from "@/lib/supabase/custom-lists";
+import { OverflowMenu } from "@/components/ui/overflow-menu";
+import { downloadPng, renderBoardPng } from "@/lib/utils/board-export";
+import { describeExportFailure } from "@/lib/utils/export-error";
+import { trackImageExported } from "@/lib/analytics/events";
 
 interface PostDialogProps {
   post: FeedPost | null;
@@ -71,6 +75,9 @@ export function PostDialog({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
+  const boardRef = useRef<HTMLElement | null>(null);
   /**
    * The feed loads a bounded slice per author to keep one screen to one query.
    * The dialog promises the whole board, so it fetches the rest on open and
@@ -131,6 +138,32 @@ export function PostDialog({
     }
   }
 
+  async function handleDownload(itemsCount: number) {
+    const node = boardRef.current;
+    if (!node) return;
+
+    setExporting(true);
+    setDownloadError("");
+    // Same convention as the tier-list and custom-board exporters: the
+    // watermark sits at zero opacity so it never disturbs the live layout, and
+    // is only made visible for the moment of the capture.
+    const watermark = node.querySelector<HTMLElement>("[data-export-watermark]");
+    if (watermark) watermark.style.opacity = "1";
+
+    try {
+      const dataUrl = await renderBoardPng(node);
+      downloadPng(dataUrl, "tierlistonline");
+      trackImageExported({ itemsCount, succeeded: true });
+    } catch (err) {
+      const reason = describeExportFailure(err);
+      trackImageExported({ itemsCount, succeeded: false, reason: reason.slice(0, 120) });
+      setDownloadError(`Could not create the image (${reason.slice(0, 80)}).`);
+    } finally {
+      if (watermark) watermark.style.opacity = "0";
+      setExporting(false);
+    }
+  }
+
   async function handleDelete() {
     if (!post || deleting) return;
     // Asked the way every other irreversible thing here is asked.
@@ -150,6 +183,7 @@ export function PostDialog({
 
   const rows = buildTierRows(fullTitles ?? titles);
   const total = rows.reduce((sum, row) => sum + row.titles.length, 0);
+  const boardItemsCount = published ? published.items.length : total;
 
   return (
     <dialog
@@ -163,7 +197,7 @@ export function PostDialog({
       {post && (
         <div className="p-4 sm:p-5">
           {published ? (
-            <section className="mb-4 rounded-xl bg-surface-raised p-2">
+            <section ref={boardRef} className="mb-4 rounded-xl bg-surface-raised p-2">
               {/* No count underneath, deliberately. The published one counts
                   pictures that a takedown or a deletion may since have emptied
                   out of the board, and a count of what is left would report the
@@ -173,7 +207,7 @@ export function PostDialog({
             </section>
           ) : (
             rows.length > 0 && (
-              <section className="mb-4 rounded-xl bg-surface-raised p-2">
+              <section ref={boardRef} className="mb-4 rounded-xl bg-surface-raised p-2">
                 <TierBoard rows={rows} variant="full" />
                 <p className="mt-2 text-center text-[11px] text-muted">
                   {titlesCountLabel(total)} across {rows.length === 1 ? "one tier" : `${rows.length} tiers`}
@@ -245,16 +279,6 @@ export function PostDialog({
               className="ml-auto"
             />
 
-            {/* Offered to the author and nobody else. Publishing used to be
-                one-way: hiding the board emptied the pictures out of the post
-                and left its title in the feed for good. */}
-            {user?.id === post.userId && (
-              <Button size="sm" variant="secondary" onClick={handleDelete} disabled={deleting}>
-                <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                {deleting ? "Deleting…" : "Delete post"}
-              </Button>
-            )}
-
             {/* Same reasoning as on the card: this opens the author's ranked
                 titles, which a board of their own photographs is not. */}
             {post.category !== "custom" && post.isPublic && (
@@ -265,7 +289,35 @@ export function PostDialog({
                 </Link>
               </Button>
             )}
+
+            <OverflowMenu
+              label="More post actions"
+              items={[
+                {
+                  label: exporting ? "Rendering…" : "Download",
+                  icon: Download,
+                  onSelect: () => void handleDownload(boardItemsCount),
+                  disabled: exporting || boardItemsCount === 0,
+                },
+                // Offered to the author and nobody else. Publishing used to be
+                // one-way: hiding the board emptied the pictures out of the
+                // post and left its title in the feed for good.
+                ...(user?.id === post.userId
+                  ? [
+                      {
+                        label: deleting ? "Deleting…" : "Delete post",
+                        icon: Trash2,
+                        onSelect: () => void handleDelete(),
+                        disabled: deleting,
+                        destructive: true,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
           </div>
+
+          {downloadError && <p className="mt-2 text-xs text-red-400">{downloadError}</p>}
 
           <section className="mt-5 border-t border-border pt-4">
             <h3 className="text-sm font-semibold">Comments</h3>

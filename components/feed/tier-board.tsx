@@ -5,6 +5,7 @@ import { TIER_META } from "@/lib/tier-meta";
 import { tierColorVar } from "@/lib/utils/tier-style";
 import type { MiniTierRow } from "@/lib/feed/post-preview";
 import { cn } from "@/lib/utils/cn";
+import { SITE_HOST } from "@/lib/seo/site";
 
 interface TierBoardProps {
   rows: MiniTierRow[];
@@ -28,7 +29,7 @@ export function TierBoard({ rows, variant = "compact", className }: TierBoardPro
   const compact = variant === "compact";
 
   return (
-    <div className={cn(compact ? "space-y-1" : "space-y-1.5", className)}>
+    <div className={cn("relative", compact ? "space-y-1" : "space-y-1.5", className)}>
       {rows.map((row) => (
         <div key={row.tier} className="flex items-stretch gap-1">
           <span
@@ -69,6 +70,21 @@ export function TierBoard({ rows, variant = "compact", className }: TierBoardPro
           </div>
         </div>
       ))}
+
+      {/* Invisible on screen; the download handler reveals it for the shot.
+          Only in the full (dialog) rendering — the compact card is a link to
+          this same post, not something anybody downloads on its own. */}
+      {!compact && (
+        <div
+          data-export-watermark
+          className="pointer-events-none absolute bottom-0 right-0 flex flex-col items-end leading-tight opacity-0"
+        >
+          <span className="text-xs font-semibold tracking-tight">
+            TierList<span className="text-accent">Online</span>
+          </span>
+          <span className="text-[10px] font-medium tracking-tight text-muted">{SITE_HOST}</span>
+        </div>
+      )}
     </div>
   );
 }

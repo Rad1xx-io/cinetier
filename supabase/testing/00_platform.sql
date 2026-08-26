@@ -102,11 +102,46 @@ create table if not exists public.profiles (
   donation_url text
 );
 
+-- schema.sql's table, run once by hand outside the numbered migrations and so
+-- never picked up by anything that only replays supabase/migrations/*.sql —
+-- 014's checks are the first thing in this harness that needs it.
+create table if not exists public.ranked_titles (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  tmdb_id bigint not null,
+  media_type text not null check (media_type in ('movie', 'tv', 'anime', 'game')),
+  title text not null,
+  poster_path text,
+  release_date text,
+  tier text not null check (tier in ('S', 'A', 'B', 'C', 'D', 'F', 'Unrated')),
+  "order" integer not null default 0,
+  added_at bigint not null,
+  updated_at bigint not null,
+  unique (user_id, tmdb_id, media_type)
+);
+
+alter table public.ranked_titles enable row level security;
+
+-- Owner CRUD, plus the public-when-public-profile read from migration 004 —
+-- the lever 014's own header leans on for "take a whole board down".
+create policy "Users can view their own ranked titles"
+  on public.ranked_titles for select using (auth.uid() = user_id);
+create policy "Published tier lists are publicly readable"
+  on public.ranked_titles for select
+  using (exists (select 1 from public.profiles p where p.id = ranked_titles.user_id and p.is_public));
+create policy "Users can insert their own ranked titles"
+  on public.ranked_titles for insert with check (auth.uid() = user_id);
+create policy "Users can update their own ranked titles"
+  on public.ranked_titles for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Users can delete their own ranked titles"
+  on public.ranked_titles for delete using (auth.uid() = user_id);
+
 grant usage on schema public, auth, storage to anon, authenticated, service_role;
 grant select on auth.users to anon, authenticated;
 grant select on storage.buckets to anon, authenticated;
 grant select, insert, update, delete on storage.objects to anon, authenticated;
 grant select, insert, update, delete on public.profiles to anon, authenticated;
+grant select, insert, update, delete on public.ranked_titles to anon, authenticated;
 
 -- Anything 012 creates afterwards gets the same treatment, so no test can be
 -- rescued by a missing privilege.

@@ -3,6 +3,10 @@ import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/re
 import type { FeedPost } from "@/lib/supabase/feed";
 
 const deletePost = vi.fn(async () => true);
+const renderBoardPng = vi.fn<(node: HTMLElement) => Promise<string>>(
+  async () => "data:image/png;base64,stub"
+);
+const downloadPng = vi.fn();
 let viewer: { id: string } | null = { id: "author-1" };
 
 vi.mock("@/lib/supabase/feed", async (importOriginal) => ({
@@ -17,6 +21,10 @@ vi.mock("@/lib/hooks/use-supabase-session", () => ({
   useSupabaseSession: () => ({ user: viewer, loading: false }),
 }));
 vi.mock("@/components/profile/donate-button", () => ({ DonateButton: () => null }));
+vi.mock("@/lib/utils/board-export", () => ({
+  renderBoardPng: (node: HTMLElement) => renderBoardPng(node),
+  downloadPng: (...args: unknown[]) => downloadPng(...(args as [])),
+}));
 
 import { PostDialog } from "@/components/feed/post-dialog";
 
@@ -48,7 +56,7 @@ function open(onDeleted = vi.fn()) {
         postId: "p1",
         listId: "l1",
         rows: [{ id: "r1", label: "S", color: "#ef4444", position: 0 }],
-        items: [],
+        items: [{ id: "i1", rowId: "r1", position: 0, caption: "a card", imageUrl: null }],
       }}
       liked={false}
       onClose={vi.fn()}
@@ -58,6 +66,12 @@ function open(onDeleted = vi.fn()) {
     />
   );
   return onDeleted;
+}
+
+/** "Delete post" moved behind the overflow menu; every test that reaches for
+ *  it now has to open the menu first, the way a person would. */
+function openActionsMenu() {
+  fireEvent.click(screen.getByRole("button", { name: /more post actions/i }));
 }
 
 beforeEach(() => {
@@ -84,26 +98,30 @@ afterEach(() => {
 describe("taking a post back out of the feed", () => {
   it("is offered to the author", () => {
     open();
-    expect(screen.getByRole("button", { name: /delete post/i })).toBeTruthy();
+    openActionsMenu();
+    expect(screen.getByRole("menuitem", { name: /delete post/i })).toBeTruthy();
   });
 
   it("is not offered to anybody else", () => {
     viewer = { id: "someone-else" };
     open();
-    expect(screen.queryByRole("button", { name: /delete post/i })).toBeNull();
+    openActionsMenu();
+    expect(screen.queryByRole("menuitem", { name: /delete post/i })).toBeNull();
   });
 
   it("is not offered to a visitor who is not signed in", () => {
     viewer = null;
     open();
-    expect(screen.queryByRole("button", { name: /delete post/i })).toBeNull();
+    openActionsMenu();
+    expect(screen.queryByRole("menuitem", { name: /delete post/i })).toBeNull();
   });
 
   it("asks first, and does nothing when the answer is no", async () => {
     vi.stubGlobal("confirm", vi.fn(() => false));
     const onDeleted = open();
+    openActionsMenu();
 
-    fireEvent.click(screen.getByRole("button", { name: /delete post/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /delete post/i }));
 
     await waitFor(() => expect(window.confirm).toHaveBeenCalled());
     expect(deletePost).not.toHaveBeenCalled();
@@ -114,8 +132,9 @@ describe("taking a post back out of the feed", () => {
     const asked = vi.fn((_message?: string) => false);
     vi.stubGlobal("confirm", asked);
     open();
+    openActionsMenu();
 
-    fireEvent.click(screen.getByRole("button", { name: /delete post/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /delete post/i }));
 
     await waitFor(() => expect(asked).toHaveBeenCalled());
     expect(String(asked.mock.calls[0]?.[0])).toMatch(/board itself is not touched/i);
@@ -124,8 +143,9 @@ describe("taking a post back out of the feed", () => {
   it("removes it and tells the feed once the answer is yes", async () => {
     vi.stubGlobal("confirm", vi.fn(() => true));
     const onDeleted = open();
+    openActionsMenu();
 
-    fireEvent.click(screen.getByRole("button", { name: /delete post/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /delete post/i }));
 
     await waitFor(() => expect(deletePost).toHaveBeenCalledWith("p1"));
     expect(onDeleted).toHaveBeenCalledWith("p1");
@@ -135,11 +155,60 @@ describe("taking a post back out of the feed", () => {
     vi.stubGlobal("confirm", vi.fn(() => true));
     deletePost.mockResolvedValueOnce(false);
     const onDeleted = open();
+    openActionsMenu();
 
-    fireEvent.click(screen.getByRole("button", { name: /delete post/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /delete post/i }));
 
     await waitFor(() => expect(deletePost).toHaveBeenCalled());
     // Nothing was removed, so the feed must not be told that it was.
     expect(onDeleted).not.toHaveBeenCalled();
+  });
+});
+
+describe("downloading a post as a picture", () => {
+  it("is offered to any visitor, not only the author", () => {
+    viewer = null;
+    open();
+    openActionsMenu();
+    expect(screen.getByRole("menuitem", { name: /^download$/i })).toBeTruthy();
+  });
+
+  it("sits in the same menu as Delete post, both behind one trigger", () => {
+    open();
+    openActionsMenu();
+    expect(screen.getByRole("menuitem", { name: /^download$/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /delete post/i })).toBeTruthy();
+  });
+
+  it("rasterises the board that is actually on screen and saves it", async () => {
+    open();
+    openActionsMenu();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: /^download$/i }));
+
+    await waitFor(() => expect(renderBoardPng).toHaveBeenCalledTimes(1));
+    // Whatever DOM node it was handed is the board section rendered a moment
+    // ago — the frozen shape merged with live pictures, the same board a
+    // viewer is already looking at, not a second copy fetched specially.
+    expect(renderBoardPng.mock.calls[0][0]).toBeInstanceOf(HTMLElement);
+    await waitFor(() => expect(downloadPng).toHaveBeenCalledWith("data:image/png;base64,stub", "tierlistonline"));
+  });
+
+  it("reveals the watermark only for the moment of the capture", async () => {
+    let opacityDuringCapture = "";
+    renderBoardPng.mockImplementationOnce(async (node: HTMLElement) => {
+      opacityDuringCapture = node.querySelector<HTMLElement>("[data-export-watermark]")?.style.opacity ?? "";
+      return "data:image/png;base64,stub";
+    });
+
+    open();
+    openActionsMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: /^download$/i }));
+
+    await waitFor(() => expect(renderBoardPng).toHaveBeenCalled());
+    expect(opacityDuringCapture).toBe("1");
+
+    const watermark = document.querySelector<HTMLElement>("[data-export-watermark]");
+    await waitFor(() => expect(watermark?.style.opacity).toBe("0"));
   });
 });

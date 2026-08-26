@@ -13,11 +13,13 @@ import {
   getAuthorTitles,
   getFeed,
   getMyLikes,
+  getPostSnapshots,
   toggleLike,
   type FeedPost,
   type PostCategory,
+  type RankedTitleSnapshotEntry,
 } from "@/lib/supabase/feed";
-import { titlesByAuthor } from "@/lib/feed/post-preview";
+import { resolveSnapshotTitles, titlesByAuthor } from "@/lib/feed/post-preview";
 import {
   trackCommunityPostViewed,
   trackPageView,
@@ -36,6 +38,10 @@ const CATEGORY_TABS: { value: PostCategory | "all"; label: string }[] = [
   { value: "game", label: "Games" },
   { value: "youtube", label: "YouTube" },
   { value: "mixed", label: "Mixed" },
+  // A showcase, not a moderation boundary: reporting a custom photo is still
+  // a manual console.error today (see .ai/ARCHITECTURE.md), unchanged by
+  // giving these posts a tab of their own to be found in.
+  { value: "custom", label: "Custom" },
 ];
 
 type LoadState = "loading" | "ready" | "unavailable";
@@ -46,6 +52,7 @@ export function FeedView() {
   const [authorTitles, setAuthorTitles] = useState<Map<string, RankedTitle[]>>(new Map());
   const [likes, setLikes] = useState<Set<string>>(new Set());
   const [published, setPublished] = useState<Map<string, PublishedBoard>>(new Map());
+  const [snapshots, setSnapshots] = useState<Map<string, RankedTitleSnapshotEntry[]>>(new Map());
   const [category, setCategory] = useState<PostCategory | "all">("all");
   const [openPost, setOpenPost] = useState<FeedPost | null>(null);
   const { user } = useSupabaseSession();
@@ -73,6 +80,7 @@ export function FeedView() {
         setAuthorTitles(new Map());
         setLikes(new Set());
         setPublished(new Map());
+        setSnapshots(new Map());
         return;
       }
 
@@ -87,17 +95,22 @@ export function FeedView() {
        */
       const supabase = getSupabaseBrowserClient();
       const customPostIds = rows.filter((post) => post.category === "custom").map((post) => post.id);
-      const [titles, myLikes, boards] = await Promise.all([
+      // The other kind of post gets the same treatment: a snapshot to resolve
+      // against, rather than a fresh read of the author's live board.
+      const ordinaryPostIds = rows.filter((post) => post.category !== "custom").map((post) => post.id);
+      const [titles, myLikes, boards, postSnapshots] = await Promise.all([
         getAuthorTitles(authorIds),
         getMyLikes(rows.map((post) => post.id)),
         supabase && customPostIds.length > 0
           ? getPublishedBoards(supabase, customPostIds)
           : Promise.resolve(new Map<string, PublishedBoard>()),
+        getPostSnapshots(ordinaryPostIds),
       ]);
       if (cancelled) return;
       setAuthorTitles(titlesByAuthor(titles));
       setLikes(myLikes);
       setPublished(boards);
+      setSnapshots(postSnapshots);
     })().catch(() => {
       if (!cancelled) setState("unavailable");
     });
@@ -171,6 +184,17 @@ export function FeedView() {
       return next;
     });
   }, []);
+
+  /**
+   * What a post actually shows: the frozen shape if it has one, resolved
+   * against the author's live board for the catalogue facts; the whole live
+   * board if it does not — a post published before snapshots existed.
+   */
+  const titlesForPost = useCallback(
+    (post: FeedPost) =>
+      resolveSnapshotTitles(snapshots.get(post.id), authorTitles.get(post.userId) ?? []),
+    [snapshots, authorTitles]
+  );
 
   const handleCommentAdded = useCallback((postId: string) => {
     setPosts((prev) =>
@@ -250,7 +274,7 @@ export function FeedView() {
             <PostCard
               key={post.id}
               post={post}
-              titles={authorTitles.get(post.userId) ?? []}
+              titles={titlesForPost(post)}
               published={published.get(post.id)}
               liked={likes.has(post.id)}
               onOpen={handleOpenPost}
@@ -262,7 +286,7 @@ export function FeedView() {
 
       <PostDialog
         post={openPost}
-        titles={openPost ? (authorTitles.get(openPost.userId) ?? []) : []}
+        titles={openPost ? titlesForPost(openPost) : []}
         published={openPost ? published.get(openPost.id) : undefined}
         onDeleted={handlePostDeleted}
         onClose={() => setOpenPost(null)}
