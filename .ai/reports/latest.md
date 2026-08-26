@@ -73,4 +73,13 @@ tier empty, TV untouched. Confirm text captured live for both catalogs:
 
 ## PR and CI
 
-*(placeholder — filled in once the PR exists and its checks have run)*
+**PR #44 — https://github.com/Rad1xx-io/cinetier/pull/44**
+
+| check | status |
+| --- | --- |
+| `Typecheck, lint and test` | success (20:46:40 → 20:47:46) |
+| `Browser test` | success (20:46:40 → 20:47:55) |
+| `Vercel Preview Comments` | success |
+
+`state: open`, `merged: false`, `mergeable_state: clean`, base `main`, 1
+commit, 7 files changed, +343/−63.
