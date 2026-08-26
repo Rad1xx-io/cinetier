@@ -395,6 +395,7 @@ export function TierListBoard() {
           onNotify={notify}
           titles={titles}
           channels={channels}
+          category={activeCatalog}
         />
       </div>
 
