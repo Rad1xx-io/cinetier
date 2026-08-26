@@ -25,4 +25,13 @@ exactly four files with nothing else touched.
 
 ## PR and CI
 
-*(placeholder — updated once the PR exists and its checks have run)*
+**PR #43 — https://github.com/Rad1xx-io/cinetier/pull/43**
+
+| check | status |
+| --- | --- |
+| `Typecheck, lint and test` | success (20:04:46 → 20:05:56) |
+| `Browser test` | success (20:04:46 → 20:05:54) |
+| `Vercel Preview Comments` | success |
+
+`state: open`, `merged: false`, `mergeable_state: clean`, base `main`, 2
+commits, 5 files changed, +122/−0. No code touched — `.ai/` only.
