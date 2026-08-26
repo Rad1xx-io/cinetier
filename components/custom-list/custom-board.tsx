@@ -30,6 +30,7 @@ import {
 import { CustomCard } from "@/components/custom-list/custom-card";
 import { CustomTierRow } from "@/components/custom-list/custom-tier-row";
 import { UploadDialog } from "@/components/custom-list/upload-dialog";
+import { OverflowMenu } from "@/components/ui/overflow-menu";
 import { PublishBoardDialog } from "@/components/custom-list/publish-board-dialog";
 import { ReportButton } from "@/components/custom-list/report-button";
 import { Button } from "@/components/ui/button";
@@ -300,19 +301,8 @@ export function CustomBoard({ board }: CustomBoardProps) {
         <div className="flex items-center gap-2">
           {canEdit && (
             <>
-              <Button variant="secondary" size="sm" onClick={handleVisibility}>
-                {isPublic ? (
-                  <>
-                    <Globe className="mr-1.5 h-4 w-4" aria-hidden />
-                    Anyone with the link
-                  </>
-                ) : (
-                  <>
-                    <Lock className="mr-1.5 h-4 w-4" aria-hidden />
-                    Only me
-                  </>
-                )}
-              </Button>
+              {/* First in the row as well as loudest: adding a picture is what
+                  a session on this page is made of. */}
               <UploadDialog listId={board.list.id} rows={rows} onUploaded={refresh} />
               <Button
                 variant="secondary"
@@ -325,10 +315,30 @@ export function CustomBoard({ board }: CustomBoardProps) {
               </Button>
             </>
           )}
-          <Button variant="secondary" size="sm" onClick={handleExport} disabled={exporting}>
-            <Download className="mr-1.5 h-4 w-4" aria-hidden />
-            {exporting ? "Rendering…" : "Download PNG"}
-          </Button>
+
+          {/* Who may see the board, and taking a copy of it: both decided once
+              and then left alone for weeks. Out of the row, behind one button. */}
+          <OverflowMenu
+            label="More board actions"
+            items={[
+              ...(canEdit
+                ? [
+                    {
+                      label: isPublic ? "Anyone with the link" : "Only me",
+                      icon: isPublic ? Globe : Lock,
+                      onSelect: () => void handleVisibility(),
+                    },
+                  ]
+                : []),
+              {
+                label: exporting ? "Rendering…" : "Download PNG",
+                icon: Download,
+                onSelect: () => void handleExport(),
+                disabled: exporting,
+              },
+            ]}
+          />
+
           {!canEdit && (
             <ReportButton
               subjectType="custom_list"

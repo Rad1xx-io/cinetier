@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, Loader2, MonitorPlay, Send, Share2, Swords } from "lucide-react";
+import { Download, MonitorPlay, Send, Share2, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UsernameDialog } from "@/components/profile/username-dialog";
 import { WidgetEmbedDialog } from "@/components/widgets/widget-embed-dialog";
@@ -19,6 +19,7 @@ import type { RankedTitle } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
 import { shareUrl } from "@/lib/seo/site";
 import { describeExportFailure } from "@/lib/utils/export-error";
+import { OverflowMenu } from "@/components/ui/overflow-menu";
 import { downloadPng, renderBoardPng } from "@/lib/utils/board-export";
 
 interface TierListActionsProps {
@@ -153,33 +154,10 @@ export function TierListActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button variant="secondary" size="sm" onClick={handleExport} disabled={exporting}>
-        {exporting ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-        ) : (
-          <Download className="h-3.5 w-3.5" aria-hidden />
-        )}
-        Download PNG
-      </Button>
-
-      <Button variant="secondary" size="sm" onClick={handleShare}>
-        <Share2 className="h-3.5 w-3.5" aria-hidden />
-        Copy link
-      </Button>
-
       <Button variant="secondary" size="sm" onClick={handlePublish}>
         <Send className="h-3.5 w-3.5" aria-hidden />
         Publish
       </Button>
-
-      {/* Only offered once the board is public: the widget reads the same page
-          a visitor would, so on a closed profile it would render nothing. */}
-      {shareHandle && (
-        <Button variant="secondary" size="sm" onClick={() => setWidgetOpen(true)}>
-          <MonitorPlay className="h-3.5 w-3.5" aria-hidden />
-          OBS widget
-        </Button>
-      )}
 
       <Button size="sm" onClick={handleStartBattle} className="relative">
         <Swords className="h-3.5 w-3.5" aria-hidden />
@@ -190,6 +168,36 @@ export function TierListActions({
           new
         </span>
       </Button>
+
+      {/*
+        * Saving a picture, copying the link, fetching an embed code: three
+        * things done once and then not again for weeks, which between them
+        * were taking three fifths of a toolbar away from the two actions
+        * somebody actually comes here for.
+        */}
+      <OverflowMenu
+        label="More list actions"
+        items={[
+          {
+            label: exporting ? "Rendering…" : "Download PNG",
+            icon: Download,
+            onSelect: () => void handleExport(),
+            disabled: exporting,
+          },
+          { label: "Copy link", icon: Share2, onSelect: () => void handleShare() },
+          // Only offered once the board is public: the widget reads the same
+          // page a visitor would, so on a closed profile it renders nothing.
+          ...(shareHandle
+            ? [
+                {
+                  label: "OBS widget",
+                  icon: MonitorPlay,
+                  onSelect: () => setWidgetOpen(true),
+                },
+              ]
+            : []),
+        ]}
+      />
 
       {shareHandle && (
         <WidgetEmbedDialog

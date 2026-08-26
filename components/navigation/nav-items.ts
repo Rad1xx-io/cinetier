@@ -22,11 +22,16 @@ const ANIME: NavItem = { href: "/anime", label: "Anime", icon: Drama };
 const YOUTUBE: NavItem = { href: "/youtube", label: "YouTube", icon: SquarePlay };
 const GAMES: NavItem = { href: "/games", label: "Games", icon: Gamepad2 };
 const FEED: NavItem = { href: "/feed", label: "Feed", icon: MessagesSquare };
-// Boards built from uploaded pictures rather than from a catalogue. It sits in
-// the row with the catalogues all the same: it is somewhere you go, and burying
-// it under a "More" menu holding one item made it look like an afterthought
-// while costing a click to reach.
-const CUSTOM: NavItem = { href: "/custom", label: "Custom", icon: Images };
+/**
+ * Boards built from uploaded pictures rather than from a catalogue.
+ *
+ * Exported, because it does not belong in the row of catalogues and is drawn
+ * beside the tier-list tab instead. Films, Anime, YouTube and Games are places
+ * to go and *find* things somebody else catalogued; this and the tier list are
+ * both "the boards that are yours", and the header should say so by putting
+ * them together rather than by filing this one under Games.
+ */
+export const CUSTOM_NAV_ITEM: NavItem = { href: "/custom", label: "Custom", icon: Images };
 
 /**
  * The tab the whole app exists for. It gets the centre slot of the desktop
@@ -54,22 +59,24 @@ export const TIER_LIST_NAV_ITEM: NavItem = {
  */
 export const NAV_ITEMS: NavItem[] = [
   TIER_LIST_NAV_ITEM,
+  // Next to the tier list rather than at the far end, for the same reason the
+  // header groups them: both lead to your own boards.
+  CUSTOM_NAV_ITEM,
   FEED,
   MOVIES,
   ANIME,
   YOUTUBE,
   GAMES,
-  CUSTOM,
 ];
 
 /**
- * The categories flanking the centred tier-list tab, split evenly so the header
- * reads as balanced. The grid centres the middle column regardless of how wide
+ * The categories flanking the centred tier-list pair, split evenly so the
+ * header reads as balanced. The grid centres the middle column regardless of how wide
  * either side ends up, so these two lists only need to be roughly even, not
  * pixel-matched.
  */
 export const DESKTOP_NAV_LEFT: NavItem[] = [FEED, MOVIES, ANIME];
-export const DESKTOP_NAV_RIGHT: NavItem[] = [YOUTUBE, GAMES, CUSTOM];
+export const DESKTOP_NAV_RIGHT: NavItem[] = [YOUTUBE, GAMES];
 
 
 /** `/` only matches exactly; other routes also match their nested sub-pages (e.g. /youtube/tier-list). */

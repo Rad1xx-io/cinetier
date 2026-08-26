@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import type { CustomBoard as Board } from "@/lib/types/custom-list";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
@@ -30,7 +30,11 @@ afterEach(cleanup);
 
 describe("saving a custom board as a picture", () => {
   it("is offered to whoever is looking, not only to the owner", () => {
+    // Behind the overflow menu now, alongside the other things done once and
+    // not again for weeks — so the check opens the menu the way a visitor
+    // would rather than looking for the label in the closed toolbar.
     render(<CustomBoard board={board(false)} />);
+    fireEvent.click(screen.getByRole("button", { name: /more board actions/i }));
     expect(screen.getByText(/Download PNG/)).toBeTruthy();
   });
 
