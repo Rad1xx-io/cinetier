@@ -14,6 +14,13 @@ export interface OverflowMenuItem {
   /** A link, for the items that navigate rather than act. */
   href?: string;
   disabled?: boolean;
+  /**
+   * Tinted like the rest of the app's irreversible actions, so "Clear board"
+   * does not read as one more line the same weight as "Download PNG" — the
+   * confirmation dialog is the real guard, this is what tells a thumb to slow
+   * down before it gets there.
+   */
+  destructive?: boolean;
 }
 
 interface OverflowMenuProps {
@@ -21,6 +28,15 @@ interface OverflowMenuProps {
   /** What the trigger announces. Say which toolbar it belongs to. */
   label?: string;
   className?: string;
+}
+
+/** Matches the panel's `w-52`. Kept in sync by hand — see the comment below. */
+const PANEL_WIDTH = 208;
+
+/** Where the panel's top-left corner belongs, in viewport coordinates. */
+interface Anchor {
+  top: number;
+  left: number;
 }
 
 /**
@@ -38,32 +54,68 @@ interface OverflowMenuProps {
  * in the row costs the actions that matter their prominence.
  */
 export function OverflowMenu({ items, label = "More actions", className }: OverflowMenuProps) {
-  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<Anchor | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const open = anchor !== null;
 
   useEffect(() => {
     if (!open) return;
     function handlePointerDown(event: PointerEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setAnchor(null);
     }
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") setAnchor(null);
+    }
+    // A toolbar this short is not somewhere anybody scrolls with the menu open,
+    // but closing on scroll costs nothing and rules out a panel left pinned to
+    // a button that has since moved.
+    function handleScroll() {
+      setAnchor(null);
     }
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", handleScroll, { capture: true, passive: true });
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handleScroll, { capture: true });
     };
   }, [open]);
+
+  function toggle() {
+    if (open) {
+      setAnchor(null);
+      return;
+    }
+    /*
+     * Measured from the trigger itself, then clamped to the viewport.
+     *
+     * The panel used to anchor with `right-0` against its own tiny wrapper —
+     * fine while the trigger sat at the visible right edge of its row, wrong
+     * the moment a toolbar had one button too many for one line: flex-wrap
+     * starts the trigger's new line at the row's *left* edge, and a 208px
+     * panel whose right edge is pinned to a 32px button near x=16 hangs off
+     * the left side of the screen by design, not by any stacking bug — no
+     * amount of z-index or `position: fixed` changes where that math lands.
+     * Clamping the left edge into [8, viewport − width − 8] is what actually
+     * keeps it on screen, wrapped or not.
+     */
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const preferredLeft = rect.right - PANEL_WIDTH;
+    const left = Math.min(Math.max(preferredLeft, 8), window.innerWidth - PANEL_WIDTH - 8);
+    setAnchor({ top: rect.bottom + 4, left });
+  }
 
   if (items.length === 0) return null;
 
   return (
     <div ref={rootRef} className={cn("relative", className)}>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={label}
@@ -79,13 +131,21 @@ export function OverflowMenu({ items, label = "More actions", className }: Overf
         <MoreHorizontal className="h-4 w-4" aria-hidden />
       </button>
 
-      {open && (
+      {anchor && (
         <div
           role="menu"
-          // Anchored to the right edge: this is the last control in a toolbar
-          // that sits at the right of its header, and opening leftward is what
-          // keeps the panel on screen at 375px.
-          className="absolute right-0 top-full z-30 mt-1 w-52 rounded-xl border border-border bg-surface-raised p-1.5 shadow-xl"
+          style={{ top: anchor.top, left: anchor.left, width: PANEL_WIDTH }}
+          /*
+           * Fixed to the viewport, not absolute within the trigger's own box:
+           * see the comment in `toggle`. z-40 matches the sticky headers and
+           * the tier-list category dropdown — this shipped at z-30, which tied
+           * with the tier list's own `sticky z-30` filter bar, and a tie at
+           * equal z-index is broken by DOM order. The filter bar comes later
+           * in the markup and painted over the panel, leaving only whatever
+           * poked out past its bottom edge — which on a three-item menu was
+           * just "OBS widget".
+           */
+          className="fixed z-40 rounded-xl border border-border bg-surface-raised p-1.5 shadow-xl"
         >
           {items.map((item) => {
             const Icon = item.icon;
@@ -97,6 +157,7 @@ export function OverflowMenu({ items, label = "More actions", className }: Overf
             );
             const classes = cn(
               "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface",
+              item.destructive ? "text-tier-s hover:bg-tier-s/10" : undefined,
               item.disabled && "pointer-events-none opacity-50"
             );
 
@@ -106,7 +167,7 @@ export function OverflowMenu({ items, label = "More actions", className }: Overf
                 href={item.href}
                 role="menuitem"
                 className={classes}
-                onClick={() => setOpen(false)}
+                onClick={() => setAnchor(null)}
               >
                 {content}
               </Link>
@@ -118,7 +179,7 @@ export function OverflowMenu({ items, label = "More actions", className }: Overf
                 disabled={item.disabled}
                 className={classes}
                 onClick={() => {
-                  setOpen(false);
+                  setAnchor(null);
                   item.onSelect?.();
                 }}
               >
