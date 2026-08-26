@@ -23,7 +23,7 @@ const { POST_TITLE_MAX } = await import("@/lib/feed/post-preview");
 const onClose = vi.fn();
 
 function open(props: Partial<Parameters<typeof PublishPostDialog>[0]> = {}) {
-  return render(<PublishPostDialog open onClose={onClose} {...props} />);
+  return render(<PublishPostDialog open onClose={onClose} titles={[]} {...props} />);
 }
 
 function submitButton(): HTMLButtonElement {
@@ -119,7 +119,21 @@ describe("PublishPostDialog — publishing", () => {
       title: "Мой топ сай-фая",
       description: "Почему именно так",
       category: "anime",
+      titles: [],
     });
+  });
+
+  it("freezes the board it was handed, not a fresh read", async () => {
+    const titles = [
+      { tmdbId: 1, mediaType: "movie" as const, title: "A", posterPath: null, releaseDate: null, tier: "S" as const, order: 0, addedAt: 0, updatedAt: 0 },
+    ];
+    open({ suggestedCategory: "movie", titles });
+    fill();
+
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(publishPost).toHaveBeenCalledTimes(1));
+    expect(publishPost).toHaveBeenCalledWith(expect.objectContaining({ titles }));
   });
 
   it("reports the publication and moves to the feed", async () => {

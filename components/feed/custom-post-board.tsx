@@ -3,6 +3,7 @@
 import { ImageOff } from "lucide-react";
 import type { PublishedBoard } from "@/lib/supabase/custom-lists";
 import { cn } from "@/lib/utils/cn";
+import { SITE_HOST } from "@/lib/seo/site";
 
 interface CustomPostBoardProps {
   board: PublishedBoard;
@@ -25,7 +26,7 @@ export function CustomPostBoard({ board, variant = "compact", className }: Custo
   const size = compact ? "h-12 w-8" : "h-24 w-16";
 
   return (
-    <div className={cn("space-y-1", className)}>
+    <div className={cn("relative space-y-1", className)}>
       {board.rows.map((row) => {
         const cards = board.items
           .filter((item) => item.rowId === row.id)
@@ -70,6 +71,18 @@ export function CustomPostBoard({ board, variant = "compact", className }: Custo
           </div>
         );
       })}
+
+      {!compact && (
+        <div
+          data-export-watermark
+          className="pointer-events-none absolute bottom-0 right-0 flex flex-col items-end leading-tight opacity-0"
+        >
+          <span className="text-xs font-semibold tracking-tight">
+            TierList<span className="text-accent">Online</span>
+          </span>
+          <span className="text-[10px] font-medium tracking-tight text-muted">{SITE_HOST}</span>
+        </div>
+      )}
     </div>
   );
 }

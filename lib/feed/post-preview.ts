@@ -1,5 +1,5 @@
 import { TIERS, type RankedTitle, type Tier } from "@/lib/types";
-import type { PostCategory } from "@/lib/supabase/feed";
+import type { PostCategory, RankedTitleSnapshotEntry } from "@/lib/supabase/feed";
 
 /**
  * How much of a board a feed card shows: the first few *filled* tiers, a handful
@@ -164,4 +164,31 @@ export function suggestedPostCategory(
 
   // A bare plurality is not a theme; over half the board is.
   return bestCount * 2 > total ? best : "mixed";
+}
+
+/**
+ * What a post actually shows: the frozen placement, with catalogue facts —
+ * name, poster, release date — filled in from whatever the author's board
+ * looks like right now.
+ *
+ * `undefined` means the post predates snapshots; the live board is shown
+ * whole, exactly as it always was. Given a snapshot, a title the live board no
+ * longer has (the author un-ranked it since publishing) is left out rather
+ * than guessed at — a gap, the same way a taken-down custom card leaves one,
+ * not a reason to fail the whole post.
+ */
+export function resolveSnapshotTitles(
+  snapshot: RankedTitleSnapshotEntry[] | undefined,
+  liveTitles: RankedTitle[]
+): RankedTitle[] {
+  if (!snapshot) return liveTitles;
+
+  const live = new Map(liveTitles.map((t) => [`${t.tmdbId}:${t.mediaType}`, t]));
+  const resolved: RankedTitle[] = [];
+  for (const entry of snapshot) {
+    const found = live.get(`${entry.tmdbId}:${entry.mediaType}`);
+    if (!found) continue;
+    resolved.push({ ...found, tier: entry.tier, order: entry.order });
+  }
+  return resolved;
 }

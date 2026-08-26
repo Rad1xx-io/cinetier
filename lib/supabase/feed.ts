@@ -154,6 +154,15 @@ export async function getAuthorTitles(
     .from("ranked_titles")
     .select("user_id,tmdb_id,media_type,title,poster_path,release_date,tier,order,added_at,updated_at")
     .in("user_id", userIds)
+    // Ordered, not merely capped: without this a title's absence from this
+    // batch was harmless — the live preview was already a cap, one title more
+    // or less went unnoticed. A published snapshot changes what "missing"
+    // means. It now reads as "the author took this down", the same as a
+    // vanished custom card — and an author with more than `perAuthorCap`
+    // titles would see that happen to whichever ones the database felt like
+    // returning that call, for a board they never touched. `id` is the
+    // primary key, so this costs nothing new and needs no extra index.
+    .order("id", { ascending: true })
     .limit(userIds.length * perAuthorCap);
 
   if (error || !data) return [];
@@ -189,10 +198,31 @@ export type PublishResult =
   | { ok: true; postId: string }
   | { ok: false; error: string };
 
+/** One title's place on the board, as it stood the moment Publish was pressed. */
+export interface RankedTitleSnapshotEntry {
+  tmdbId: number;
+  mediaType: MediaType;
+  tier: RankedTitle["tier"];
+  order: number;
+}
+
+function buildRankedTitleSnapshot(titles: RankedTitle[]): { titles: RankedTitleSnapshotEntry[] } {
+  return {
+    titles: titles.map((t) => ({
+      tmdbId: t.tmdbId,
+      mediaType: t.mediaType,
+      tier: t.tier,
+      order: t.order,
+    })),
+  };
+}
+
 export async function publishPost(input: {
   title: string;
   description: string;
   category: PostCategory;
+  /** The board as it stands right now — frozen into the post, not re-read later. */
+  titles: RankedTitle[];
 }): Promise<PublishResult> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return { ok: false, error: "Cloud accounts are not configured." };
@@ -221,7 +251,50 @@ export async function publishPost(input: {
         : "Could not publish the post. Please try again.",
     };
   }
-  return { ok: true, postId: (data as { id: string }).id };
+
+  const postId = (data as { id: string }).id;
+
+  const { error: snapshotError } = await supabase
+    .from("ranked_title_publications")
+    .insert({ post_id: postId, snapshot: buildRankedTitleSnapshot(input.titles) });
+
+  if (snapshotError) {
+    // A post with no snapshot would render from a live read forever, quietly
+    // rewriting itself every time the board changes — exactly the bug this
+    // exists to close. Withdrawn rather than left half-made, the same
+    // rollback publishCustomBoard already uses for the same reason.
+    await supabase.from("posts").delete().eq("id", postId);
+    console.error("TierListOnline: the snapshot failed, so the post was withdrawn —", snapshotError);
+    return { ok: false, error: "Could not publish the post. Please try again." };
+  }
+
+  return { ok: true, postId };
+}
+
+/**
+ * The frozen shape behind each of these posts, keyed by post id.
+ *
+ * A post with no entry here is one published before this existed — the
+ * caller's job is to fall back to a live read for it, not to treat a missing
+ * key as an error.
+ */
+export async function getPostSnapshots(
+  postIds: string[]
+): Promise<Map<string, RankedTitleSnapshotEntry[]>> {
+  const snapshots = new Map<string, RankedTitleSnapshotEntry[]>();
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase || postIds.length === 0) return snapshots;
+
+  const { data, error } = await supabase
+    .from("ranked_title_publications")
+    .select("post_id, snapshot")
+    .in("post_id", postIds);
+  if (error || !data) return snapshots;
+
+  for (const row of data as { post_id: string; snapshot: { titles?: RankedTitleSnapshotEntry[] } }[]) {
+    snapshots.set(row.post_id, row.snapshot.titles ?? []);
+  }
+  return snapshots;
 }
 
 /** Which of these posts the signed-in visitor has already liked. */

@@ -7,10 +7,12 @@ import {
   MINI_BOARD_TIERS,
   POST_DESCRIPTION_MAX,
   POST_TITLE_MAX,
+  resolveSnapshotTitles,
   suggestedPostCategory,
   titlesByAuthor,
   validatePost,
 } from "@/lib/feed/post-preview";
+import type { RankedTitleSnapshotEntry } from "@/lib/supabase/feed";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 
 function title(
@@ -336,5 +338,58 @@ describe("avatarInitials", () => {
 
   it("copes with a one-character handle", () => {
     expect(avatarInitials(null, "r")).toBe("R");
+  });
+});
+
+describe("resolveSnapshotTitles", () => {
+  it("shows the whole live board when there is no snapshot yet — a post published before this existed", () => {
+    const live = [title(1, "A", "S"), title(2, "B", "A")];
+    expect(resolveSnapshotTitles(undefined, live)).toBe(live);
+  });
+
+  it("uses the snapshot's placement, not whatever the live row currently says", () => {
+    // The author has since re-tiered this one from S to F and moved it — the
+    // post must go on showing where it stood when Publish was pressed.
+    const live = [title(1, "A", "F", 9)];
+    const snapshot: RankedTitleSnapshotEntry[] = [{ tmdbId: 1, mediaType: "movie", tier: "S", order: 0 }];
+
+    const resolved = resolveSnapshotTitles(snapshot, live);
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0]).toMatchObject({ tier: "S", order: 0, title: "A" });
+  });
+
+  it("takes the catalogue facts — name, poster, date — from the live row", () => {
+    const live = [
+      { ...title(1, "Renamed Since", "F"), posterPath: "/new.jpg", releaseDate: "2030-01-01" },
+    ];
+    const snapshot: RankedTitleSnapshotEntry[] = [{ tmdbId: 1, mediaType: "movie", tier: "S", order: 0 }];
+
+    const resolved = resolveSnapshotTitles(snapshot, live);
+
+    expect(resolved[0]).toMatchObject({
+      title: "Renamed Since",
+      posterPath: "/new.jpg",
+      releaseDate: "2030-01-01",
+    });
+  });
+
+  it("drops a title the author has since un-ranked, rather than inventing one", () => {
+    // The exact case this whole feature exists for: a title taken down after
+    // publishing should leave a gap, not a crash and not a stale poster.
+    const live: RankedTitle[] = [];
+    const snapshot: RankedTitleSnapshotEntry[] = [{ tmdbId: 1, mediaType: "movie", tier: "S", order: 0 }];
+
+    expect(resolveSnapshotTitles(snapshot, live)).toEqual([]);
+  });
+
+  it("tells two media types with the same tmdb id apart", () => {
+    const live = [title(1, "The Movie", "S", 0, "movie"), title(1, "The Anime", "A", 0, "anime")];
+    const snapshot: RankedTitleSnapshotEntry[] = [{ tmdbId: 1, mediaType: "anime", tier: "S", order: 0 }];
+
+    const resolved = resolveSnapshotTitles(snapshot, live);
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].title).toBe("The Anime");
   });
 });

@@ -6,6 +6,7 @@ import { Loader2, Send, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { publishPost, type PostCategory } from "@/lib/supabase/feed";
+import type { RankedTitle } from "@/lib/types";
 import {
   POST_DESCRIPTION_MAX,
   POST_TITLE_MAX,
@@ -28,12 +29,15 @@ interface PublishPostDialogProps {
   onClose: () => void;
   /** The category the board is mostly made of — the sensible default. */
   suggestedCategory?: PostCategory;
+  /** The board exactly as it stands now — frozen into the post at Publish. */
+  titles: RankedTitle[];
 }
 
 export function PublishPostDialog({
   open,
   onClose,
   suggestedCategory = "mixed",
+  titles,
 }: PublishPostDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const router = useRouter();
@@ -75,7 +79,7 @@ export function PublishPostDialog({
 
     setSaving(true);
     setError(null);
-    const result = await publishPost({ title, description, category });
+    const result = await publishPost({ title, description, category, titles });
     setSaving(false);
 
     if (!result.ok) {
