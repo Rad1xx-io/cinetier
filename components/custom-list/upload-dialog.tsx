@@ -85,7 +85,21 @@ export function UploadDialog({ listId, rows, onUploaded }: UploadDialogProps) {
 
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      {/*
+        * The one thing this page is for, dressed accordingly.
+        *
+        * It used to be an accent fill and nothing else, in a row of four
+        * buttons the same size — enough to be a different colour, not enough
+        * to be read first. The weight, the ring and the shadow are what
+        * separate "the button you came here to press" from "a button". The
+        * height is left alone on purpose: the toolbar is one row of one
+        * height, and a taller control would break the line it sits on.
+        */}
+      <Button
+        size="sm"
+        onClick={() => setOpen(true)}
+        className="font-semibold shadow-sm shadow-accent/40 ring-1 ring-accent/50"
+      >
         <ImagePlus className="mr-1.5 h-4 w-4" aria-hidden />
         Add a picture
       </Button>

@@ -6,6 +6,7 @@ import { Clapperboard, Settings } from "lucide-react";
 import {
   DESKTOP_NAV_LEFT,
   DESKTOP_NAV_RIGHT,
+  CUSTOM_NAV_ITEM,
   TIER_LIST_NAV_ITEM,
   isNavItemActive,
   type NavItem,
@@ -99,24 +100,40 @@ function CategoryLink({ item, pathname }: { item: NavItem; pathname: string }) {
  * header deliberately avoids — outlined while idle so it stays a tab rather
  * than a call-to-action button, solid once you are on it.
  */
+/**
+ * The two places your own boards live, drawn as one control.
+ *
+ * They were split apart: the tier list in the centre, Custom filed at the end
+ * of the catalogue row between YouTube and Games — which reads as a sixth
+ * catalogue and is nothing of the kind. Catalogues are where you find what
+ * other people cataloged; these two are where your own boards are. Joined into
+ * a segmented pair, with one border around both and the seam between them, the
+ * header says that in the shape rather than in a tooltip.
+ */
 function TierListTab({ pathname }: { pathname: string }) {
-  const active = isNavItemActive(pathname, TIER_LIST_NAV_ITEM.href);
-  const Icon = TIER_LIST_NAV_ITEM.icon;
+  const pair = [TIER_LIST_NAV_ITEM, CUSTOM_NAV_ITEM];
 
   return (
-    <Link
-      href={TIER_LIST_NAV_ITEM.href}
-      className={cn(
-        "flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        active
-          ? "border-transparent bg-accent text-accent-foreground"
-          : "border-accent/40 bg-accent/10 text-accent hover:bg-accent/20"
-      )}
-      aria-current={active ? "page" : undefined}
-    >
-      <Icon className="h-4 w-4" aria-hidden />
-      {TIER_LIST_NAV_ITEM.label}
-    </Link>
+    <div className="flex shrink-0 items-center rounded-lg border border-accent/40 bg-accent/10 p-0.5">
+      {pair.map((item) => {
+        const active = isNavItemActive(pathname, item.href);
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              "flex items-center gap-2 whitespace-nowrap rounded-[0.4rem] px-3 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+              active ? "bg-accent text-accent-foreground" : "text-accent hover:bg-accent/20"
+            )}
+            aria-current={active ? "page" : undefined}
+          >
+            <Icon className="h-4 w-4" aria-hidden />
+            {item.label}
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 
