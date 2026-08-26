@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, MonitorPlay, Send, Share2, Swords } from "lucide-react";
+import { Download, Eraser, Images, MonitorPlay, Send, Share2, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UsernameDialog } from "@/components/profile/username-dialog";
 import { WidgetEmbedDialog } from "@/components/widgets/widget-embed-dialog";
@@ -20,7 +20,10 @@ import type { RankedChannel } from "@/lib/types/youtube";
 import { shareUrl } from "@/lib/seo/site";
 import { describeExportFailure } from "@/lib/utils/export-error";
 import { OverflowMenu } from "@/components/ui/overflow-menu";
+import Link from "next/link";
 import { downloadPng, renderBoardPng } from "@/lib/utils/board-export";
+import { clearAll } from "@/lib/storage";
+import { clearAllChannels } from "@/lib/storage/youtube";
 
 interface TierListActionsProps {
   /** The element to rasterise — the tier rows only, without the toolbar. */
@@ -152,8 +155,33 @@ export function TierListActions({
     setPublishOpen(true);
   }, [user, onNotify]);
 
+  const handleClearList = useCallback(() => {
+    const total = titles.length + channels.length;
+    if (total === 0) return;
+    // Named, not vague: "clear the list" reads as nothing much until it says
+    // how many titles that actually is.
+    const confirmed = window.confirm(
+      `Remove all ${total} title${total === 1 ? "" : "s"} from this list? The tiers stay, empty. This cannot be undone.`
+    );
+    if (!confirmed) return;
+    clearAll();
+    clearAllChannels();
+  }, [titles.length, channels.length]);
+
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/*
+        * A second entry point, not a second category. Custom boards are not
+        * ranked from a catalogue — this button is the only way into them from
+        * here, now that they have no place of their own in the navigation.
+        */}
+      <Button variant="secondary" size="sm" asChild>
+        <Link href="/custom">
+          <Images className="h-3.5 w-3.5" aria-hidden />
+          Custom
+        </Link>
+      </Button>
+
       <Button variant="secondary" size="sm" onClick={handlePublish}>
         <Send className="h-3.5 w-3.5" aria-hidden />
         Publish
@@ -193,6 +221,19 @@ export function TierListActions({
                   label: "OBS widget",
                   icon: MonitorPlay,
                   onSelect: () => setWidgetOpen(true),
+                },
+              ]
+            : []),
+          // Destructive and infrequent, like the export and the link above it,
+          // but not one of them: this empties the list rather than doing
+          // something to it, so it gets its own tint and sits last.
+          ...(titles.length + channels.length > 0
+            ? [
+                {
+                  label: "Clear list",
+                  icon: Eraser,
+                  onSelect: handleClearList,
+                  destructive: true,
                 },
               ]
             : []),

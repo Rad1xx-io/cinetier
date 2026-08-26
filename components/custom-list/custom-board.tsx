@@ -13,11 +13,12 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { Download, Globe, Lock, Plus, Send } from "lucide-react";
+import { Download, Eraser, Globe, Lock, Plus, Send } from "lucide-react";
 import type { CustomBoard as Board, CustomItem } from "@/lib/types/custom-list";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   addTierRow,
+  clearCustomBoard,
   deleteItem,
   clearTierRowImage,
   publishCustomBoard,
@@ -284,6 +285,18 @@ export function CustomBoard({ board }: CustomBoardProps) {
     await setBoardVisibility(supabase, board.list.id, next);
   }
 
+  async function handleClearBoard() {
+    if (!supabase || items.length === 0) return;
+    // The count is the whole point of asking: "clear the board" reads as
+    // nothing much until it names how many pictures that actually is.
+    const confirmed = window.confirm(
+      `Remove all ${items.length} card${items.length === 1 ? "" : "s"} from this board? The tiers stay, empty. The pictures cannot be brought back.`
+    );
+    if (!confirmed) return;
+    setItems([]);
+    await clearCustomBoard(supabase, board.list.id);
+  }
+
   const pool = buckets.get(POOL_ID) ?? [];
 
   return (
@@ -336,6 +349,19 @@ export function CustomBoard({ board }: CustomBoardProps) {
                 onSelect: () => void handleExport(),
                 disabled: exporting,
               },
+              // Destructive and infrequent, like the actions above it, but not
+              // one of them: this clears the board rather than doing something
+              // to it, so it gets its own tint and sits last.
+              ...(canEdit && items.length > 0
+                ? [
+                    {
+                      label: "Clear board",
+                      icon: Eraser,
+                      onSelect: () => void handleClearBoard(),
+                      destructive: true,
+                    },
+                  ]
+                : []),
             ]}
           />
 

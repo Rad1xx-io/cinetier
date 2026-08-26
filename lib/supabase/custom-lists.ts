@@ -362,6 +362,25 @@ async function removeUnreferencedFiles(supabase: SupabaseClient, paths: (string 
   }
 }
 
+/**
+ * Empties the board without deleting it.
+ *
+ * Only `custom_items` rows are collected and removed — a tier's own picture,
+ * set through "Use a picture for this tier", is a different thing from a card
+ * and is not touched, so a tier that had one keeps it, empty. The removed
+ * cards' files follow through the same unreferenced-file check as everywhere
+ * else, once the rows that pointed at them are actually gone.
+ */
+export async function clearCustomBoard(supabase: SupabaseClient, listId: string): Promise<void> {
+  const { data } = await supabase.from("custom_items").select("image_path").eq("list_id", listId);
+  const paths = (data ?? []).map((row) => (row as { image_path: string | null }).image_path);
+
+  const { error } = await supabase.from("custom_items").delete().eq("list_id", listId);
+  if (error) return;
+
+  await removeUnreferencedFiles(supabase, paths);
+}
+
 export async function deleteCustomBoard(supabase: SupabaseClient, listId: string): Promise<void> {
   // Collected first: the delete cascades, and afterwards there is nothing left
   // to ask which files the board was using.
