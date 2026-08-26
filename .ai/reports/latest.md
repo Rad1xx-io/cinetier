@@ -4,7 +4,14 @@
 
 **PR #45 — https://github.com/Rad1xx-io/cinetier/pull/45**
 
-*(status filled in below once the latest commit's checks have run — see the note at the bottom)*
+| check | status |
+| --- | --- |
+| `Typecheck, lint and test` | success (22:46:54 → 22:47:57) |
+| `Browser test` | success (22:46:54 → 22:48:09) |
+
+`state: open`, `merged: false`, `mergeable_state: clean`, base `main`, 3 commits, 24 files changed, +1079/−118.
+
+One CI run this time took roughly 9 minutes to start — GitHub's own Actions queue, not this branch or its workflow config (`.github/workflows/ci.yml` diffs empty against `origin/main`). Confirmed by watching the run actually start and finish, not assumed from an idle wait.
 
 ## What changed
 
