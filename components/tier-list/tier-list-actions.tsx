@@ -22,8 +22,24 @@ import { describeExportFailure } from "@/lib/utils/export-error";
 import { OverflowMenu } from "@/components/ui/overflow-menu";
 import Link from "next/link";
 import { downloadPng, renderBoardPng } from "@/lib/utils/board-export";
-import { clearAll } from "@/lib/storage";
+import { getRatedTitles, reorderAll } from "@/lib/storage";
 import { clearAllChannels } from "@/lib/storage/youtube";
+import type { ContentType } from "@/lib/utils/content-type";
+
+/**
+ * What one item of a catalog is called in the Clear List confirmation.
+ *
+ * An adjective before "title" for every catalog but YouTube, which counts
+ * channels rather than titles — "12 YouTube titles" is not what is on the
+ * board, "12 YouTube channels" is.
+ */
+const CLEAR_LIST_NOUN: Record<ContentType, { singular: string; plural: string }> = {
+  movie: { singular: "Film title", plural: "Film titles" },
+  tv: { singular: "TV title", plural: "TV titles" },
+  anime: { singular: "Anime title", plural: "Anime titles" },
+  game: { singular: "Game title", plural: "Game titles" },
+  youtube: { singular: "YouTube channel", plural: "YouTube channels" },
+};
 
 interface TierListActionsProps {
   /** The element to rasterise — the tier rows only, without the toolbar. */
@@ -33,6 +49,17 @@ interface TierListActionsProps {
    *  be about channels as easily as films. */
   titles: RankedTitle[];
   channels: RankedChannel[];
+  /**
+   * The catalog the board is currently showing.
+   *
+   * This page holds one unified list across every catalog, but there is
+   * deliberately no "everything at once" view of it — the picker always shows
+   * exactly one (`CATALOG_FILTERS` has no "all" entry, on purpose: a tier
+   * holding films, games and channels side by side was never a ranking of
+   * anything). Clear List is scoped to this because of that — there is no
+   * other state for it to fall back to.
+   */
+  category: ContentType;
 }
 
 export function TierListActions({
@@ -40,6 +67,7 @@ export function TierListActions({
   onNotify,
   titles,
   channels,
+  category,
 }: TierListActionsProps) {
   const { user } = useSupabaseSession();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -155,18 +183,34 @@ export function TierListActions({
     setPublishOpen(true);
   }, [user, onNotify]);
 
+  /*
+   * "This list" reported production behaviour and this behaviour disagreed:
+   * clicking Clear List while looking at Films wiped TV, Anime, Games and
+   * YouTube too, and said so honestly in a dialog that read "all 52 titles"
+   * to someone looking at one. It cleared the whole store because that is
+   * the only thing it had ever been asked to clear — the picker's category
+   * never reached it.
+   *
+   * There is no "show everything" state this could fall back to instead: the
+   * category prop above is one of the five catalogs, always, because the
+   * picker itself has no "all" entry to select. So this is not "scoped when
+   * a filter happens to be on" — every visit to this page is already scoped
+   * to one catalog, and Clear List now agrees with what is on screen.
+   */
+  const clearableCount =
+    category === "youtube" ? channels.length : titles.filter((t) => t.mediaType === category).length;
+  const clearNoun = CLEAR_LIST_NOUN[category];
+
   const handleClearList = useCallback(() => {
-    const total = titles.length + channels.length;
-    if (total === 0) return;
-    // Named, not vague: "clear the list" reads as nothing much until it says
-    // how many titles that actually is.
+    if (clearableCount === 0) return;
     const confirmed = window.confirm(
-      `Remove all ${total} title${total === 1 ? "" : "s"} from this list? The tiers stay, empty. This cannot be undone.`
+      `Remove all ${clearableCount} ${clearableCount === 1 ? clearNoun.singular : clearNoun.plural} ` +
+        `from this list? Everything else on the board stays where it is. This cannot be undone.`
     );
     if (!confirmed) return;
-    clearAll();
-    clearAllChannels();
-  }, [titles.length, channels.length]);
+    if (category === "youtube") clearAllChannels();
+    else reorderAll(getRatedTitles().filter((t) => t.mediaType !== category));
+  }, [clearableCount, clearNoun, category]);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -227,7 +271,7 @@ export function TierListActions({
           // Destructive and infrequent, like the export and the link above it,
           // but not one of them: this empties the list rather than doing
           // something to it, so it gets its own tint and sits last.
-          ...(titles.length + channels.length > 0
+          ...(clearableCount > 0
             ? [
                 {
                   label: "Clear list",
