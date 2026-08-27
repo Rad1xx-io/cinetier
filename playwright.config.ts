@@ -37,6 +37,11 @@ export default defineConfig({
       // request to them is intercepted before it leaves the page.
       NEXT_PUBLIC_SUPABASE_URL: "https://stub.supabase.co",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "stub-anon-key",
+      // With no key at all, PostHogProvider skips `posthog.init` entirely and
+      // the activation-funnel spec would be testing nothing — a stub host lets
+      // the real SDK run for real and lets the spec intercept what it sends.
+      NEXT_PUBLIC_POSTHOG_KEY: "stub-posthog-key",
+      NEXT_PUBLIC_POSTHOG_HOST: "https://stub.posthog.test",
     },
   },
 });

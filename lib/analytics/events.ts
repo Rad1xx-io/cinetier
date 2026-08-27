@@ -313,3 +313,71 @@ export function trackCustomItemUploaded(props: {
     placed_in_tier: props.placedInTier,
   });
 }
+
+/* --------------------------------------------------- activation funnel --- */
+
+/**
+ * An email handed to `signInWithOtp`, before Supabase answers.
+ *
+ * Supabase never says whether the address belongs to an existing account, so
+ * this cannot be split into "signup" versus "sign-in" the way the completed
+ * side of the flow can (`trackSignupCompleted`, gated on the account's own
+ * age). It fires on every submission, returning visitors included — the
+ * honest top of a funnel is wider than its bottom.
+ */
+export function trackSignupStarted(entryPoint: string): void {
+  trackEvent("signup_started", { entry_point: entryPoint });
+}
+
+/**
+ * The moment somebody's list of ranked titles stops being empty.
+ *
+ * Computed at the call site from the local store's own count immediately
+ * before the write — "was zero, is now one" — rather than a remembered flag,
+ * so it cannot be skipped by a cleared cache and cannot double-fire from a
+ * second device. No properties: the milestone is the whole signal.
+ */
+export function trackFirstTitleRanked(): void {
+  trackEvent("first_title_ranked");
+}
+
+/** Which kind of board a first publish came from. */
+export type FirstPostType = "tier_list" | "custom";
+
+/**
+ * The first time an account's `posts` row count goes from zero to one.
+ *
+ * Asked of the database immediately before the write, the same way
+ * `first_title_ranked` asks the local store — publishing is rare enough that
+ * one extra read costs nothing, and it is the only way to get this right
+ * across a second device or a cleared cache. Whichever kind of board gets
+ * published first — a ranked list or a photo board — is the one this fires
+ * for; the other kind, published later, does not fire it again.
+ */
+export function trackFirstPostPublished(postType: FirstPostType): void {
+  trackEvent("first_post_published", { post_type: postType });
+}
+
+/**
+ * A post's board saved as a picture from the feed.
+ *
+ * Distinct from `image_exported`, which already covers this same click but
+ * cannot say whether the picture came from a post, a live tier list or a
+ * custom board — the three call it from. This one exists to answer a
+ * narrower question: how often does a post in the feed get downloaded.
+ */
+export function trackPostDownloaded(postId: string, category: string): void {
+  trackEvent("post_downloaded", { post_id: postId, category });
+}
+
+/**
+ * An act of making something shareable: a custom board's visibility turned to
+ * "Anyone with the link", or a tier list's own link copied to the clipboard.
+ *
+ * One event for both, because the funnel question is "did this person do
+ * anything that shares their board with someone else", not which of the two
+ * mechanisms they reached for.
+ */
+export function trackPostSharedLink(surface: "tier_list" | "custom_board"): void {
+  trackEvent("post_shared_link", { surface });
+}

@@ -1,63 +1,96 @@
-# Freeze regular tier-list posts, add a Download menu, and a Custom feed tab
+# Activation funnel analytics
 
-## PR and CI
-
-**PR #45 — https://github.com/Rad1xx-io/cinetier/pull/45**
-
-| check | status |
-| --- | --- |
-| `Typecheck, lint and test` | success (22:46:54 → 22:47:57) |
-| `Browser test` | success (22:46:54 → 22:48:09) |
-
-`state: open`, `merged: false`, `mergeable_state: clean`, base `main`, 3 commits, 24 files changed, +1079/−118.
-
-One CI run this time took roughly 9 minutes to start — GitHub's own Actions queue, not this branch or its workflow config (`.github/workflows/ci.yml` diffs empty against `origin/main`). Confirmed by watching the run actually start and finish, not assumed from an idle wait.
+No screenshots this round — no UI changed, only event tracking. `.ai/reports/shots/`
+cleared of the previous round's images per the convention.
 
 ## What changed
 
-### 1 · A post used to keep rewriting itself
+PostHog was already fully wired (SDK, auto page-view, `signup_completed`) before this
+task — the work was five new funnel events on top of the existing `lib/analytics/`
+infrastructure, not a new integration.
 
-A post carried no ranking data of its own — it was rendered by re-reading the author's live `ranked_titles` every time. Re-tier a title, un-rank it, and every post ever made about that board quietly changed with it.
+| event | fires | properties |
+| --- | --- | --- |
+| `signup_started` | every magic-link form submit, before Supabase answers | `entry_point` |
+| `first_title_ranked` | the local board's title count going from 0 to 1 | none |
+| `first_post_published` | this account's `posts` row count going from 0 to 1, whichever kind publishes first | `post_type: "tier_list" \| "custom"` |
+| `post_downloaded` | a successful Download from a post's overflow menu | `post_id`, `category` |
+| `post_shared_link` | a custom board turning public, or a tier list's "Copy link" | `surface: "tier_list" \| "custom_board"` |
 
-Migration `014_ranked_title_publications.sql` mirrors 013's `custom_list_publications` for this kind of post: freezes which title sat in which tier, in what order, at the moment Publish was pressed — **not** the titles themselves. No name, no poster, no release date: those are catalogue facts, resolved live from `ranked_titles` at render time, the same way a custom board's pictures are. A title the author has since un-ranked is simply not found and drops out — a gap, not an error.
+Every "first_*" event is computed from a fact read immediately before the write —
+the local store's own count for `first_title_ranked`, a `select … limit 1` against
+`posts` for `first_post_published` — never a remembered flag. Decision and the
+reasoning (including the one accepted race, a same-instant publish from two tabs)
+are in `.ai/DECISIONS.md`, dated 2026-08-27.
 
-`ranked_titles` already gates a stranger's read on the author's own `is_public` flag (migration 004), so "take a whole board down" already had a lever — nothing new was added for it.
+No PII in any payload: no email, no JWT, only public identifiers (`post_id`, which
+is already a public post's own id) and neutral category/type strings. Checked as a
+fact in the payload-shape test, not asserted field by field.
 
-- `publishPost` now freezes the board actually on screen (like `publishCustomBoard` does), not a fresh database read. A failed snapshot insert withdraws the post rather than leaving one with nothing behind it.
-- No UPDATE policy, self-checked exactly as 013 is.
-- `getAuthorTitles` gained `.order("id", { ascending: true })` ahead of its 40-per-author cap — requested mid-review, after the plan was approved, because an undetermined cap meant "missing from this batch" could be pure chance rather than the author's own action, and a snapshot now reads that absence as "taken down."
-- Posts published before this migration have no row here and keep rendering live until deleted and republished. **Confirmed on production: 2 such posts** (movie, game category) — untouched by this migration, as agreed.
+## What was actually verified, not just written
 
-### 2 · Downloading a post
+**Unit — 22 new tests across 5 files, every one with a negative control** (the fix
+reverted, the test shown to fail against the real code, not a mock of the code under
+test):
 
-The same `OverflowMenu` from #41/#42, in the post dialog: **Download** next to **Delete post**, offered to any viewer. Reuses `renderBoardPng`/`downloadPng` unchanged — the ref points at whichever board is already rendered (resolved snapshot for a regular post, published board for a custom one), so there was no format to adapt.
+- `analytics-tracker.test.ts` — payload shape and event names for all five, plus the
+  no-PII check, run against the real `trackEvent`/provider pipeline.
+- `activation-funnel.test.ts` — `addTitle()`'s real first-title gating (fires once,
+  not on a second title, not on a duplicate add of the same title); `isFirstPostForUser`
+  against a fake `posts` table; `publishCustomBoard`'s real gating (fires once, not on
+  a second board, not when the account already had a post).
+- `publish-post-first-event.test.ts` — the same gating for `publishPost`, module-mocked
+  the way `tier-list-actions-custom-clear.test.tsx` already does for the same reason
+  (`publishPost` reaches for its Supabase client internally rather than taking one as
+  a parameter).
+- `post-delete.test.tsx` (extended) — `post_downloaded` fires on a successful Download
+  with the right post id and category, and does not fire when rendering fails.
+- `magic-link-signup-started.test.tsx` — the real `MagicLinkForm` component fires
+  `signup_started` on submit, before Supabase's response, and still fires when
+  Supabase goes on to refuse the address.
+- `post-shared-link.test.tsx` — the real `TierListActions` "Copy link" and the real
+  `CustomBoard` visibility toggle; confirmed the toggle fires only on the transition
+  *to* public, not the reverse (a dedicated negative case, not just the happy path).
 
-Added the watermark `TierBoard` and `CustomPostBoard` were missing relative to every other export in the app, gated to the dialog's `full` variant so the feed-card thumbnail is untouched.
+All 929 unit tests pass; lint, typecheck and build clean (one pre-existing,
+unrelated warning in `post-delete.test.tsx`).
 
-### 3 · A Custom tab in the feed
+**Browser — one new Playwright spec, `e2e/activation-funnel.spec.ts`**, run against
+the real production bundle (`next build && next start`), not `next dev`:
 
-One entry in `CATEGORY_TABS`. A showcase, not a moderation boundary — reporting a custom photo is still a manual `console.error` today, unchanged by this.
+- Added `NEXT_PUBLIC_POSTHOG_KEY`/`HOST` (a stub host) to the e2e build, since with no
+  key at all `PostHogProvider` skips `posthog.init` entirely and there would be
+  nothing running to test.
+- Confirmed PostHog's own SDK genuinely initialises in the compiled bundle — real
+  network requests to the configured host (`/flags`, `config.js`), not merely present
+  in a jsdom-mocked unit test.
+- Confirmed the magic-link form still works end to end (reaches "Link sent") once
+  PostHogProvider has mounted — a broken mount would have broken the page.
+- 11/11 browser tests pass, including under full parallel load (re-run twice to
+  confirm, after one flaky run traced to CPU contention across ten concurrent browser
+  contexts rather than a real bug — fixed by widening two assertions' timeouts rather
+  than papering over it with a retry).
 
-### Found along the way: the test harness had gone stale
+**Where the verification stops, honestly:** `window.posthog` never exists in this
+app — the integration imports `posthog-js` as an ES module rather than the HTML
+snippet, so nothing external can hook `.capture()` directly (documented in
+`.ai/ARCHITECTURE.md`). What's proven instead is the full call chain up to that
+point — component click → `trackEvent` → every registered provider → the PostHog
+provider's `client.capture(...)` call (that last hop covered by the pre-existing
+`posthog-provider.test.ts`) — plus, in a real browser, that the SDK the provider
+calls into is genuinely alive. Whether `posthog-js` then successfully batches and
+transmits that capture call to PostHog's actual servers is the SDK's own internals,
+not this project's code, and was not chased further — a real event landing in the
+PostHog dashboard the first time this ships is the natural remaining confirmation,
+not something a sandboxed test can honestly claim to have watched happen.
 
-`supabase/testing/run.sh` only ever applied migration `012` and only ever ran `10_rls_checks.sql`. `013` and its own `11_publication_checks.sql` (from #33) were never wired in — 013's self-check requires `009` first and would have failed the moment this script was actually run end to end. Fixed: `run.sh` now applies `009/012/013/014` and runs every numbered check file present. `ranked_titles` itself lives in `supabase/schema.sql`, outside the numbered migrations, so `00_platform.sql` gained a stand-in for it, including the 004 `is_public` read policy 014 leans on.
+## PR and CI
 
-## Verified
+*(placeholder — updated once the PR exists and its checks have run)*
 
-- **911 unit tests** (17 new), lint, typecheck and build clean.
-- **10 browser tests, all pre-existing and untouched** — confirms the post-dialog reshuffle (Delete post moving behind the menu) broke nothing already covered.
-- Every new unit test has a **negative control**: `resolveSnapshotTitles`'s merge/gap logic, `getAuthorTitles`'s ordering, the publish rollback, the Custom tab, and the watermark reveal each demonstrably fail when the behaviour they check is removed.
-- **RLS harness re-run clean end to end**, including `--negative` mode. `12_ranked_title_publication_checks.sql` (new, 7 checks) passed against a real PostgreSQL 16; the no-UPDATE check was separately confirmed to *fail* when that policy is temporarily reopened in the same session.
-- `.ai/DECISIONS.md` and `.ai/ARCHITECTURE.md` updated with the snapshot design and the `ranked_titles`-lives-outside-migrations gotcha, so the next session does not rediscover either by hand.
+## How to see the funnel in PostHog
 
-## Screenshots
-
-`.ai/reports/shots/`:
-- `post-dialog-download-menu.png` — the post dialog's overflow menu open, showing **Download** alongside **Delete post**.
-- `feed-tabs-with-custom.png` — the feed's category tabs with **Custom** added, selected.
-
-Captured with Playwright against a temporary route (deleted before this was committed), the same approach used for #41/#42's toolbar screenshots — the in-app browser pane does not composite frames reliably enough to screenshot from directly.
-
-## Not verified live
-
-Publishing itself needs a signed-in session, which cannot be exercised here — the RLS harness proves the database side end to end (all 7 new checks, plus the existing 13 re-verified in the same run), but nobody has clicked Publish on a real account since this shipped.
+PostHog dashboard → Product analytics → Funnels → new funnel with steps
+`signup_started` → `signup_completed` → `first_title_ranked` → `first_post_published`
+→ `post_downloaded` **or** `post_shared_link` (the last two as an "either" step, not
+a single next step — they are alternative signs of finishing the loop, not sequential).

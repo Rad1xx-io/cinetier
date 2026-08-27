@@ -1,8 +1,10 @@
 "use client";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getSessionSnapshot } from "@/lib/supabase/session-store";
 import { safeDonationUrl } from "@/lib/utils/donation-url";
+import { trackFirstPostPublished } from "@/lib/analytics/events";
 import type { MediaType, RankedTitle } from "@/lib/types";
 
 /** The categories a post can be filed under. `mixed` is for a board of everything. */
@@ -217,6 +219,25 @@ function buildRankedTitleSnapshot(titles: RankedTitle[]): { titles: RankedTitleS
   };
 }
 
+/**
+ * Whether this account has never had a post before this moment.
+ *
+ * Asked of the database immediately before the write that might change the
+ * answer, the same way `first_title_ranked` asks the local store before
+ * adding — publishing is rare enough that one extra read costs nothing, and
+ * it is the only way to get "first ever" right across a second device or a
+ * cleared cache. Shared between `publishPost` and `publishCustomBoard`: both
+ * write into the same `posts` table, so whichever kind of board an account
+ * publishes first is the one the funnel should credit.
+ */
+export async function isFirstPostForUser(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  const { data } = await supabase.from("posts").select("id").eq("user_id", userId).limit(1);
+  return (data?.length ?? 0) === 0;
+}
+
 export async function publishPost(input: {
   title: string;
   description: string;
@@ -229,6 +250,8 @@ export async function publishPost(input: {
 
   const userId = currentUserId();
   if (!userId) return { ok: false, error: "Sign in to publish posts." };
+
+  const isFirstPost = await isFirstPostForUser(supabase, userId);
 
   const { data, error } = await supabase
     .from("posts")
@@ -268,6 +291,7 @@ export async function publishPost(input: {
     return { ok: false, error: "Could not publish the post. Please try again." };
   }
 
+  if (isFirstPost) trackFirstPostPublished("tier_list");
   return { ok: true, postId };
 }
 

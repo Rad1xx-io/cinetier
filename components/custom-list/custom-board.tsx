@@ -38,7 +38,7 @@ import { Button } from "@/components/ui/button";
 import { downloadPng, renderBoardPng } from "@/lib/utils/board-export";
 import { describeExportFailure } from "@/lib/utils/export-error";
 import { SITE_HOST } from "@/lib/seo/site";
-import { trackImageExported } from "@/lib/analytics/events";
+import { trackImageExported, trackPostSharedLink } from "@/lib/analytics/events";
 import { tierCollisionDetection } from "@/lib/utils/tier-dnd";
 
 /** The pool of cards not yet given a tier. Its own droppable, like any row. */
@@ -282,6 +282,9 @@ export function CustomBoard({ board }: CustomBoardProps) {
     if (!supabase) return;
     const next = !isPublic;
     setIsPublic(next);
+    // Only the turn towards public is a sharing intent; switching back to
+    // "Only me" is the opposite of that and should not count as one.
+    if (next) trackPostSharedLink("custom_board");
     await setBoardVisibility(supabase, board.list.id, next);
   }
 
