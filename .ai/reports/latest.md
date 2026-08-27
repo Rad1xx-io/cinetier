@@ -56,37 +56,48 @@ All 929 unit tests pass; lint, typecheck and build clean (one pre-existing,
 unrelated warning in `post-delete.test.tsx`).
 
 **Browser — one new Playwright spec, `e2e/activation-funnel.spec.ts`**, run against
-the real production bundle (`next build && next start`), not `next dev`:
+the real production bundle (`next build && next start`), not `next dev`.
 
-- Added `NEXT_PUBLIC_POSTHOG_KEY`/`HOST` (a stub host) to the e2e build, since with no
-  key at all `PostHogProvider` skips `posthog.init` entirely and there would be
-  nothing running to test.
-- Confirmed PostHog's own SDK genuinely initialises in the compiled bundle — real
-  network requests to the configured host (`/flags`, `config.js`), not merely present
-  in a jsdom-mocked unit test.
-- Confirmed the magic-link form still works end to end (reaches "Link sent") once
-  PostHogProvider has mounted — a broken mount would have broken the page.
-- 11/11 browser tests pass, including under full parallel load (re-run twice to
-  confirm, after one flaky run traced to CPU contention across ten concurrent browser
-  contexts rather than a real bug — fixed by widening two assertions' timeouts rather
-  than papering over it with a retry).
+The first version tried to go further than this: a stub `NEXT_PUBLIC_POSTHOG_KEY`/
+`HOST` in the shared build so PostHog's own SDK would genuinely `init()`, proving
+real network requests left the page. Locally, with default parallelism, that flaked
+once (traced to ten concurrent browser contexts under CPU load); widening two
+assertions' timeouts made it pass twice more, locally. On GitHub Actions it failed
+outright. The stub key is baked into **the one build every spec in the suite shares**,
+so it made `PostHogProvider` attempt real network requests to an unreachable `.test`
+host in the background of every other test in the directory too, not only this one —
+and how fast a given environment's resolver gives up on a host that will never
+resolve is not something a laptop and a GitHub-hosted runner are guaranteed to agree
+on. That is a real risk to the whole suite for one test's benefit, and it is exactly
+the kind of thing that is invisible on one machine and flaky on another — so it was
+reverted rather than chased further. `playwright.config.ts` carries the reasoning.
+
+What ships instead: the real click sequence — Sign in, fill the email, submit — on
+the real built page, still reaches "Link sent". No key is configured, matching every
+other spec here, so `PostHogProvider.start()` returns before `posthog.init` is ever
+called — the same state the whole rest of the suite already runs in. 11/11 browser
+tests pass, confirmed twice under full parallel load after the revert.
 
 **Where the verification stops, honestly:** `window.posthog` never exists in this
-app — the integration imports `posthog-js` as an ES module rather than the HTML
-snippet, so nothing external can hook `.capture()` directly (documented in
-`.ai/ARCHITECTURE.md`). What's proven instead is the full call chain up to that
-point — component click → `trackEvent` → every registered provider → the PostHog
-provider's `client.capture(...)` call (that last hop covered by the pre-existing
-`posthog-provider.test.ts`) — plus, in a real browser, that the SDK the provider
-calls into is genuinely alive. Whether `posthog-js` then successfully batches and
-transmits that capture call to PostHog's actual servers is the SDK's own internals,
-not this project's code, and was not chased further — a real event landing in the
-PostHog dashboard the first time this ships is the natural remaining confirmation,
-not something a sandboxed test can honestly claim to have watched happen.
+app even when PostHog is genuinely configured — the integration imports `posthog-js`
+as an ES module rather than the HTML snippet, so nothing external can hook
+`.capture()` directly (documented in `.ai/ARCHITECTURE.md`), and getting a real SDK
+instance running in the shared e2e build turned out to cost more than it proved. What
+*is* proven, end to end, is the call chain up to the SDK's own boundary — component
+click → `trackEvent` → every registered provider → the PostHog provider's
+`client.capture(...)` call, that last hop covered by the pre-existing
+`posthog-provider.test.ts` — plus, now, that the click sequence itself survives in
+the real compiled page. Whether `posthog-js` then successfully batches and transmits
+a capture call to PostHog's actual servers is the SDK's own internals, not this
+project's code; a real event landing in the PostHog dashboard the first time this
+ships is the natural remaining confirmation, not something a sandboxed test can
+honestly claim to have watched happen.
 
 ## PR and CI
 
-*(placeholder — updated once the PR exists and its checks have run)*
+**PR #46 — https://github.com/Rad1xx-io/cinetier/pull/46**
+
+*(check status filled in once CI has run on the final commit)*
 
 ## How to see the funnel in PostHog
 
