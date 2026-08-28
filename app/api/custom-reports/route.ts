@@ -13,7 +13,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
  * it is not read at all — which is exactly why it must not fail quietly.
  */
 
-const SUBJECT_TYPES = new Set(["custom_item", "custom_list"]);
+const SUBJECT_TYPES = new Set(["custom_item", "custom_list", "post", "post_comment"]);
 
 /**
  * Tells somebody, if there is somebody to tell.

@@ -1,63 +1,101 @@
-# Freeze regular tier-list posts, add a Download menu, and a Custom feed tab
+# Extend content reporting to feed posts and comments
 
 ## PR and CI
 
-**PR #45 — https://github.com/Rad1xx-io/cinetier/pull/45**
-
-| check | status |
-| --- | --- |
-| `Typecheck, lint and test` | success (22:46:54 → 22:47:57) |
-| `Browser test` | success (22:46:54 → 22:48:09) |
-
-`state: open`, `merged: false`, `mergeable_state: clean`, base `main`, 3 commits, 24 files changed, +1079/−118.
-
-One CI run this time took roughly 9 minutes to start — GitHub's own Actions queue, not this branch or its workflow config (`.github/workflows/ci.yml` diffs empty against `origin/main`). Confirmed by watching the run actually start and finish, not assumed from an idle wait.
+_Filled in after the PR is opened and CI is confirmed — see chat for the final status table._
 
 ## What changed
 
-### 1 · A post used to keep rewriting itself
+### 1 · The report route now accepts posts and comments
 
-A post carried no ranking data of its own — it was rendered by re-reading the author's live `ranked_titles` every time. Re-tier a title, un-rank it, and every post ever made about that board quietly changed with it.
+`SUBJECT_TYPES` in `app/api/custom-reports/route.ts` gained `"post"` and `"post_comment"`
+alongside the existing `"custom_item"`/`"custom_list"`. Same route, same table
+(`content_reports`), same auth-required / fail-quiet-but-log-loudly behaviour as before — a
+report is only ever logged at `console.error` and forwarded to `CONTENT_REPORT_WEBHOOK_URL`
+if one is configured, and a failed insert is the one thing that still returns an error to the
+caller.
 
-Migration `014_ranked_title_publications.sql` mirrors 013's `custom_list_publications` for this kind of post: freezes which title sat in which tier, in what order, at the moment Publish was pressed — **not** the titles themselves. No name, no poster, no release date: those are catalogue facts, resolved live from `ranked_titles` at render time, the same way a custom board's pictures are. A title the author has since un-ranked is simply not found and drops out — a gap, not an error.
+`ReportSubjectType` in `lib/types/custom-list.ts` widened to match.
 
-`ranked_titles` already gates a stranger's read on the author's own `is_public` flag (migration 004), so "take a whole board down" already had a lever — nothing new was added for it.
+### 2 · Migration 015 — widen the database check
 
-- `publishPost` now freezes the board actually on screen (like `publishCustomBoard` does), not a fresh database read. A failed snapshot insert withdraws the post rather than leaving one with nothing behind it.
-- No UPDATE policy, self-checked exactly as 013 is.
-- `getAuthorTitles` gained `.order("id", { ascending: true })` ahead of its 40-per-author cap — requested mid-review, after the plan was approved, because an undetermined cap meant "missing from this batch" could be pure chance rather than the author's own action, and a snapshot now reads that absence as "taken down."
-- Posts published before this migration have no row here and keep rendering live until deleted and republished. **Confirmed on production: 2 such posts** (movie, game category) — untouched by this migration, as agreed.
+`content_reports.subject_type` had a `CHECK (subject_type in ('custom_item', 'custom_list'))`
+constraint from migration 012. `015_report_feed_content.sql` drops and re-adds it with `post`
+and `post_comment` added — the route would otherwise 500 on every feed report the moment it
+tried to insert. No new table: a report is one idea regardless of what it points at.
 
-### 2 · Downloading a post
+```sql
+-- TierListOnline: let a report point at a feed post or a comment on one, not
+-- only a custom board's own content. Run once in the Supabase SQL Editor.
+-- Safe to re-run.
+--
+-- content_reports (012) started as the one signal for something nothing here
+-- inspects automatically: a picture somebody should not have uploaded. The
+-- community feed (009) has the same gap — a post's title and description, or
+-- a comment on it, is read by whoever wrote it and whoever's looking, and
+-- there was no way to flag either one. This widens the same table's
+-- subject_type check rather than adding a second reports table: a report is
+-- one idea regardless of what it points at, and the API route already reads
+-- subject_type generically.
 
-The same `OverflowMenu` from #41/#42, in the post dialog: **Download** next to **Delete post**, offered to any viewer. Reuses `renderBoardPng`/`downloadPng` unchanged — the ref points at whichever board is already rendered (resolved snapshot for a regular post, published board for a custom one), so there was no format to adapt.
+do $$
+begin
+  if to_regclass('public.content_reports') is null then
+    raise exception 'TierListOnline: run migration 012 first — public.content_reports is missing.';
+  end if;
+  if to_regclass('public.posts') is null then
+    raise exception 'TierListOnline: run migration 009 first — public.posts is missing.';
+  end if;
+end $$;
 
-Added the watermark `TierBoard` and `CustomPostBoard` were missing relative to every other export in the app, gated to the dialog's `full` variant so the feed-card thumbnail is untouched.
+alter table public.content_reports drop constraint if exists content_reports_subject_type_check;
+alter table public.content_reports add constraint content_reports_subject_type_check
+  check (subject_type in ('custom_item', 'custom_list', 'post', 'post_comment'));
+```
 
-### 3 · A Custom tab in the feed
+**Run this migration in the Supabase SQL Editor before merging** — the route will 500 on
+every feed report until it has.
 
-One entry in `CATEGORY_TABS`. A showcase, not a moderation boundary — reporting a custom photo is still a manual `console.error` today, unchanged by this.
+### 3 · `ReportButton`/`ReportDialog` moved to `components/ui/`
 
-### Found along the way: the test harness had gone stale
+They were `components/custom-list/report-button.tsx`, a self-contained trigger + dialog. Now
+split in two, both in `components/ui/` since the feed uses them too:
 
-`supabase/testing/run.sh` only ever applied migration `012` and only ever ran `10_rls_checks.sql`. `013` and its own `11_publication_checks.sql` (from #33) were never wired in — 013's self-check requires `009` first and would have failed the moment this script was actually run end to end. Fixed: `run.sh` now applies `009/012/013/014` and runs every numbered check file present. `ranked_titles` itself lives in `supabase/schema.sql`, outside the numbered migrations, so `00_platform.sql` gained a stand-in for it, including the 004 `is_public` read policy 014 leans on.
+- `ReportDialog` — the form itself (reason textarea, send, "Reported" state), now controlled
+  (`open`/`onClose`) so a caller that already has its own trigger (an overflow menu item) can
+  drive it without owning a second copy of the dialog.
+- `ReportButton` — the small flag-icon trigger + its own open state, wrapping `ReportDialog`,
+  unchanged in behaviour for its existing callers (`custom-card.tsx`, `custom-board.tsx`, both
+  just import from the new path). Gained an optional `className` to override its trigger's
+  background treatment — the default (`bg-background/80 backdrop-blur`) suits a control
+  floating over a picture; a comment in a plain list needed a lighter one instead.
+
+### 4 · The feed UI
+
+- **A post**: "Report" added to the post dialog's existing `OverflowMenu` ("More post
+  actions"), next to Download and Delete post — not a new icon in the like/comment row. Not
+  offered to the post's own author. Not added to the feed-card grid, matching the existing
+  precedent that Download/Delete post are dialog-only too.
+- **A comment**: each comment row in the post dialog gets its own `ReportButton` (comments
+  had no per-item actions of any kind before this). Not offered on your own comment.
+
+Neither surface gates on being signed in — the same convention `ReportButton` already had for
+custom items and boards. A signed-out visitor sees Report same as anyone; the route's existing
+401 surfaces inline in the dialog if they actually try to send one.
 
 ## Verified
 
-- **911 unit tests** (17 new), lint, typecheck and build clean.
-- **10 browser tests, all pre-existing and untouched** — confirms the post-dialog reshuffle (Delete post moving behind the menu) broke nothing already covered.
-- Every new unit test has a **negative control**: `resolveSnapshotTitles`'s merge/gap logic, `getAuthorTitles`'s ordering, the publish rollback, the Custom tab, and the watermark reveal each demonstrably fail when the behaviour they check is removed.
-- **RLS harness re-run clean end to end**, including `--negative` mode. `12_ranked_title_publication_checks.sql` (new, 7 checks) passed against a real PostgreSQL 16; the no-UPDATE check was separately confirmed to *fail* when that policy is temporarily reopened in the same session.
-- `.ai/DECISIONS.md` and `.ai/ARCHITECTURE.md` updated with the snapshot design and the `ranked_titles`-lives-outside-migrations gotcha, so the next session does not rediscover either by hand.
-
-## Screenshots
-
-`.ai/reports/shots/`:
-- `post-dialog-download-menu.png` — the post dialog's overflow menu open, showing **Download** alongside **Delete post**.
-- `feed-tabs-with-custom.png` — the feed's category tabs with **Custom** added, selected.
-
-Captured with Playwright against a temporary route (deleted before this was committed), the same approach used for #41/#42's toolbar screenshots — the in-app browser pane does not composite frames reliably enough to screenshot from directly.
-
-## Not verified live
-
-Publishing itself needs a signed-in session, which cannot be exercised here — the RLS harness proves the database side end to end (all 7 new checks, plus the existing 13 re-verified in the same run), but nobody has clicked Publish on a real account since this shipped.
+- `npm run lint` — clean (1 pre-existing unrelated warning)
+- `npm run typecheck` — clean
+- `npm test` — 917/917 passing, including 6 new unit tests in
+  `__tests__/post-report.test.tsx` (post-level: offered/not-offered by author, sends the right
+  subject+reason, rejects a too-short reason; comment-level: offered only on somebody else's
+  comment, reports the specific comment's id)
+- `npx playwright test` — 12/12 passing, including 2 new specs in `e2e/feed-report.spec.ts`
+  against the real built page (network stubbed, `/api/custom-reports` intercepted rather than
+  exercised for real)
+- `npm run build` — clean
+- Playwright screenshots against the production build (`.ai/reports/shots/`):
+  `post-actions-menu-with-report.png` (Report next to Download in the overflow menu, the flag
+  icon visible on somebody else's comment), `post-dialog-with-comment-report.png`,
+  `report-dialog.png` (the dialog open on a post, mid-draft)

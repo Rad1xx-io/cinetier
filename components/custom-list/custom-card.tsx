@@ -4,7 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Eye, EyeOff, ImageOff, Trash2 } from "lucide-react";
 import type { CustomItem } from "@/lib/types/custom-list";
-import { ReportButton } from "@/components/custom-list/report-button";
+import { ReportButton } from "@/components/ui/report-button";
 import { cn } from "@/lib/utils/cn";
 
 interface CustomCardProps {
