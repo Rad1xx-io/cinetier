@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TopNav } from "@/components/navigation/top-nav";
 import { MobileHeader } from "@/components/navigation/mobile-header";
@@ -93,6 +94,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <main className="flex-1 pb-20 md:pb-0">{children}</main>
         <ChromeGate>
           <footer className="hidden border-t border-border px-6 py-6 text-center text-xs text-muted md:block">
+            <nav className="mb-2 flex items-center justify-center gap-4">
+              <Link href="/about" className="hover:text-foreground hover:underline">
+                About
+              </Link>
+              <Link href="/privacy" className="hover:text-foreground hover:underline">
+                Privacy
+              </Link>
+              <Link href="/terms" className="hover:text-foreground hover:underline">
+                Terms
+              </Link>
+            </nav>
             This product uses the TMDB API but is not endorsed or certified by TMDB.
           </footer>
           <BottomNav />
