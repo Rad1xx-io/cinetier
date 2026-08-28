@@ -13,6 +13,7 @@ import { getMyProfile, type Profile } from "@/lib/supabase/profiles";
 import {
   trackImageExported,
   trackLinkCopied,
+  trackPostSharedLink,
   trackShareClicked,
 } from "@/lib/analytics/events";
 import type { RankedTitle } from "@/lib/types";
@@ -98,6 +99,7 @@ export function TierListActions({
       // Counted before the write: a clipboard refusal still falls back to
       // showing the link, so the user got their link either way.
       trackLinkCopied("tier_list", handle);
+      trackPostSharedLink("tier_list");
       try {
         await navigator.clipboard.writeText(url);
         onNotify("Link copied");

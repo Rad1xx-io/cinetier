@@ -79,6 +79,24 @@ components/ui/overflow-menu.tsx — один общий компонент дл�
 что у sticky-хедеров и категорийного дропдауна тир-листа — z-30 когда-то
 уже совпал с z-30 фильтр-бара и проиграл ему по порядку в DOM.
 
+## PostHog: посевом в snippet — нет, посевом в window — тоже нет
+Интеграция — `posthog-js` как ES-модуль (`import posthog from "posthog-js"`
+в app/providers/PostHogProvider.tsx), а не HTML-сниппет. Это значит
+`window.posthog` НИКОГДА не появляется — если понадобится перехватить
+`.capture()` из e2e/консоли браузера, ловить нужно по сети (запросы на
+`NEXT_PUBLIC_POSTHOG_HOST`, например `/flags`), а не через
+`window.posthog`. `capture_pageview: "history_change"` +
+`opt_out_capturing_by_default` на dev — так что в `next dev` события в
+PostHog реально не долетают (это осознанно, "Development noise stays
+out of the project's numbers"), в `next build && next start` долетают,
+если заданы `NEXT_PUBLIC_POSTHOG_KEY`/`HOST`.
+
+`lib/analytics/tracker.ts` — единая точка выхода (`trackEvent`) для всех
+провайдеров; `lib/analytics/posthog-provider.ts` регистрирует PostHog как
+один из провайдеров и сам не содержит логики "что и когда трекать" — это
+всегда типизированные обёртки в `lib/analytics/events.ts`, вызываемые из
+компонентов/lib-слоя напрямую, а не через какой-то отдельный aggregator.
+
 ## Отчёты и скриншоты
 Финальный отчёт по каждой завершённой задаче пишется в
 `.ai/reports/latest.md` (перезаписывается каждый раз, не копится) и

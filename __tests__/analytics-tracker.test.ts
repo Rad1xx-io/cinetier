@@ -167,3 +167,43 @@ describe("typed funnel helpers", () => {
     expect(sent[2].properties.creator_user_id).toBe("author-3");
   });
 });
+
+describe("activation funnel", () => {
+  it("names and shapes every new step correctly, with no PII in any of them", () => {
+    const { provider, sent } = collector();
+    registerProvider(provider);
+
+    events.trackSignupStarted("/tier-list");
+    events.trackFirstTitleRanked();
+    events.trackFirstPostPublished("tier_list");
+    events.trackFirstPostPublished("custom");
+    events.trackPostDownloaded("post-1", "movie");
+    events.trackPostSharedLink("tier_list");
+    events.trackPostSharedLink("custom_board");
+
+    expect(sent.map((e) => e.event)).toEqual([
+      "signup_started",
+      "first_title_ranked",
+      "first_post_published",
+      "first_post_published",
+      "post_downloaded",
+      "post_shared_link",
+      "post_shared_link",
+    ]);
+    expect(sent[0].properties).toEqual({ entry_point: "/tier-list" });
+    // The milestone is the whole signal — no properties to carry.
+    expect(sent[1].properties).toEqual({});
+    expect(sent[2].properties).toEqual({ post_type: "tier_list" });
+    expect(sent[3].properties).toEqual({ post_type: "custom" });
+    expect(sent[4].properties).toEqual({ post_id: "post-1", category: "movie" });
+    expect(sent[5].properties).toEqual({ surface: "tier_list" });
+    expect(sent[6].properties).toEqual({ surface: "custom_board" });
+
+    // No email, no JWT, no id that isn't already a public post/list identifier
+    // — checked as a fact about the payload, not asserted by hand per field.
+    const serialised = JSON.stringify(sent.map((e) => e.properties));
+    expect(serialised).not.toMatch(/@/); // an email address, however it got there
+    expect(serialised.toLowerCase()).not.toContain("token");
+    expect(serialised.toLowerCase()).not.toContain("jwt");
+  });
+});

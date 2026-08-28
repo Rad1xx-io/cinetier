@@ -8,6 +8,8 @@ import type {
 import { STARTER_ROWS } from "@/lib/types/custom-list";
 import { describeWriteFailure } from "@/lib/supabase/write-failure";
 import { validatePost } from "@/lib/feed/post-preview";
+import { isFirstPostForUser } from "@/lib/supabase/feed";
+import { trackFirstPostPublished } from "@/lib/analytics/events";
 
 /**
  * Reading and writing custom boards.
@@ -589,6 +591,8 @@ export async function publishCustomBoard(
   const validation = validatePost(postTitle, description);
   if (!validation.ok) return { error: validation.error };
 
+  const isFirstPost = await isFirstPostForUser(supabase, board.list.userId);
+
   const { data, error } = await supabase
     .from("posts")
     .insert({
@@ -618,6 +622,7 @@ export async function publishCustomBoard(
     return { error: describeWriteFailure(snapshotError) };
   }
 
+  if (isFirstPost) trackFirstPostPublished("custom");
   return { postId };
 }
 
