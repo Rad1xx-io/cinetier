@@ -1,5 +1,6 @@
 import { localStorageRepository } from "@/lib/storage/local-storage-repository";
 import { rememberCatalogIfUnset } from "@/lib/storage/last-catalog";
+import { trackFirstTitleRanked } from "@/lib/analytics/events";
 import type { RankingRepository } from "@/lib/storage/repository";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { CriterionScore } from "@/lib/types/criteria";
@@ -28,7 +29,20 @@ export function addTitle(input: Parameters<RankingRepository["add"]>[0]): Ranked
   // somebody who has never picked one it is the only statement available.
   // It does not overwrite a choice already made — see rememberCatalogIfUnset.
   rememberCatalogIfUnset(input.mediaType);
-  return repository.add(input);
+
+  /*
+   * Read before the write, not after: `repository.add` returns the existing
+   * row unchanged when the title is already ranked, so checking the count
+   * afterwards would misfire on a duplicate add. Checking the fact — the list
+   * was empty and this call is the one that ends that — is what the funnel
+   * asked for, computed from the store that is already the source of truth
+   * rather than a remembered flag that a cleared cache or a second device
+   * could get wrong.
+   */
+  const wasEmpty = repository.getAll().length === 0;
+  const added = repository.add(input);
+  if (wasEmpty) trackFirstTitleRanked();
+  return added;
 }
 
 export function removeTitle(tmdbId: number, mediaType: MediaType): void {

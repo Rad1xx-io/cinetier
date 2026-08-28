@@ -32,7 +32,7 @@ import { ReportButton } from "@/components/ui/report-button";
 import { ReportDialog } from "@/components/ui/report-dialog";
 import { downloadPng, renderBoardPng } from "@/lib/utils/board-export";
 import { describeExportFailure } from "@/lib/utils/export-error";
-import { trackImageExported } from "@/lib/analytics/events";
+import { trackImageExported, trackPostDownloaded } from "@/lib/analytics/events";
 
 interface PostDialogProps {
   post: FeedPost | null;
@@ -144,7 +144,7 @@ export function PostDialog({
 
   async function handleDownload(itemsCount: number) {
     const node = boardRef.current;
-    if (!node) return;
+    if (!node || !post) return;
 
     setExporting(true);
     setDownloadError("");
@@ -158,6 +158,7 @@ export function PostDialog({
       const dataUrl = await renderBoardPng(node);
       downloadPng(dataUrl, "tierlistonline");
       trackImageExported({ itemsCount, succeeded: true });
+      trackPostDownloaded(post.id, post.category);
     } catch (err) {
       const reason = describeExportFailure(err);
       trackImageExported({ itemsCount, succeeded: false, reason: reason.slice(0, 120) });
