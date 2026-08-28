@@ -69,6 +69,10 @@ export const SITEMAP_ROUTES: SitemapRoute[] = [
   // way in, which is a real landing page rather than a dead one.
   { path: "/tier-list", changeFrequency: "weekly", priority: 0.7 },
   { path: "/youtube/tier-list", changeFrequency: "weekly", priority: 0.6 },
+  // Informational, not content — ranked below everything above.
+  { path: "/about", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/privacy", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/terms", changeFrequency: "yearly", priority: 0.3 },
 ];
 
 /**
