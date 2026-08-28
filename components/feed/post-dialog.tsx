@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Download, Eye, GitFork, Heart, Loader2, MessageCircle, Send, Trash2, X } from "lucide-react";
+import { Download, Eye, Flag, GitFork, Heart, Loader2, MessageCircle, Send, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -28,6 +28,8 @@ import { cn } from "@/lib/utils/cn";
 import { CustomPostBoard } from "@/components/feed/custom-post-board";
 import type { PublishedBoard } from "@/lib/supabase/custom-lists";
 import { OverflowMenu } from "@/components/ui/overflow-menu";
+import { ReportButton } from "@/components/ui/report-button";
+import { ReportDialog } from "@/components/ui/report-dialog";
 import { downloadPng, renderBoardPng } from "@/lib/utils/board-export";
 import { describeExportFailure } from "@/lib/utils/export-error";
 import { trackImageExported, trackPostDownloaded } from "@/lib/analytics/events";
@@ -77,6 +79,7 @@ export function PostDialog({
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [downloadError, setDownloadError] = useState("");
+  const [reportOpen, setReportOpen] = useState(false);
   const boardRef = useRef<HTMLElement | null>(null);
   /**
    * The feed loads a bounded slice per author to keep one screen to one query.
@@ -102,6 +105,7 @@ export function PostDialog({
     setComments(null);
     setDraft("");
     setFullTitles(null);
+    setReportOpen(false);
   }
 
   useEffect(() => {
@@ -300,6 +304,17 @@ export function PostDialog({
                   onSelect: () => void handleDownload(boardItemsCount),
                   disabled: exporting || boardItemsCount === 0,
                 },
+                // Not offered to the author about their own post — same as a
+                // custom board's own report button.
+                ...(user?.id !== post.userId
+                  ? [
+                      {
+                        label: "Report",
+                        icon: Flag,
+                        onSelect: () => setReportOpen(true),
+                      },
+                    ]
+                  : []),
                 // Offered to the author and nobody else. Publishing used to be
                 // one-way: hiding the board emptied the pictures out of the
                 // post and left its title in the feed for good.
@@ -317,6 +332,14 @@ export function PostDialog({
               ]}
             />
           </div>
+
+          <ReportDialog
+            open={reportOpen}
+            onClose={() => setReportOpen(false)}
+            subjectType="post"
+            subjectId={post.id}
+            label={`Report “${post.title}”`}
+          />
 
           {downloadError && <p className="mt-2 text-xs text-red-400">{downloadError}</p>}
 
@@ -350,6 +373,17 @@ export function PostDialog({
                         {comment.text}
                       </p>
                     </div>
+
+                    {/* Not offered on your own comment — same as the post and
+                        the custom-board items above. */}
+                    {user?.id !== comment.userId && (
+                      <ReportButton
+                        subjectType="post_comment"
+                        subjectId={comment.id}
+                        label="Report this comment"
+                        className="shrink-0 hover:bg-surface-raised"
+                      />
+                    )}
                   </li>
                 ))}
               </ul>

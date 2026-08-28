@@ -60,4 +60,5 @@ export const STARTER_ROWS: { label: string; color: string }[] = [
   { label: "D", color: "#3b82f6" },
 ];
 
-export type ReportSubjectType = "custom_item" | "custom_list";
+/** Shared with the community feed's posts and comments, not only custom boards. */
+export type ReportSubjectType = "custom_item" | "custom_list" | "post" | "post_comment";

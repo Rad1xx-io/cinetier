@@ -33,7 +33,7 @@ import { CustomTierRow } from "@/components/custom-list/custom-tier-row";
 import { UploadDialog } from "@/components/custom-list/upload-dialog";
 import { OverflowMenu } from "@/components/ui/overflow-menu";
 import { PublishBoardDialog } from "@/components/custom-list/publish-board-dialog";
-import { ReportButton } from "@/components/custom-list/report-button";
+import { ReportButton } from "@/components/ui/report-button";
 import { Button } from "@/components/ui/button";
 import { downloadPng, renderBoardPng } from "@/lib/utils/board-export";
 import { describeExportFailure } from "@/lib/utils/export-error";

@@ -1,29 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { Flag } from "lucide-react";
 import type { ReportSubjectType } from "@/lib/types/custom-list";
 import { Button } from "@/components/ui/button";
 
-interface ReportButtonProps {
+interface ReportDialogProps {
+  open: boolean;
+  onClose: () => void;
   subjectType: ReportSubjectType;
   subjectId: string;
   label: string;
 }
 
 /**
- * The way somebody says a picture should not be here.
+ * The form behind every "Report" action, wherever it is triggered from.
  *
- * Nothing on this site inspects an upload automatically, so this is the only
- * signal that exists. It asks for a sentence rather than offering a menu of
- * categories: a menu would need a taxonomy nobody has agreed on yet, and the
- * person who has to act on this will read the sentence either way.
+ * Controlled rather than owning its own open state: `ReportButton` wraps this
+ * for the overlay-icon case (a custom card, a comment), but a post's report
+ * lives behind its overflow menu, which only ever calls back with "selected" —
+ * something has to hold whether the form is open, and that has to be the
+ * caller, not this component.
  */
-export function ReportButton({ subjectType, subjectId, label }: ReportButtonProps) {
-  const [open, setOpen] = useState(false);
+export function ReportDialog({ open, onClose, subjectType, subjectId, label }: ReportDialogProps) {
   const [reason, setReason] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
   const [message, setMessage] = useState("");
+
+  if (!open) return null;
 
   async function submit() {
     setState("sending");
@@ -46,26 +49,30 @@ export function ReportButton({ subjectType, subjectId, label }: ReportButtonProp
     }
   }
 
-  if (state === "sent") {
-    return <p className="text-xs text-muted">Reported. Thank you — somebody will look at it.</p>;
+  function handleClose() {
+    onClose();
+    // Reset for the next time this subject is reported — a dialog reopened on
+    // the same comment should not still say "Reported" from last time.
+    setReason("");
+    setState("idle");
   }
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-md bg-background/80 p-1 text-muted backdrop-blur hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        aria-label={label}
-        title={label}
-      >
-        <Flag className="h-3.5 w-3.5" />
-      </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="text-sm font-semibold">{label}</h2>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-surface-raised p-4">
-            <h2 className="text-sm font-semibold">{label}</h2>
+        {state === "sent" ? (
+          <>
+            <p className="mt-2 text-sm text-muted">Reported. Thank you — somebody will look at it.</p>
+            <div className="mt-3 flex justify-end">
+              <Button size="sm" onClick={handleClose}>
+                Close
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
             <p className="mt-1 text-xs text-muted">
               Say briefly what is wrong with it. Reports are read by a person.
             </p>
@@ -79,7 +86,7 @@ export function ReportButton({ subjectType, subjectId, label }: ReportButtonProp
             />
             {state === "failed" && <p className="mt-2 text-xs text-red-400">{message}</p>}
             <div className="mt-3 flex justify-end gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>
+              <Button variant="secondary" size="sm" onClick={handleClose}>
                 Cancel
               </Button>
               <Button
@@ -90,9 +97,9 @@ export function ReportButton({ subjectType, subjectId, label }: ReportButtonProp
                 {state === "sending" ? "Sending…" : "Send report"}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
-    </>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
