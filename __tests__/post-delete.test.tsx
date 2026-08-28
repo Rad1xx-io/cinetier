@@ -7,6 +7,7 @@ const renderBoardPng = vi.fn<(node: HTMLElement) => Promise<string>>(
   async () => "data:image/png;base64,stub"
 );
 const downloadPng = vi.fn();
+const trackPostDownloaded = vi.fn();
 let viewer: { id: string } | null = { id: "author-1" };
 
 vi.mock("@/lib/supabase/feed", async (importOriginal) => ({
@@ -24,6 +25,10 @@ vi.mock("@/components/profile/donate-button", () => ({ DonateButton: () => null 
 vi.mock("@/lib/utils/board-export", () => ({
   renderBoardPng: (node: HTMLElement) => renderBoardPng(node),
   downloadPng: (...args: unknown[]) => downloadPng(...(args as [])),
+}));
+vi.mock("@/lib/analytics/events", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/analytics/events")>()),
+  trackPostDownloaded: (...args: unknown[]) => trackPostDownloaded(...(args as [])),
 }));
 
 import { PostDialog } from "@/components/feed/post-dialog";
@@ -192,6 +197,26 @@ describe("downloading a post as a picture", () => {
     // viewer is already looking at, not a second copy fetched specially.
     expect(renderBoardPng.mock.calls[0][0]).toBeInstanceOf(HTMLElement);
     await waitFor(() => expect(downloadPng).toHaveBeenCalledWith("data:image/png;base64,stub", "tierlistonline"));
+  });
+
+  it("reports which post was downloaded, category and all, on success", async () => {
+    open();
+    openActionsMenu();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: /^download$/i }));
+
+    await waitFor(() => expect(trackPostDownloaded).toHaveBeenCalledWith("p1", "custom"));
+  });
+
+  it("does not report a download that failed to render", async () => {
+    renderBoardPng.mockRejectedValueOnce(new Error("out of memory"));
+    open();
+    openActionsMenu();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: /^download$/i }));
+
+    await waitFor(() => expect(renderBoardPng).toHaveBeenCalled());
+    expect(trackPostDownloaded).not.toHaveBeenCalled();
   });
 
   it("reveals the watermark only for the moment of the capture", async () => {

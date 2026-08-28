@@ -34,7 +34,12 @@ describe("a board whose name is shorter than a post title may be", () => {
     const insert = vi.fn((row: Record<string, unknown>) => ({ row,
       select: () => ({ single: async () => ({ data: { id: "p1" }, error: null }) }),
     }));
-    const from = vi.fn(() => ({ insert }));
+    // publishCustomBoard now asks whether this account has ever published
+    // before it writes anything — an empty "posts" table answers that.
+    const from = vi.fn(() => ({
+      insert,
+      select: () => ({ eq: () => ({ limit: async () => ({ data: [] }) }) }),
+    }));
     const supabase = { from } as unknown as SupabaseClient;
 
     await publishCustomBoard(supabase, board("  best  "), "  best  ", "");

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { trackSignupStarted } from "@/lib/analytics/events";
 
 type SendStatus =
   | { kind: "idle" }
@@ -35,6 +36,9 @@ export function MagicLinkForm({ redirectTo = "/" }: MagicLinkFormProps) {
     if (!supabase) return;
 
     setStatus({ kind: "sending" });
+    // Fired on the attempt, not the result: a rejected address or a network
+    // drop still says somebody tried, which is the top-of-funnel fact.
+    trackSignupStarted(window.location.pathname);
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {

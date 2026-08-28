@@ -35,6 +35,18 @@ export default defineConfig({
     env: {
       // Inlined at build time. Any syntactically valid values will do — every
       // request to them is intercepted before it leaves the page.
+      //
+      // Deliberately no NEXT_PUBLIC_POSTHOG_KEY/HOST here. This is one build
+      // shared by every spec in the suite, and a real key would make
+      // PostHogProvider genuinely call `posthog.init` — and therefore attempt
+      // real network requests — in the background of every test in this
+      // directory, not only the one that wants to look at them. A `.test`
+      // top-level domain is guaranteed to never resolve, but how *quickly* a
+      // given environment's resolver gives up on it is not guaranteed, and
+      // that difference is exactly the kind of thing that is invisible on one
+      // machine and flaky on another. With no key, `PostHogProvider.start()`
+      // returns before `posthog.init` is ever called — the same state every
+      // other spec in this suite already runs against.
       NEXT_PUBLIC_SUPABASE_URL: "https://stub.supabase.co",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "stub-anon-key",
     },
