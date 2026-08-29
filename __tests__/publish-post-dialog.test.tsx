@@ -136,6 +136,46 @@ describe("PublishPostDialog — publishing", () => {
     expect(publishPost).toHaveBeenCalledWith(expect.objectContaining({ titles }));
   });
 
+  it("scopes the snapshot to the picked category, not the whole board", async () => {
+    // Same bug as Clear List: the category button changed what was shown on
+    // screen but never reached the actual submit — every post snapshotted
+    // the full unfiltered board no matter which button was clicked.
+    const movie = { tmdbId: 1, mediaType: "movie" as const, title: "A", posterPath: null, releaseDate: null, tier: "S" as const, order: 0, addedAt: 0, updatedAt: 0 };
+    const anime = { tmdbId: 2, mediaType: "anime" as const, title: "B", posterPath: null, releaseDate: null, tier: "A" as const, order: 1, addedAt: 0, updatedAt: 0 };
+    open({ suggestedCategory: "movie", titles: [movie, anime] });
+    fill();
+
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(publishPost).toHaveBeenCalledTimes(1));
+    expect(publishPost).toHaveBeenCalledWith(expect.objectContaining({ titles: [movie] }));
+  });
+
+  it("keeps the whole board when the category is Everything", async () => {
+    const movie = { tmdbId: 1, mediaType: "movie" as const, title: "A", posterPath: null, releaseDate: null, tier: "S" as const, order: 0, addedAt: 0, updatedAt: 0 };
+    const anime = { tmdbId: 2, mediaType: "anime" as const, title: "B", posterPath: null, releaseDate: null, tier: "A" as const, order: 1, addedAt: 0, updatedAt: 0 };
+    open({ suggestedCategory: "mixed", titles: [movie, anime] });
+    fill();
+
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(publishPost).toHaveBeenCalledTimes(1));
+    expect(publishPost).toHaveBeenCalledWith(expect.objectContaining({ titles: [movie, anime] }));
+  });
+
+  it("re-scopes the snapshot when the category is changed before submit", async () => {
+    const movie = { tmdbId: 1, mediaType: "movie" as const, title: "A", posterPath: null, releaseDate: null, tier: "S" as const, order: 0, addedAt: 0, updatedAt: 0 };
+    const anime = { tmdbId: 2, mediaType: "anime" as const, title: "B", posterPath: null, releaseDate: null, tier: "A" as const, order: 1, addedAt: 0, updatedAt: 0 };
+    open({ suggestedCategory: "movie", titles: [movie, anime] });
+    fill();
+
+    fireEvent.click(categoryButton(/Anime/));
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(publishPost).toHaveBeenCalledTimes(1));
+    expect(publishPost).toHaveBeenCalledWith(expect.objectContaining({ titles: [anime] }));
+  });
+
   it("reports the publication and moves to the feed", async () => {
     open();
     fill();

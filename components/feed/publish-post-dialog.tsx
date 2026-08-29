@@ -77,9 +77,20 @@ export function PublishPostDialog({
       return;
     }
 
+    /*
+     * Same bug as Clear List (see the comment above `clearableCount` in
+     * tier-list-actions.tsx): the picker's category never reached the
+     * publish call, so every post snapshotted the whole unfiltered board
+     * no matter which button was clicked. "Everything" is the one option
+     * that is supposed to mean that — every other one should snapshot only
+     * its own catalog.
+     */
+    const snapshotTitles =
+      category === "mixed" ? titles : titles.filter((t) => t.mediaType === category);
+
     setSaving(true);
     setError(null);
-    const result = await publishPost({ title, description, category, titles });
+    const result = await publishPost({ title, description, category, titles: snapshotTitles });
     setSaving(false);
 
     if (!result.ok) {
