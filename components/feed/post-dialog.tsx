@@ -13,13 +13,14 @@ import {
   registerPostView,
   type FeedPost,
   type PostComment,
+  type RankedTitleSnapshotEntry,
 } from "@/lib/supabase/feed";
 
 /** Far above any hand-built tier list, so "the whole board" is not a promise
  *  the query quietly breaks on a long one. */
 const FULL_BOARD_CAP = 500;
 import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
-import { avatarInitials, buildTierRows } from "@/lib/feed/post-preview";
+import { avatarInitials, buildTierRows, resolveSnapshotTitles } from "@/lib/feed/post-preview";
 import { TierBoard } from "@/components/feed/tier-board";
 import { DonateButton } from "@/components/profile/donate-button";
 import { titlesCountLabel } from "@/lib/utils/plural";
@@ -38,6 +39,15 @@ interface PostDialogProps {
   post: FeedPost | null;
   /** The author's board in full — the dialog shows every tier, uncapped. */
   titles: RankedTitle[];
+  /**
+   * This post's frozen placement, the same one `titles` above was already
+   * resolved against. Needed again here because `fullTitles` below is a raw,
+   * unresolved read — without re-resolving it against this, the dialog would
+   * render the author's entire current board instead of this post's.
+   * `undefined` for a post published before snapshots existed, same meaning
+   * as everywhere else this type appears.
+   */
+  snapshot?: RankedTitleSnapshotEntry[];
   /**
    * Present instead of `titles` when the post is a board of uploaded pictures.
    *
@@ -64,6 +74,7 @@ function formatWhen(iso: string): string {
 export function PostDialog({
   post,
   titles,
+  snapshot,
   published,
   onClose,
   liked,
@@ -85,6 +96,13 @@ export function PostDialog({
    * The feed loads a bounded slice per author to keep one screen to one query.
    * The dialog promises the whole board, so it fetches the rest on open and
    * falls back to the slice until that lands — no empty frame, no spinner.
+   *
+   * Raw and unresolved: this is the author's entire current board, not this
+   * post's. It gets run through `resolveSnapshotTitles` at render time, same
+   * as the feed's own slice already was before it became the `titles` prop —
+   * skipping that step here previously meant the dialog rendered whatever the
+   * author's board looks like right now, mixed categories and all, instead of
+   * what this post actually froze at Publish.
    */
   const [fullTitles, setFullTitles] = useState<RankedTitle[] | null>(null);
   const viewedRef = useRef<string | null>(null);
@@ -186,7 +204,7 @@ export function PostDialog({
     onClose();
   }
 
-  const rows = buildTierRows(fullTitles ?? titles);
+  const rows = buildTierRows(fullTitles ? resolveSnapshotTitles(snapshot, fullTitles) : titles);
   const total = rows.reduce((sum, row) => sum + row.titles.length, 0);
   const boardItemsCount = published ? published.items.length : total;
 
