@@ -14,3 +14,8 @@ export function plural(n: number, one: string, many = `${one}s`): string {
 export function titlesCountLabel(n: number): string {
   return `${n} ${plural(n, "title")}`;
 }
+
+/** e.g. "1 channel" / "12 channels". */
+export function channelsCountLabel(n: number): string {
+  return `${n} ${plural(n, "channel")}`;
+}

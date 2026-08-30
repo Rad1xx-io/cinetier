@@ -1,5 +1,6 @@
 import { TIERS, type RankedTitle, type Tier } from "@/lib/types";
-import type { PostCategory, RankedTitleSnapshotEntry } from "@/lib/supabase/feed";
+import type { RankedChannel } from "@/lib/types/youtube";
+import type { PostCategory, RankedChannelSnapshotEntry, RankedTitleSnapshotEntry } from "@/lib/supabase/feed";
 
 /**
  * How much of a board a feed card shows: the first few *filled* tiers, a handful
@@ -87,6 +88,72 @@ export function buildMiniBoard(
   return { rows, hiddenCount: total - shown };
 }
 
+export interface ChannelTierRow {
+  tier: Tier;
+  channels: RankedChannel[];
+}
+
+export interface MiniChannelBoard {
+  rows: ChannelTierRow[];
+  hiddenCount: number;
+}
+
+/**
+ * `buildTierRows`/`buildMiniBoard`, for the other store a board can be made
+ * of. Kept as its own small pair rather than folded into the ones above:
+ * `RankedChannel` has no `tmdbId` and no poster path, so a shared generic
+ * would need a wider item type everywhere `MiniTierRow` is already used —
+ * `TierBoard`, every card and dialog — for a form that is genuinely
+ * different, the same reasoning `custom_list_publications` and
+ * `ranked_title_publications` already settled on for storage (see
+ * .ai/DECISIONS.md). A channel board is rendered by its own `ChannelBoard`
+ * component instead, alongside `TierBoard`, not through it.
+ */
+export function buildChannelTierRows(channels: RankedChannel[]): ChannelTierRow[] {
+  const byTier = new Map<Tier, RankedChannel[]>();
+  for (const channel of channels) {
+    if (!TIER_RANK.has(channel.tier as Tier)) continue;
+    const tier = channel.tier as Tier;
+    const bucket = byTier.get(tier);
+    if (bucket) bucket.push(channel);
+    else byTier.set(tier, [channel]);
+  }
+
+  const rows: ChannelTierRow[] = [];
+  for (const tier of TIERS) {
+    const bucket = byTier.get(tier);
+    if (!bucket || bucket.length === 0) continue;
+    rows.push({
+      tier,
+      channels: [...bucket].sort((a, b) => a.order - b.order || a.title.localeCompare(b.title)),
+    });
+  }
+  return rows;
+}
+
+export function buildMiniChannelBoard(
+  channels: RankedChannel[],
+  options: { maxTiers?: number; perRow?: number } = {}
+): MiniChannelBoard {
+  const maxTiers = Math.max(0, options.maxTiers ?? MINI_BOARD_TIERS);
+  const perRow = Math.max(0, options.perRow ?? MINI_BOARD_PER_ROW);
+
+  const all = buildChannelTierRows(channels);
+  const total = all.reduce((sum, row) => sum + row.channels.length, 0);
+
+  const rows = all
+    .slice(0, maxTiers)
+    .map((row) => ({ tier: row.tier, channels: row.channels.slice(0, perRow) }));
+  const shown = rows.reduce((sum, row) => sum + row.channels.length, 0);
+
+  return { rows, hiddenCount: total - shown };
+}
+
+/** "one tier" / "N tiers", shared by the titles and channels captions in the dialog. */
+export function tierCountPhrase(rowCount: number): string {
+  return rowCount === 1 ? "one tier" : `${rowCount} tiers`;
+}
+
 /**
  * Groups one flat query of many authors' titles by author.
  *
@@ -103,6 +170,19 @@ export function titlesByAuthor(
     const bucket = byAuthor.get(title.userId);
     if (bucket) bucket.push(title);
     else byAuthor.set(title.userId, [title]);
+  }
+  return byAuthor;
+}
+
+/** `titlesByAuthor`, for channels. */
+export function channelsByAuthor(
+  channels: (RankedChannel & { userId: string })[]
+): Map<string, RankedChannel[]> {
+  const byAuthor = new Map<string, RankedChannel[]>();
+  for (const channel of channels) {
+    const bucket = byAuthor.get(channel.userId);
+    if (bucket) bucket.push(channel);
+    else byAuthor.set(channel.userId, [channel]);
   }
   return byAuthor;
 }
@@ -187,6 +267,26 @@ export function resolveSnapshotTitles(
   const resolved: RankedTitle[] = [];
   for (const entry of snapshot) {
     const found = live.get(`${entry.tmdbId}:${entry.mediaType}`);
+    if (!found) continue;
+    resolved.push({ ...found, tier: entry.tier, order: entry.order });
+  }
+  return resolved;
+}
+
+/**
+ * `resolveSnapshotTitles`, for channels. Keyed by `channelId` alone — unlike a
+ * title, a channel has no second store it could collide with under the same id.
+ */
+export function resolveSnapshotChannels(
+  snapshot: RankedChannelSnapshotEntry[] | undefined,
+  liveChannels: RankedChannel[]
+): RankedChannel[] {
+  if (!snapshot) return liveChannels;
+
+  const live = new Map(liveChannels.map((c) => [c.channelId, c]));
+  const resolved: RankedChannel[] = [];
+  for (const entry of snapshot) {
+    const found = live.get(entry.channelId);
     if (!found) continue;
     resolved.push({ ...found, tier: entry.tier, order: entry.order });
   }

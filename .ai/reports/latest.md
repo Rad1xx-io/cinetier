@@ -1,93 +1,115 @@
-# Feed post dialog: the "whole board" fetch bypassed the snapshot
+# YouTube category now actually snapshots channels on Publish
 
-No new screenshot files in `.ai/reports/shots/` this round (cleared, still empty) — the
-visual proof here came from a live reproduction against real production data on a local
-dev server (see "How this was verified" below), not from a Playwright spec, since the
-bug only shows up once a real author's live board diverges from a real post's snapshot.
+`.ai/reports/shots/` cleared before this round, then three new screenshots taken
+against the real built page: `youtube-post-card.png`, `youtube-post-dialog.png`,
+`mixed-post-dialog-titles-and-channels.png`.
 
 ## PR and CI
 
 _Filled in after the PR is opened and CI is confirmed — see chat for the final status table._
 
-## The report
+## The gap
 
-Rad1xx's "Best Anime 2026" post (already flagged in `.ai/DECISIONS.md` as needing one more
-Delete Post + Publish after the category-scoping fix) was recreated after that fix shipped.
-The feed card correctly showed only anime. Opening the post's dialog showed 66 titles across
-6 tiers, including at least one game.
+`PublishPostDialog` never had a `channels` prop. A "YouTube" category post always
+froze an empty snapshot regardless of what the author had actually ranked — flagged
+as a known, out-of-scope gap in the previous task (`.ai/DECISIONS.md`, 2026-08-29,
+last paragraph) and picked up here as its own task.
 
-## Root cause, confirmed against real data before touching any code
+## The fork, and how it was resolved
 
-Queried Supabase directly (REST, the same public anon key the client itself uses) rather than
-guessing from the source:
+`RankedChannel` (`lib/types/youtube.ts`) has no `tmdbId` — it can't fit
+`RankedTitleSnapshotEntry`'s shape. The obvious precedent, `custom_list_publications`
+vs `ranked_title_publications` being deliberately separate tables (`.ai/DECISIONS.md`,
+2026-08-27), pointed toward a second table for channels too. Decided against it: that
+split exists because a custom board is a genuinely different *kind* of post
+(`category = 'custom'`, no catalogue at all). YouTube is not — it's one of the same
+tier-list's existing catalog filters, and a "mixed"/Everything post must hold titles
+*and* channels in the same post at once. Two tables would mean reading both on every
+non-custom post just to support that one combined case. Instead, `ranked_title_publications.snapshot`
+widened in place, in the same row: `{ titles: [...], channels: [...] }`. No migration
+needed — `snapshot` is untyped `jsonb` with no `CHECK` on its shape; old rows without a
+`channels` key read back as `channels: []`. Full reasoning in `.ai/DECISIONS.md`
+(2026-08-30) and `.ai/ARCHITECTURE.md`.
 
-- `ranked_title_publications` for this post: **16 rows, every one `mediaType: "anime"`.** The
-  category-scoping fix worked — the snapshot itself was never the problem.
-- `ranked_titles` for the author: **66 rows — 49 game, 16 anime, 1 movie, 6 tiers.** Exactly
-  the numbers the dialog was showing.
+## What changed
 
-So the dialog wasn't rendering a stale or wrong snapshot — it was rendering the author's
-*entire current live board*, unrelated to which post was open.
+### Publishing
 
-`components/feed/post-dialog.tsx` fetches a second, larger batch on open —
-`getAuthorTitles([post.userId], FULL_BOARD_CAP)` — meant to cover authors with more than the
-40-per-author cap the feed's own batched query uses for cards, so a post's snapshot doesn't
-silently lose an entry that fell outside that cap. Once that fetch resolved, it was rendered
-directly (`buildTierRows(fullTitles ?? titles)`) — never passed through `resolveSnapshotTitles`
-the way `feed-view.tsx`'s own `titlesForPost` already does for the initial slice. The bigger
-fetch is *the author's whole board*, not the post's — so once it landed, the dialog quietly
-stopped showing what this post actually froze and started showing everything the author has
-ever ranked, mixed categories and all. This is not specific to this one post: it affects the
-dialog for any post by any author who has ranked anything at all, since the fetch almost never
-comes back empty.
+- `lib/supabase/feed.ts`: `RankedChannelSnapshotEntry`, `PostSnapshot` (the
+  `{titles, channels}` wrapper, now `getPostSnapshots`'s return type), `buildSnapshot`
+  (replaces `buildRankedTitleSnapshot`), `publishPost` takes an optional `channels`,
+  new `getAuthorChannels` mirroring `getAuthorTitles` exactly (same `order("id")`
+  before the cap, same reason).
+- `PublishPostDialog` gained `channels?: RankedChannel[]`. In `handleSubmit`: channels
+  go into the snapshot for `category === "mixed"` or `"youtube"`, `[]` otherwise.
+  `titles` needed no new case for "youtube" — the existing `mediaType === category`
+  filter already yields `[]` there, since no title's `mediaType` is ever `"youtube"`.
+- `tier-list-actions.tsx` now passes `channels={channels}` through (it already held
+  `channels` in scope for `CreateBattleModal`).
+- Resolved, from the previous task's open question: "Everything" now means literally
+  everything, channels included — not just the four catalogues that share a table.
 
-Checked for sibling instances first: `getAuthorTitles` is called in exactly two places in the
-app — `feed-view.tsx` (already correct) and `post-dialog.tsx` (this bug). No other spot needed
-the same fix.
+### Rendering
 
-## The fix
+- New `components/feed/channel-board.tsx` — `TierBoard`'s structure, `ChannelThumbnail`
+  instead of `Poster` (a channel has no poster path, and looks like itself — a round
+  avatar, not a film poster — through the same component every other channel view in
+  the app already uses).
+- `lib/feed/post-preview.ts`: `buildChannelTierRows`/`buildMiniChannelBoard`
+  (mirrors `buildTierRows`/`buildMiniBoard`, kept separate rather than genericized —
+  would have meant renaming `MiniTierRow.titles`, touching two already well-tested
+  shared consumers for a form that's genuinely different), `channelsByAuthor`,
+  `resolveSnapshotChannels`, `tierCountPhrase` (factored out of the existing
+  "N tiers"/"one tier" ternary, now shared by both captions).
+- `post-card.tsx` / `post-dialog.tsx`: both gained an optional `channels` prop and
+  render `ChannelBoard` alongside `TierBoard` when channels are present — a "youtube"
+  post shows only the channel board (no titles ever), a "mixed" post can show both,
+  stacked, each with its own count line. The two catalogues are never merged into one
+  set of tier rows — the live tier-list page never does that either (its picker
+  always scopes to exactly one catalog).
+- `post-dialog.tsx` also gained `getAuthorChannels`/`fullChannels`/
+  `resolveSnapshotChannels`, mirroring yesterday's `fullTitles` fix exactly — the same
+  bug for the same reason, closed here rather than left as a second known gap.
+- `feed-view.tsx`: `authorChannels` state, `getAuthorChannels(authorIds)` added to the
+  existing `Promise.all`, `channelsForPost` alongside `titlesForPost`, passed to both
+  `PostCard` and `PostDialog`.
 
-- `PostDialog` gained a `snapshot?: RankedTitleSnapshotEntry[]` prop — the same value
-  `feed-view.tsx` already reads from `getPostSnapshots()` and resolves the card's titles
-  against.
-- `feed-view.tsx` now passes it: `snapshot={openPost ? snapshots.get(openPost.id) : undefined}`.
-- The board render now resolves the fetched batch before using it:
-  `buildTierRows(fullTitles ? resolveSnapshotTitles(snapshot, fullTitles) : titles)`.
-  `undefined` (a post published before snapshots existed) keeps its documented meaning —
-  show the live board whole — so nothing changes for those posts.
-
-## How this was verified
-
-**Unit — `__tests__/post-dialog-full-board-snapshot.test.tsx`, 2 new tests, with a negative
-control:**
-
-- Mocks `getAuthorTitles` to return a mixed two-item board (one anime, one game) — standing in
-  for "the author's whole live board," exactly what production returned regardless of which
-  post was open. Renders `PostDialog` with `titles`/`snapshot` scoped to the anime item only
-  (what `feed-view.tsx` would actually pass for an anime-only post). Asserts the resolved board
-  shows only the anime title once the async fetch lands, never the game.
-- A second test confirms the documented pre-snapshot fallback still works: with `snapshot`
-  omitted, both items show, matching `resolveSnapshotTitles`'s existing contract.
-- **Negative control**: reverted `post-dialog.tsx` locally and reran — the first test failed
-  exactly as expected, the game leaking into the board (`AssertionError: expected <span>Game Y
-  to be null`) — confirming the test catches the real bug, not a vacuous pass.
-
-**Live reproduction, before and after the fix, against real production data:**
-
-The in-app browser pane couldn't load `tierlistonline.com` directly this session (every JS/CSS
-chunk failed with `net::ERR_BLOCKED_BY_CLIENT`, a known unreliability of this pane) — the
-initial diagnosis used direct Supabase REST queries instead (above). For the fix itself, ran
-`npm run dev` locally against the real production Supabase project (`.env.local` points at it)
-and opened `/feed` in the browser pane from there — same real data, working browser this time.
-Before the fix, this reproduced the exact reported numbers. After: opening "Best Anime 2026"
-now reads **"16 titles across 6 tiers,"** matching the snapshot exactly — screenshot taken but
-not saved to a file (the browser tool returns the image inline; no file-saving hook was
-available to route it into `.ai/reports/shots/`).
-
-**Full suite:**
+## Verified
 
 - `npm run lint` — clean (1 pre-existing unrelated warning)
 - `npm run typecheck` — clean
-- `npm test` — 940/940 passing, including the 2 new tests
-- `npx playwright test` — 13/13 passing (no dialog markup changed, existing specs unaffected)
+- `npm test` — 965/965 passing, including 27 new tests across
+  `feed-snapshots.test.ts` (`getAuthorChannels` ordering, `publishPost` freezing
+  channels thinly, `getPostSnapshots` defaulting a pre-existing row's missing
+  `channels` key to `[]`), `feed-post-preview.test.ts` (`buildChannelTierRows`,
+  `buildMiniChannelBoard`, `channelsByAuthor`, `resolveSnapshotChannels`,
+  `tierCountPhrase`), `publish-post-dialog.test.tsx` (channels snapshot for YouTube,
+  excluded from a single catalogue, included in Everything), and
+  `post-dialog-full-board-snapshot.test.tsx` (a youtube post's dialog stays scoped to
+  its own channel snapshot rather than the author's whole live channel list — the
+  same shape of bug fixed yesterday for titles, caught here before it shipped)
+- **Negative controls, both applied by temporarily reverting the real fix and
+  re-running:**
+  - Reverted `publish-post-dialog.tsx` → exactly the 4 new channel-scoping
+    assertions failed, the pre-existing 14 kept passing.
+  - Reverted `post-dialog.tsx` + `post-preview.ts` together → 4 of 5 dialog tests
+    failed, including a genuine crash (`resolveSnapshotTitles` given a non-iterable
+    wrapped snapshot) rather than only a text mismatch — confirms the tests exercise
+    real code paths, not vacuous assertions.
+- `npx playwright test` — 15/15 passing, including 2 new specs in
+  `e2e/feed-youtube-post.spec.ts` against the real built page (network stubbed): a
+  YouTube post's card shows its channel instead of "has not published their list",
+  and its dialog shows the channel in full with "1 channel across one tier".
 - `npm run build` — clean
+- **Live screenshots**, taken with a throwaway Playwright script against the actual
+  built `/feed` (same route-stubbing as the e2e spec, not a mock of the rendering
+  code) rather than the in-app browser pane (blocked every JS/CSS chunk again this
+  session — same known unreliability as two tasks ago): the card and dialog for a
+  YouTube post, and the dialog for a mixed post showing both a title and a channel
+  stacked in one section. All three in `.ai/reports/shots/`.
+
+## Deliberately not addressed
+
+Nothing left open from this task's own scope. The two things flagged in the previous
+task's `.ai/DECISIONS.md` entry are both closed now: channels really do snapshot, and
+Rad1xx's next YouTube-category publish will freeze the real channel, not an empty list.

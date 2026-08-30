@@ -120,6 +120,7 @@ describe("PublishPostDialog — publishing", () => {
       description: "Почему именно так",
       category: "anime",
       titles: [],
+      channels: [],
     });
   });
 
@@ -174,6 +175,59 @@ describe("PublishPostDialog — publishing", () => {
 
     await waitFor(() => expect(publishPost).toHaveBeenCalledTimes(1));
     expect(publishPost).toHaveBeenCalledWith(expect.objectContaining({ titles: [anime] }));
+  });
+
+  const someChannel = {
+    channelId: "c1",
+    title: "Some Channel",
+    thumbnailUrl: null,
+    country: null,
+    tier: "S" as const,
+    order: 0,
+    addedAt: 0,
+    updatedAt: 0,
+  };
+
+  it("snapshots channels for the YouTube category — the whole bug this dialog existed to fix", async () => {
+    // Before this: PublishPostDialog never received channels at all, so a
+    // "YouTube" post always froze an empty list regardless of what the
+    // author had actually ranked.
+    open({ suggestedCategory: "youtube", channels: [someChannel] });
+    fireEvent.click(categoryButton(/YouTube/));
+    fill();
+
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(publishPost).toHaveBeenCalledTimes(1));
+    expect(publishPost).toHaveBeenCalledWith(
+      expect.objectContaining({ category: "youtube", titles: [], channels: [someChannel] })
+    );
+  });
+
+  it("keeps channels out of a single catalogue's snapshot", async () => {
+    const anime = { tmdbId: 2, mediaType: "anime" as const, title: "B", posterPath: null, releaseDate: null, tier: "A" as const, order: 1, addedAt: 0, updatedAt: 0 };
+    open({ suggestedCategory: "anime", titles: [anime], channels: [someChannel] });
+    fill();
+
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(publishPost).toHaveBeenCalledTimes(1));
+    expect(publishPost).toHaveBeenCalledWith(
+      expect.objectContaining({ category: "anime", titles: [anime], channels: [] })
+    );
+  });
+
+  it("includes channels in Everything, same as every catalogue", async () => {
+    const anime = { tmdbId: 2, mediaType: "anime" as const, title: "B", posterPath: null, releaseDate: null, tier: "A" as const, order: 1, addedAt: 0, updatedAt: 0 };
+    open({ suggestedCategory: "mixed", titles: [anime], channels: [someChannel] });
+    fill();
+
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(publishPost).toHaveBeenCalledTimes(1));
+    expect(publishPost).toHaveBeenCalledWith(
+      expect.objectContaining({ category: "mixed", titles: [anime], channels: [someChannel] })
+    );
   });
 
   it("reports the publication and moves to the feed", async () => {

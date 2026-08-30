@@ -1,19 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
   avatarInitials,
+  buildChannelTierRows,
   buildMiniBoard,
+  buildMiniChannelBoard,
   buildTierRows,
+  channelsByAuthor,
   MINI_BOARD_PER_ROW,
   MINI_BOARD_TIERS,
   POST_DESCRIPTION_MAX,
   POST_TITLE_MAX,
+  resolveSnapshotChannels,
   resolveSnapshotTitles,
   suggestedPostCategory,
+  tierCountPhrase,
   titlesByAuthor,
   validatePost,
 } from "@/lib/feed/post-preview";
-import type { RankedTitleSnapshotEntry } from "@/lib/supabase/feed";
+import type { RankedChannelSnapshotEntry, RankedTitleSnapshotEntry } from "@/lib/supabase/feed";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
+import type { RankedChannel } from "@/lib/types/youtube";
 
 function title(
   tmdbId: number,
@@ -32,6 +38,19 @@ function title(
     order,
     addedAt: tmdbId,
     updatedAt: tmdbId,
+  };
+}
+
+function channel(channelId: string, name: string, tier: TierOrUnrated, order = 0): RankedChannel {
+  return {
+    channelId,
+    title: name,
+    thumbnailUrl: null,
+    country: null,
+    tier,
+    order,
+    addedAt: 0,
+    updatedAt: 0,
   };
 }
 
@@ -391,5 +410,136 @@ describe("resolveSnapshotTitles", () => {
 
     expect(resolved).toHaveLength(1);
     expect(resolved[0].title).toBe("The Anime");
+  });
+});
+
+describe("buildChannelTierRows", () => {
+  it("returns every filled tier, in tier order", () => {
+    const channels = [channel("f", "F", "F"), channel("s", "S", "S"), channel("c", "C", "C")];
+
+    expect(buildChannelTierRows(channels).map((row) => row.tier)).toEqual(["S", "C", "F"]);
+  });
+
+  it("skips tiers nothing was put in", () => {
+    const channels = [channel("s", "Лучший", "S"), channel("f", "Худший", "F")];
+
+    expect(buildChannelTierRows(channels).map((row) => row.tier)).toEqual(["S", "F"]);
+  });
+
+  it("drops unrated entries", () => {
+    expect(buildChannelTierRows([channel("u", "Не оценён", "Unrated")])).toEqual([]);
+  });
+
+  it("orders a tier by the author's own arrangement", () => {
+    const channels = [channel("b", "Второй", "S", 1), channel("a", "Первый", "S", 0)];
+
+    expect(buildChannelTierRows(channels)[0].channels.map((c) => c.title)).toEqual([
+      "Первый",
+      "Второй",
+    ]);
+  });
+
+  it("returns nothing for an empty board", () => {
+    expect(buildChannelTierRows([])).toEqual([]);
+  });
+});
+
+describe("buildMiniChannelBoard", () => {
+  it("shows no more than the tier limit, counting only filled tiers", () => {
+    const channels = [
+      channel("s", "S", "S"),
+      channel("a", "A", "A"),
+      channel("b", "B", "B"),
+      channel("c", "C", "C"),
+      channel("d", "D", "D"),
+      channel("f", "F", "F"),
+    ];
+
+    const board = buildMiniChannelBoard(channels);
+
+    expect(board.rows).toHaveLength(MINI_BOARD_TIERS);
+    expect(board.rows.map((row) => row.tier)).toEqual(["S", "A", "B"]);
+    expect(board.hiddenCount).toBe(6 - MINI_BOARD_TIERS);
+  });
+
+  it("caps how many avatars one row shows", () => {
+    const channels = Array.from({ length: MINI_BOARD_PER_ROW + 4 }, (_, i) =>
+      channel(`c${i}`, `S${i}`, "S", i)
+    );
+
+    const board = buildMiniChannelBoard(channels);
+
+    expect(board.rows[0].channels).toHaveLength(MINI_BOARD_PER_ROW);
+    expect(board.hiddenCount).toBe(4);
+  });
+
+  it("handles an empty board", () => {
+    expect(buildMiniChannelBoard([])).toEqual({ rows: [], hiddenCount: 0 });
+  });
+});
+
+describe("channelsByAuthor", () => {
+  it("splits one flat query per author", () => {
+    const rows = [
+      { ...channel("a1", "A-топ", "S"), userId: "a" },
+      { ...channel("b1", "B-топ", "S"), userId: "b" },
+      { ...channel("a2", "A-слабый", "F"), userId: "a" },
+    ];
+
+    const grouped = channelsByAuthor(rows);
+
+    expect(grouped.get("a")?.map((c) => c.title)).toEqual(["A-топ", "A-слабый"]);
+    expect(grouped.get("b")?.map((c) => c.title)).toEqual(["B-топ"]);
+  });
+
+  it("returns an empty map for no rows", () => {
+    expect(channelsByAuthor([]).size).toBe(0);
+  });
+});
+
+describe("resolveSnapshotChannels", () => {
+  it("shows the whole live board when there is no snapshot yet — a post published before this existed", () => {
+    const live = [channel("a", "A", "S"), channel("b", "B", "A")];
+    expect(resolveSnapshotChannels(undefined, live)).toBe(live);
+  });
+
+  it("uses the snapshot's placement, not whatever the live row currently says", () => {
+    const live = [channel("a", "A", "F", 9)];
+    const snapshot: RankedChannelSnapshotEntry[] = [{ channelId: "a", tier: "S", order: 0 }];
+
+    const resolved = resolveSnapshotChannels(snapshot, live);
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0]).toMatchObject({ tier: "S", order: 0, title: "A" });
+  });
+
+  it("takes the live channel's own name and avatar rather than freezing them", () => {
+    const live = [{ ...channel("a", "Renamed Since", "F"), thumbnailUrl: "https://example.com/new.jpg" }];
+    const snapshot: RankedChannelSnapshotEntry[] = [{ channelId: "a", tier: "S", order: 0 }];
+
+    const resolved = resolveSnapshotChannels(snapshot, live);
+
+    expect(resolved[0]).toMatchObject({
+      title: "Renamed Since",
+      thumbnailUrl: "https://example.com/new.jpg",
+    });
+  });
+
+  it("drops a channel the author has since un-ranked, rather than inventing one", () => {
+    const live: RankedChannel[] = [];
+    const snapshot: RankedChannelSnapshotEntry[] = [{ channelId: "a", tier: "S", order: 0 }];
+
+    expect(resolveSnapshotChannels(snapshot, live)).toEqual([]);
+  });
+});
+
+describe("tierCountPhrase", () => {
+  it("uses the singular for exactly one row", () => {
+    expect(tierCountPhrase(1)).toBe("one tier");
+  });
+
+  it("uses the count for anything else, including zero", () => {
+    expect(tierCountPhrase(0)).toBe("0 tiers");
+    expect(tierCountPhrase(3)).toBe("3 tiers");
   });
 });
