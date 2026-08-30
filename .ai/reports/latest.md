@@ -1,72 +1,93 @@
-# Publish post: category now actually scopes the snapshot
+# Feed post dialog: the "whole board" fetch bypassed the snapshot
 
-No screenshots this round — no UI changed, only what data gets sent when the existing
-Publish button is clicked. `.ai/reports/shots/` cleared of the previous round's images
-per the convention.
+No new screenshot files in `.ai/reports/shots/` this round (cleared, still empty) — the
+visual proof here came from a live reproduction against real production data on a local
+dev server (see "How this was verified" below), not from a Playwright spec, since the
+bug only shows up once a real author's live board diverges from a real post's snapshot.
 
 ## PR and CI
 
 _Filled in after the PR is opened and CI is confirmed — see chat for the final status table._
 
-## What changed
+## The report
 
-### The bug
+Rad1xx's "Best Anime 2026" post (already flagged in `.ai/DECISIONS.md` as needing one more
+Delete Post + Publish after the category-scoping fix) was recreated after that fix shipped.
+The feed card correctly showed only anime. Opening the post's dialog showed 66 titles across
+6 tiers, including at least one game.
 
-`components/feed/publish-post-dialog.tsx`'s category picker (`CATEGORY_OPTIONS`) changed
-what button showed as pressed, but `handleSubmit` always passed the full, unfiltered
-`titles` prop straight to `publishPost()` — the picked category was stored as a label on
-the post row and never actually filtered what got snapshotted into it. The same class of
-bug already found and fixed for Clear List in `components/tier-list/tier-list-actions.tsx`
-(see the comment above `clearableCount`): a picker that changes what is shown on screen but
-never reaches the call that acts on it.
+## Root cause, confirmed against real data before touching any code
 
-### The fix
+Queried Supabase directly (REST, the same public anon key the client itself uses) rather than
+guessing from the source:
 
-`handleSubmit` now computes the snapshot before calling `publishPost`:
+- `ranked_title_publications` for this post: **16 rows, every one `mediaType: "anime"`.** The
+  category-scoping fix worked — the snapshot itself was never the problem.
+- `ranked_titles` for the author: **66 rows — 49 game, 16 anime, 1 movie, 6 tiers.** Exactly
+  the numbers the dialog was showing.
 
-```ts
-const snapshotTitles =
-  category === "mixed" ? titles : titles.filter((t) => t.mediaType === category);
-```
+So the dialog wasn't rendering a stale or wrong snapshot — it was rendering the author's
+*entire current live board*, unrelated to which post was open.
 
-"Everything" (`mixed`) is the one option meant to keep the whole board; every other
-button now snapshots only its own catalog, matching what is actually highlighted when
-Publish is clicked.
+`components/feed/post-dialog.tsx` fetches a second, larger batch on open —
+`getAuthorTitles([post.userId], FULL_BOARD_CAP)` — meant to cover authors with more than the
+40-per-author cap the feed's own batched query uses for cards, so a post's snapshot doesn't
+silently lose an entry that fell outside that cap. Once that fetch resolved, it was rendered
+directly (`buildTierRows(fullTitles ?? titles)`) — never passed through `resolveSnapshotTitles`
+the way `feed-view.tsx`'s own `titlesForPost` already does for the initial slice. The bigger
+fetch is *the author's whole board*, not the post's — so once it landed, the dialog quietly
+stopped showing what this post actually froze and started showing everything the author has
+ever ranked, mixed categories and all. This is not specific to this one post: it affects the
+dialog for any post by any author who has ranked anything at all, since the fetch almost never
+comes back empty.
 
-### Deliberately not touched: the "YouTube" category
+Checked for sibling instances first: `getAuthorTitles` is called in exactly two places in the
+app — `feed-view.tsx` (already correct) and `post-dialog.tsx` (this bug). No other spot needed
+the same fix.
 
-`PublishPostDialog` has no `channels` prop, and `RankedTitle.mediaType` is
-`"movie" | "tv" | "anime" | "game"` — it never contains `"youtube"` (`lib/types/index.ts`).
-So filtering by `t.mediaType === "youtube"` snapshots an **empty** list, same as before this
-fix in effect (a "YouTube" post never actually contained real channels either way — it
-previously snapshotted the whole unrelated board instead). This is an honest empty
-snapshot now rather than a wrong full one, not a new regression, but actually wiring
-channels into a YouTube post is a separate, out-of-scope change (`tier-list-actions.tsx`
-already threads `channels` through for Clear List and Battle — `PublishPostDialog` would
-need the same prop, plus `publishPost` would need to accept and store them). Logged in
-`.ai/DECISIONS.md`, not fixed here without a separate request.
+## The fix
 
-## Verified
+- `PostDialog` gained a `snapshot?: RankedTitleSnapshotEntry[]` prop — the same value
+  `feed-view.tsx` already reads from `getPostSnapshots()` and resolves the card's titles
+  against.
+- `feed-view.tsx` now passes it: `snapshot={openPost ? snapshots.get(openPost.id) : undefined}`.
+- The board render now resolves the fetched batch before using it:
+  `buildTierRows(fullTitles ? resolveSnapshotTitles(snapshot, fullTitles) : titles)`.
+  `undefined` (a post published before snapshots existed) keeps its documented meaning —
+  show the live board whole — so nothing changes for those posts.
 
-- `npm run lint` — clean (1 pre-existing unrelated warning in `__tests__/post-delete.test.tsx`)
+## How this was verified
+
+**Unit — `__tests__/post-dialog-full-board-snapshot.test.tsx`, 2 new tests, with a negative
+control:**
+
+- Mocks `getAuthorTitles` to return a mixed two-item board (one anime, one game) — standing in
+  for "the author's whole live board," exactly what production returned regardless of which
+  post was open. Renders `PostDialog` with `titles`/`snapshot` scoped to the anime item only
+  (what `feed-view.tsx` would actually pass for an anime-only post). Asserts the resolved board
+  shows only the anime title once the async fetch lands, never the game.
+- A second test confirms the documented pre-snapshot fallback still works: with `snapshot`
+  omitted, both items show, matching `resolveSnapshotTitles`'s existing contract.
+- **Negative control**: reverted `post-dialog.tsx` locally and reran — the first test failed
+  exactly as expected, the game leaking into the board (`AssertionError: expected <span>Game Y
+  to be null`) — confirming the test catches the real bug, not a vacuous pass.
+
+**Live reproduction, before and after the fix, against real production data:**
+
+The in-app browser pane couldn't load `tierlistonline.com` directly this session (every JS/CSS
+chunk failed with `net::ERR_BLOCKED_BY_CLIENT`, a known unreliability of this pane) — the
+initial diagnosis used direct Supabase REST queries instead (above). For the fix itself, ran
+`npm run dev` locally against the real production Supabase project (`.env.local` points at it)
+and opened `/feed` in the browser pane from there — same real data, working browser this time.
+Before the fix, this reproduced the exact reported numbers. After: opening "Best Anime 2026"
+now reads **"16 titles across 6 tiers,"** matching the snapshot exactly — screenshot taken but
+not saved to a file (the browser tool returns the image inline; no file-saving hook was
+available to route it into `.ai/reports/shots/`).
+
+**Full suite:**
+
+- `npm run lint` — clean (1 pre-existing unrelated warning)
 - `npm run typecheck` — clean
-- `npm test` — 938/938 passing, including 3 new tests in `__tests__/publish-post-dialog.test.tsx`:
-  - scopes the snapshot to the picked category, not the whole board
-  - keeps the whole board when the category is Everything
-  - re-scopes the snapshot when the category is changed before submit (picker touched after
-    open, not just the `suggestedCategory` default)
-- **Negative control**: reverted the fix locally and re-ran the suite — exactly the 2 new
-  filtering assertions failed (full unfiltered `titles` sent regardless of category), the
-  other 13 in the file still passed. Confirms the tests actually catch the bug rather than
-  passing vacuously.
-- `npx playwright test` — 13/13 passing (no new spec needed — this is a data-shape change
-  at the `publishPost` call boundary, already covered by the unit test above; no dialog
-  markup changed)
+- `npm test` — 940/940 passing, including the 2 new tests
+- `npx playwright test` — 13/13 passing (no dialog markup changed, existing specs unaffected)
 - `npm run build` — clean
-
-## Follow-up needed after this merges
-
-Rad1xx's "Best Anime 2026" post was already recreated once with the old, unfixed logic and
-is still wrong (full board, not just anime). It needs one more **Delete Post + Publish** on
-the live site after this PR merges — the snapshot is taken once at Publish time and does not
-retroactively correct itself.

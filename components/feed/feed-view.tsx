@@ -287,6 +287,7 @@ export function FeedView() {
       <PostDialog
         post={openPost}
         titles={openPost ? titlesForPost(openPost) : []}
+        snapshot={openPost ? snapshots.get(openPost.id) : undefined}
         published={openPost ? published.get(openPost.id) : undefined}
         onDeleted={handlePostDeleted}
         onClose={() => setOpenPost(null)}
