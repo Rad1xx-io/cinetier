@@ -6,6 +6,7 @@ import { getSessionSnapshot } from "@/lib/supabase/session-store";
 import { safeDonationUrl } from "@/lib/utils/donation-url";
 import { trackFirstPostPublished } from "@/lib/analytics/events";
 import type { MediaType, RankedTitle } from "@/lib/types";
+import type { RankedChannel } from "@/lib/types/youtube";
 
 /** The categories a post can be filed under. `mixed` is for a board of everything. */
 /**
@@ -196,6 +197,57 @@ export async function getAuthorTitles(
   }));
 }
 
+/**
+ * The avatars behind every visible card's YouTube channels, in one round trip.
+ *
+ * Mirrors `getAuthorTitles` exactly, `ranked_channels` in place of
+ * `ranked_titles` — same reason for ordering by `id` before the cap: an author
+ * past `perAuthorCap` channels must lose the same ones every call, or a
+ * published snapshot reads an arbitrary absence as a takedown.
+ */
+export async function getAuthorChannels(
+  userIds: string[],
+  perAuthorCap = 40
+): Promise<(RankedChannel & { userId: string })[]> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase || userIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("ranked_channels")
+    .select("user_id,channel_id,title,thumbnail_url,country,tier,order,subscriber_count,added_at,updated_at")
+    .in("user_id", userIds)
+    .order("id", { ascending: true })
+    .limit(userIds.length * perAuthorCap);
+
+  if (error || !data) return [];
+
+  return (
+    data as {
+      user_id: string;
+      channel_id: string;
+      title: string;
+      thumbnail_url: string | null;
+      country: string | null;
+      tier: string;
+      order: number;
+      subscriber_count: number | null;
+      added_at: number;
+      updated_at: number;
+    }[]
+  ).map((row) => ({
+    userId: row.user_id,
+    channelId: row.channel_id,
+    title: row.title,
+    thumbnailUrl: row.thumbnail_url,
+    country: row.country,
+    tier: row.tier as RankedChannel["tier"],
+    order: row.order,
+    subscriberCount: row.subscriber_count ?? undefined,
+    addedAt: row.added_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
 export type PublishResult =
   | { ok: true; postId: string }
   | { ok: false; error: string };
@@ -208,13 +260,30 @@ export interface RankedTitleSnapshotEntry {
   order: number;
 }
 
-function buildRankedTitleSnapshot(titles: RankedTitle[]): { titles: RankedTitleSnapshotEntry[] } {
+/** One channel's place on the board, as it stood the moment Publish was pressed. */
+export interface RankedChannelSnapshotEntry {
+  channelId: string;
+  tier: RankedChannel["tier"];
+  order: number;
+}
+
+export interface PostSnapshot {
+  titles: RankedTitleSnapshotEntry[];
+  channels: RankedChannelSnapshotEntry[];
+}
+
+function buildSnapshot(titles: RankedTitle[], channels: RankedChannel[]): PostSnapshot {
   return {
     titles: titles.map((t) => ({
       tmdbId: t.tmdbId,
       mediaType: t.mediaType,
       tier: t.tier,
       order: t.order,
+    })),
+    channels: channels.map((c) => ({
+      channelId: c.channelId,
+      tier: c.tier,
+      order: c.order,
     })),
   };
 }
@@ -244,6 +313,8 @@ export async function publishPost(input: {
   category: PostCategory;
   /** The board as it stands right now — frozen into the post, not re-read later. */
   titles: RankedTitle[];
+  /** Same freezing, for the other store a board can be made of. */
+  channels?: RankedChannel[];
 }): Promise<PublishResult> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return { ok: false, error: "Cloud accounts are not configured." };
@@ -279,7 +350,7 @@ export async function publishPost(input: {
 
   const { error: snapshotError } = await supabase
     .from("ranked_title_publications")
-    .insert({ post_id: postId, snapshot: buildRankedTitleSnapshot(input.titles) });
+    .insert({ post_id: postId, snapshot: buildSnapshot(input.titles, input.channels ?? []) });
 
   if (snapshotError) {
     // A post with no snapshot would render from a live read forever, quietly
@@ -300,12 +371,12 @@ export async function publishPost(input: {
  *
  * A post with no entry here is one published before this existed — the
  * caller's job is to fall back to a live read for it, not to treat a missing
- * key as an error.
+ * key as an error. `channels` is missing the same way on a post published
+ * before it existed here — a post that has always been title-only gets `[]`,
+ * not a crash.
  */
-export async function getPostSnapshots(
-  postIds: string[]
-): Promise<Map<string, RankedTitleSnapshotEntry[]>> {
-  const snapshots = new Map<string, RankedTitleSnapshotEntry[]>();
+export async function getPostSnapshots(postIds: string[]): Promise<Map<string, PostSnapshot>> {
+  const snapshots = new Map<string, PostSnapshot>();
   const supabase = getSupabaseBrowserClient();
   if (!supabase || postIds.length === 0) return snapshots;
 
@@ -315,8 +386,14 @@ export async function getPostSnapshots(
     .in("post_id", postIds);
   if (error || !data) return snapshots;
 
-  for (const row of data as { post_id: string; snapshot: { titles?: RankedTitleSnapshotEntry[] } }[]) {
-    snapshots.set(row.post_id, row.snapshot.titles ?? []);
+  for (const row of data as {
+    post_id: string;
+    snapshot: { titles?: RankedTitleSnapshotEntry[]; channels?: RankedChannelSnapshotEntry[] };
+  }[]) {
+    snapshots.set(row.post_id, {
+      titles: row.snapshot.titles ?? [],
+      channels: row.snapshot.channels ?? [],
+    });
   }
   return snapshots;
 }

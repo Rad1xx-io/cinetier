@@ -8,23 +8,33 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   addComment,
   deletePost,
+  getAuthorChannels,
   getAuthorTitles,
   getComments,
   registerPostView,
   type FeedPost,
   type PostComment,
-  type RankedTitleSnapshotEntry,
+  type PostSnapshot,
 } from "@/lib/supabase/feed";
 
 /** Far above any hand-built tier list, so "the whole board" is not a promise
  *  the query quietly breaks on a long one. */
 const FULL_BOARD_CAP = 500;
 import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
-import { avatarInitials, buildTierRows, resolveSnapshotTitles } from "@/lib/feed/post-preview";
+import {
+  avatarInitials,
+  buildChannelTierRows,
+  buildTierRows,
+  resolveSnapshotChannels,
+  resolveSnapshotTitles,
+  tierCountPhrase,
+} from "@/lib/feed/post-preview";
 import { TierBoard } from "@/components/feed/tier-board";
+import { ChannelBoard } from "@/components/feed/channel-board";
 import { DonateButton } from "@/components/profile/donate-button";
-import { titlesCountLabel } from "@/lib/utils/plural";
+import { channelsCountLabel, titlesCountLabel } from "@/lib/utils/plural";
 import type { RankedTitle } from "@/lib/types";
+import type { RankedChannel } from "@/lib/types/youtube";
 import { cn } from "@/lib/utils/cn";
 import { CustomPostBoard } from "@/components/feed/custom-post-board";
 import type { PublishedBoard } from "@/lib/supabase/custom-lists";
@@ -39,15 +49,17 @@ interface PostDialogProps {
   post: FeedPost | null;
   /** The author's board in full — the dialog shows every tier, uncapped. */
   titles: RankedTitle[];
+  /** Same, for the channels on a "youtube" or "mixed" post. */
+  channels?: RankedChannel[];
   /**
-   * This post's frozen placement, the same one `titles` above was already
-   * resolved against. Needed again here because `fullTitles` below is a raw,
-   * unresolved read — without re-resolving it against this, the dialog would
-   * render the author's entire current board instead of this post's.
-   * `undefined` for a post published before snapshots existed, same meaning
-   * as everywhere else this type appears.
+   * This post's frozen placement, the same one `titles`/`channels` above were
+   * already resolved against. Needed again here because `fullTitles`/
+   * `fullChannels` below are raw, unresolved reads — without re-resolving them
+   * against this, the dialog would render the author's entire current board
+   * instead of this post's. `undefined` for a post published before snapshots
+   * existed, same meaning as everywhere else this type appears.
    */
-  snapshot?: RankedTitleSnapshotEntry[];
+  snapshot?: PostSnapshot;
   /**
    * Present instead of `titles` when the post is a board of uploaded pictures.
    *
@@ -74,6 +86,7 @@ function formatWhen(iso: string): string {
 export function PostDialog({
   post,
   titles,
+  channels = [],
   snapshot,
   published,
   onClose,
@@ -105,6 +118,8 @@ export function PostDialog({
    * what this post actually froze at Publish.
    */
   const [fullTitles, setFullTitles] = useState<RankedTitle[] | null>(null);
+  /** Same enrichment as `fullTitles`, for the author's channels. */
+  const [fullChannels, setFullChannels] = useState<RankedChannel[] | null>(null);
   const viewedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -123,6 +138,7 @@ export function PostDialog({
     setComments(null);
     setDraft("");
     setFullTitles(null);
+    setFullChannels(null);
     setReportOpen(false);
   }
 
@@ -135,6 +151,9 @@ export function PostDialog({
       // more — keeping the slice the feed already had beats blanking a board
       // that was rendering fine.
       if (rows.length > 0) setFullTitles(rows);
+    });
+    getAuthorChannels([post.userId], FULL_BOARD_CAP).then((rows) => {
+      if (rows.length > 0) setFullChannels(rows);
     });
 
     // Counted once per post per mount of this dialog. The ref keeps Strict
@@ -204,9 +223,15 @@ export function PostDialog({
     onClose();
   }
 
-  const rows = buildTierRows(fullTitles ? resolveSnapshotTitles(snapshot, fullTitles) : titles);
+  const rows = buildTierRows(
+    fullTitles ? resolveSnapshotTitles(snapshot?.titles, fullTitles) : titles
+  );
   const total = rows.reduce((sum, row) => sum + row.titles.length, 0);
-  const boardItemsCount = published ? published.items.length : total;
+  const channelRows = buildChannelTierRows(
+    fullChannels ? resolveSnapshotChannels(snapshot?.channels, fullChannels) : channels
+  );
+  const channelTotal = channelRows.reduce((sum, row) => sum + row.channels.length, 0);
+  const boardItemsCount = published ? published.items.length : total + channelTotal;
 
   return (
     <dialog
@@ -229,12 +254,32 @@ export function PostDialog({
               <CustomPostBoard board={published} variant="full" />
             </section>
           ) : (
-            rows.length > 0 && (
+            (rows.length > 0 || channelRows.length > 0) && (
               <section ref={boardRef} className="mb-4 rounded-xl bg-surface-raised p-2">
-                <TierBoard rows={rows} variant="full" />
-                <p className="mt-2 text-center text-[11px] text-muted">
-                  {titlesCountLabel(total)} across {rows.length === 1 ? "one tier" : `${rows.length} tiers`}
-                </p>
+                {rows.length > 0 && (
+                  <>
+                    <TierBoard rows={rows} variant="full" />
+                    <p className="mt-2 text-center text-[11px] text-muted">
+                      {titlesCountLabel(total)} across {tierCountPhrase(rows.length)}
+                    </p>
+                  </>
+                )}
+                {/* A "youtube" post has no titles at all — this is the whole
+                    board then, not an addition to it. A "mixed" one can have
+                    both, stacked rather than merged into one set of rows: a
+                    channel has no tmdbId or poster to sit in a TierBoard row. */}
+                {channelRows.length > 0 && (
+                  <>
+                    <ChannelBoard
+                      rows={channelRows}
+                      variant="full"
+                      className={rows.length > 0 ? "mt-3" : undefined}
+                    />
+                    <p className="mt-2 text-center text-[11px] text-muted">
+                      {channelsCountLabel(channelTotal)} across {tierCountPhrase(channelRows.length)}
+                    </p>
+                  </>
+                )}
               </section>
             )
           )}

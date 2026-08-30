@@ -299,6 +299,7 @@ export function TierListActions({
         onClose={() => setPublishOpen(false)}
         suggestedCategory={suggestedPostCategory(titles, channels)}
         titles={titles}
+        channels={channels}
       />
 
       <CreateBattleModal

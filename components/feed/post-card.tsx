@@ -4,19 +4,23 @@ import Link from "next/link";
 import { Eye, GitFork, Heart, MessageCircle } from "lucide-react";
 import { ContentTypeBadge } from "@/components/ui/content-type-badge";
 import { TierBoard } from "@/components/feed/tier-board";
+import { ChannelBoard } from "@/components/feed/channel-board";
 import { CustomPostBoard } from "@/components/feed/custom-post-board";
 import type { PublishedBoard } from "@/lib/supabase/custom-lists";
 import { DonateButton } from "@/components/profile/donate-button";
-import { avatarInitials, buildMiniBoard } from "@/lib/feed/post-preview";
+import { avatarInitials, buildMiniBoard, buildMiniChannelBoard } from "@/lib/feed/post-preview";
 import { titlesCountLabel } from "@/lib/utils/plural";
 import type { FeedPost } from "@/lib/supabase/feed";
 import type { RankedTitle } from "@/lib/types";
+import type { RankedChannel } from "@/lib/types/youtube";
 import { cn } from "@/lib/utils/cn";
 
 interface PostCardProps {
   post: FeedPost;
   /** The author's board, unabridged — the card decides how much of it fits. */
   titles: RankedTitle[];
+  /** Same, for the channels on a "youtube" or "mixed" post. */
+  channels?: RankedChannel[];
   /** Present instead of `titles` when the post is a board of uploaded pictures. */
   published?: PublishedBoard;
   liked: boolean;
@@ -24,9 +28,18 @@ interface PostCardProps {
   onToggleLike: (post: FeedPost) => void;
 }
 
-export function PostCard({ post, titles, published, liked, onOpen, onToggleLike }: PostCardProps) {
+export function PostCard({
+  post,
+  titles,
+  channels = [],
+  published,
+  liked,
+  onOpen,
+  onToggleLike,
+}: PostCardProps) {
   const displayName = post.displayName || `@${post.username}`;
   const board = buildMiniBoard(titles);
+  const channelBoard = buildMiniChannelBoard(channels);
 
   return (
     <article className="flex flex-col overflow-hidden rounded-2xl border border-border bg-surface transition-colors hover:border-accent/30">
@@ -42,19 +55,30 @@ export function PostCard({ post, titles, published, liked, onOpen, onToggleLike 
         <div className="bg-surface-raised p-2">
           {published ? (
             <CustomPostBoard board={published} variant="compact" />
-          ) : board.rows.length === 0 ? (
+          ) : board.rows.length === 0 && channelBoard.rows.length === 0 ? (
             <p className="flex h-24 items-center justify-center text-xs text-muted">
               This author has not published their list
             </p>
           ) : (
-            <TierBoard rows={board.rows} variant="compact" />
+            <>
+              {board.rows.length > 0 && <TierBoard rows={board.rows} variant="compact" />}
+              {/* A "youtube" post has no titles at all — this is the whole board
+                  then, not an addition to it. A "mixed" one can have both. */}
+              {channelBoard.rows.length > 0 && (
+                <ChannelBoard
+                  rows={channelBoard.rows}
+                  variant="compact"
+                  className={board.rows.length > 0 ? "mt-1" : undefined}
+                />
+              )}
+            </>
           )}
 
-          {!published && board.hiddenCount > 0 && (
+          {!published && board.hiddenCount + channelBoard.hiddenCount > 0 && (
             // Inside the button that opens the post, so it reads as the way to
             // see the rest — which is exactly what tapping it does.
             <p className="mt-1 rounded bg-background/60 px-2 py-0.5 text-center text-[10px] text-muted">
-              …and {titlesCountLabel(board.hiddenCount)} more
+              …and {titlesCountLabel(board.hiddenCount + channelBoard.hiddenCount)} more
             </p>
           )}
         </div>

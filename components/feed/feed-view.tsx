@@ -10,6 +10,7 @@ import { getPublishedBoards, type PublishedBoard } from "@/lib/supabase/custom-l
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PostDialog } from "@/components/feed/post-dialog";
 import {
+  getAuthorChannels,
   getAuthorTitles,
   getFeed,
   getMyLikes,
@@ -17,9 +18,14 @@ import {
   toggleLike,
   type FeedPost,
   type PostCategory,
-  type RankedTitleSnapshotEntry,
+  type PostSnapshot,
 } from "@/lib/supabase/feed";
-import { resolveSnapshotTitles, titlesByAuthor } from "@/lib/feed/post-preview";
+import {
+  channelsByAuthor,
+  resolveSnapshotChannels,
+  resolveSnapshotTitles,
+  titlesByAuthor,
+} from "@/lib/feed/post-preview";
 import {
   trackCommunityPostViewed,
   trackPageView,
@@ -28,6 +34,7 @@ import {
 } from "@/lib/analytics/events";
 import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
 import type { RankedTitle } from "@/lib/types";
+import type { RankedChannel } from "@/lib/types/youtube";
 import { cn } from "@/lib/utils/cn";
 
 const CATEGORY_TABS: { value: PostCategory | "all"; label: string }[] = [
@@ -50,9 +57,10 @@ export function FeedView() {
   const [state, setState] = useState<LoadState>("loading");
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [authorTitles, setAuthorTitles] = useState<Map<string, RankedTitle[]>>(new Map());
+  const [authorChannels, setAuthorChannels] = useState<Map<string, RankedChannel[]>>(new Map());
   const [likes, setLikes] = useState<Set<string>>(new Set());
   const [published, setPublished] = useState<Map<string, PublishedBoard>>(new Map());
-  const [snapshots, setSnapshots] = useState<Map<string, RankedTitleSnapshotEntry[]>>(new Map());
+  const [snapshots, setSnapshots] = useState<Map<string, PostSnapshot>>(new Map());
   const [category, setCategory] = useState<PostCategory | "all">("all");
   const [openPost, setOpenPost] = useState<FeedPost | null>(null);
   const { user } = useSupabaseSession();
@@ -78,6 +86,7 @@ export function FeedView() {
 
       if (rows.length === 0) {
         setAuthorTitles(new Map());
+        setAuthorChannels(new Map());
         setLikes(new Set());
         setPublished(new Map());
         setSnapshots(new Map());
@@ -98,8 +107,9 @@ export function FeedView() {
       // The other kind of post gets the same treatment: a snapshot to resolve
       // against, rather than a fresh read of the author's live board.
       const ordinaryPostIds = rows.filter((post) => post.category !== "custom").map((post) => post.id);
-      const [titles, myLikes, boards, postSnapshots] = await Promise.all([
+      const [titles, channels, myLikes, boards, postSnapshots] = await Promise.all([
         getAuthorTitles(authorIds),
+        getAuthorChannels(authorIds),
         getMyLikes(rows.map((post) => post.id)),
         supabase && customPostIds.length > 0
           ? getPublishedBoards(supabase, customPostIds)
@@ -108,6 +118,7 @@ export function FeedView() {
       ]);
       if (cancelled) return;
       setAuthorTitles(titlesByAuthor(titles));
+      setAuthorChannels(channelsByAuthor(channels));
       setLikes(myLikes);
       setPublished(boards);
       setSnapshots(postSnapshots);
@@ -192,8 +203,15 @@ export function FeedView() {
    */
   const titlesForPost = useCallback(
     (post: FeedPost) =>
-      resolveSnapshotTitles(snapshots.get(post.id), authorTitles.get(post.userId) ?? []),
+      resolveSnapshotTitles(snapshots.get(post.id)?.titles, authorTitles.get(post.userId) ?? []),
     [snapshots, authorTitles]
+  );
+
+  /** `titlesForPost`, for the channels a "youtube" or "mixed" post may carry. */
+  const channelsForPost = useCallback(
+    (post: FeedPost) =>
+      resolveSnapshotChannels(snapshots.get(post.id)?.channels, authorChannels.get(post.userId) ?? []),
+    [snapshots, authorChannels]
   );
 
   const handleCommentAdded = useCallback((postId: string) => {
@@ -275,6 +293,7 @@ export function FeedView() {
               key={post.id}
               post={post}
               titles={titlesForPost(post)}
+              channels={channelsForPost(post)}
               published={published.get(post.id)}
               liked={likes.has(post.id)}
               onOpen={handleOpenPost}
@@ -287,6 +306,7 @@ export function FeedView() {
       <PostDialog
         post={openPost}
         titles={openPost ? titlesForPost(openPost) : []}
+        channels={openPost ? channelsForPost(openPost) : []}
         snapshot={openPost ? snapshots.get(openPost.id) : undefined}
         published={openPost ? published.get(openPost.id) : undefined}
         onDeleted={handlePostDeleted}

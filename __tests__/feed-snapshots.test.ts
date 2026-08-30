@@ -7,7 +7,9 @@ vi.mock("@/lib/supabase/session-store", () => ({
   getSessionSnapshot: () => ({ status: "signed-in", user: { id: "author-1" } }),
 }));
 
-const { getAuthorTitles, getPostSnapshots, publishPost } = await import("@/lib/supabase/feed");
+const { getAuthorChannels, getAuthorTitles, getPostSnapshots, publishPost } = await import(
+  "@/lib/supabase/feed"
+);
 
 afterEach(() => vi.clearAllMocks());
 
@@ -27,6 +29,20 @@ describe("getAuthorTitles reads a deterministic slice", () => {
     expect(order).toHaveBeenCalledWith("id", { ascending: true });
     // And it has to run before the cap, or the cap could still land on an
     // arbitrary slice of an already-unordered set.
+    expect(order.mock.invocationCallOrder[0]).toBeLessThan(limit.mock.invocationCallOrder[0]);
+  });
+});
+
+describe("getAuthorChannels reads a deterministic slice", () => {
+  it("orders by id before capping, same as getAuthorTitles and for the same reason", async () => {
+    const order = vi.fn().mockReturnThis();
+    const limit = vi.fn().mockResolvedValue({ data: [], error: null });
+    const inFn = vi.fn(() => ({ order, limit }));
+    client.from.mockReturnValue({ select: () => ({ in: inFn }) });
+
+    await getAuthorChannels(["u1"]);
+
+    expect(order).toHaveBeenCalledWith("id", { ascending: true });
     expect(order.mock.invocationCallOrder[0]).toBeLessThan(limit.mock.invocationCallOrder[0]);
   });
 });
@@ -79,6 +95,9 @@ describe("publishing a post freezes the board that was on screen", () => {
           { tmdbId: 1, mediaType: "movie", tier: "S", order: 0 },
           { tmdbId: 2, mediaType: "anime", tier: "A", order: 1 },
         ],
+        // No channels handed in — an empty array, not a missing key, so a
+        // reader never has to guess whether this post predates channels.
+        channels: [],
       },
     });
     // No catalogue data in the frozen part — that is resolved live. (The
@@ -86,6 +105,43 @@ describe("publishing a post freezes the board that was on screen", () => {
     // catalogue field specifically, not the substring.)
     expect(JSON.stringify(inserted[0].snapshot)).not.toContain('"title":');
     expect(JSON.stringify(inserted[0].snapshot)).not.toContain("posterPath");
+  });
+
+  it("freezes channels the same way, and just as thinly", async () => {
+    const inserted: Record<string, unknown>[] = [];
+    client.from.mockImplementation((table: string) => {
+      if (table === "posts") return chain({ data: { id: "post-1" }, error: null });
+      if (table === "ranked_title_publications") {
+        return {
+          insert: (row: Record<string, unknown>) => {
+            inserted.push(row);
+            return Promise.resolve({ error: null });
+          },
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const channels = [
+      { channelId: "c1", title: "Some Channel", thumbnailUrl: null, country: null, tier: "S" as const, order: 0, addedAt: 0, updatedAt: 0 },
+    ];
+
+    const result = await publishPost({
+      title: "My channels",
+      description: "",
+      category: "youtube",
+      titles: [],
+      channels,
+    });
+
+    expect(result).toEqual({ ok: true, postId: "post-1" });
+    expect(inserted[0]).toMatchObject({
+      snapshot: { titles: [], channels: [{ channelId: "c1", tier: "S", order: 0 }] },
+    });
+    // Same promise as titles: no name, no thumbnail frozen in — those stay
+    // live, resolved from ranked_channels at render time.
+    expect(JSON.stringify(inserted[0].snapshot)).not.toContain('"title":');
+    expect(JSON.stringify(inserted[0].snapshot)).not.toContain("thumbnailUrl");
   });
 
   it("withdraws the post rather than leaving one with no snapshot", async () => {
@@ -130,11 +186,31 @@ describe("getPostSnapshots", () => {
 
     const snapshots = await getPostSnapshots(["p1", "p2"]);
 
-    expect(snapshots.get("p1")).toEqual([{ tmdbId: 1, mediaType: "movie", tier: "S", order: 0 }]);
+    expect(snapshots.get("p1")).toEqual({
+      titles: [{ tmdbId: 1, mediaType: "movie", tier: "S", order: 0 }],
+      channels: [],
+    });
     // A post with no row here — not yet published under this scheme — gets no
     // entry at all, which is what tells resolveSnapshotTitles to fall back to
     // a live read instead of showing an empty board.
     expect(snapshots.has("p2")).toBe(false);
+  });
+
+  it("defaults channels to empty for a snapshot written before channels existed", async () => {
+    // The real shape of every row written before this feature — no `channels`
+    // key at all, not an empty array. Must not crash, and must not be
+    // mistaken for "this post predates snapshots entirely" (that is `undefined`
+    // at the Map level, not an empty array inside a present entry).
+    client.from.mockReturnValue(
+      chain({
+        data: [{ post_id: "p1", snapshot: { titles: [] } }],
+        error: null,
+      })
+    );
+
+    const snapshots = await getPostSnapshots(["p1"]);
+
+    expect(snapshots.get("p1")).toEqual({ titles: [], channels: [] });
   });
 
   it("asks for nothing when there is nothing to ask about", async () => {

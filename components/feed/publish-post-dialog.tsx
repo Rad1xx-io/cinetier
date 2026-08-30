@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { publishPost, type PostCategory } from "@/lib/supabase/feed";
 import type { RankedTitle } from "@/lib/types";
+import type { RankedChannel } from "@/lib/types/youtube";
 import {
   POST_DESCRIPTION_MAX,
   POST_TITLE_MAX,
@@ -31,6 +32,8 @@ interface PublishPostDialogProps {
   suggestedCategory?: PostCategory;
   /** The board exactly as it stands now — frozen into the post at Publish. */
   titles: RankedTitle[];
+  /** Same freezing, for the other store a board can be made of. */
+  channels?: RankedChannel[];
 }
 
 export function PublishPostDialog({
@@ -38,6 +41,7 @@ export function PublishPostDialog({
   onClose,
   suggestedCategory = "mixed",
   titles,
+  channels = [],
 }: PublishPostDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const router = useRouter();
@@ -84,13 +88,26 @@ export function PublishPostDialog({
      * no matter which button was clicked. "Everything" is the one option
      * that is supposed to mean that — every other one should snapshot only
      * its own catalog.
+     *
+     * Channels live in their own store with no `mediaType` to filter by —
+     * filtering `titles` already yields `[]` for "youtube" on its own, since
+     * no title's `mediaType` is ever "youtube". They snapshot for "youtube"
+     * and for "mixed" ("Everything" means everything on the board, channels
+     * included, not just the four catalogues that happen to share a table).
      */
     const snapshotTitles =
       category === "mixed" ? titles : titles.filter((t) => t.mediaType === category);
+    const snapshotChannels = category === "mixed" || category === "youtube" ? channels : [];
 
     setSaving(true);
     setError(null);
-    const result = await publishPost({ title, description, category, titles: snapshotTitles });
+    const result = await publishPost({
+      title,
+      description,
+      category,
+      titles: snapshotTitles,
+      channels: snapshotChannels,
+    });
     setSaving(false);
 
     if (!result.ok) {
