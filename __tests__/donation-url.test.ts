@@ -14,8 +14,31 @@ describe("safeDonationUrl", () => {
     expect(safeDonationUrl("www.patreon.com/someone")).toBe("https://www.patreon.com/someone");
   });
 
-  it("allows plain http, since some tip jars still are", () => {
-    expect(safeDonationUrl("http://example.com/tip")).toBe("http://example.com/tip");
+  /*
+   * This used to assert the opposite. The link is typed by one person and
+   * clicked by another, so a plaintext hop is somebody else's risk to carry —
+   * it can be rewritten in transit to point elsewhere, with the site's own
+   * credibility behind it. Every platform this is realistically used for has
+   * been HTTPS-only for years.
+   */
+  it("rejects plain http rather than silently upgrading it", () => {
+    expect(safeDonationUrl("http://example.com/tip")).toBeNull();
+    expect(safeDonationUrl("HTTP://example.com/tip")).toBeNull();
+    // Not upgraded to https either: quietly changing where a link points is
+    // its own surprise, and the author should be told rather than corrected.
+    expect(safeDonationUrl("http://boosty.to/someone")).toBeNull();
+  });
+
+  it("still accepts https, including the scheme-less paste that becomes https", () => {
+    expect(safeDonationUrl("https://example.com/tip")).toBe("https://example.com/tip");
+    expect(safeDonationUrl("boosty.to/someone")).toBe("https://boosty.to/someone");
+  });
+
+  it("rejects protocol-relative urls, which carry no scheme of their own", () => {
+    // `//evil.com` is normalised to `https://` by the scheme test above rather
+    // than inheriting the page's, so this asserts the outcome, not the route.
+    expect(safeDonationUrl("//evil.com")).toBe("https://evil.com/");
+    expect(safeDonationUrl("//")).toBeNull();
   });
 
   // The whole reason this function exists: the value is typed by one user and

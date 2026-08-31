@@ -1,135 +1,111 @@
-# Security remediation pass 1 — TLO-06, 02, 01, 04, 07
+# Security remediation pass 3 — TLO-10, 11, 12, 13, 14, 16, 17 + CSP
 
-No screenshots this round: nothing user-visible changed. `.ai/reports/shots/`
-cleared per the convention. Header behaviour is verified with `curl` against the
-production build instead, which is the honest instrument for it.
+No screenshots: the only visible change is a report button on a tier row, which
+follows the existing card pattern exactly. Header behaviour is verified with
+`curl` against production builds, which is the honest instrument for it.
 
 ## PR and CI
 
 _Filled in after the PR is opened and CI is confirmed — see chat for the final status table._
 
-## Two migrations must be run by hand before this deploys
+## Stacked
 
-`016_image_path_privileges.sql` and `017_rate_limits.sql`, in that order, in the
-Supabase SQL Editor. Both are idempotent and both self-check at the end.
+Branches from `security-remediation-pass-2`, which is PR #53 and not merged.
+PR #52 (Pass 1) **is** merged and live.
 
-Ordering note for 016: it revokes the privilege that the old `clearTierRowImage`
-used. Run the migration **first**, then deploy. Between the two, "remove this
-tier's picture" is the one button that stops working; it fails quietly and
-nothing else is affected. Deploying first instead would break the same button
-for the same length of time, because the RPC would not exist yet.
+Two new migrations, **021 and 022**, on top of the five already pending.
 
-## TLO-01 — image_path is no longer a user-writable column
+## TLO-10 — profile enumeration
 
-The audit's highest-priority finding. The RLS policies check who owns the row
-and never which column is being written, and no column-level grant existed, so
-an authenticated user could write a path they had seen into a row on their own
-public board and have the storage policy serve it back — defeating
-`content_moderation`, `hidden_at` and `is_public` at once.
+`using (true)` did the job it was written for — resolving `/u/<username>` with
+no session — and also answered the same query without a username, returning
+every account including those with `is_public = false`.
 
-Fixed with option A from the audit, column-level privilege separation, not a
-trigger. A trigger would have to distinguish "called from inside `attach_upload`"
-from a direct UPDATE, which means a session flag, which is itself the next
-bypass. A column grant has no such seam and PostgREST cannot argue with it.
+The trap that makes the obvious fix wrong: `post_feed` joins profiles with
+`security_invoker`, so a profile the reader cannot see is a post that silently
+vanishes from the feed — and a private account is allowed to post (`post_feed`
+selects `is_public` precisely so the card can decide whether to offer Fork).
+So the rule is `is_public OR own OR has posted`. What stops being readable is a
+private account that has never published anything, which nothing ever read.
 
-`INSERT` had to be closed too: `Owners write their own custom tiers` is a
-`FOR ALL` policy, so revoking UPDATE alone would have left the same attack
-available by inserting a new tier row carrying the path.
+004 was narrowed to `is_public or auth.uid() = id` as well, so re-running it
+cannot restore `using (true)`. The posts clause cannot go there — `public.posts`
+does not exist until 009 — so a re-run of 004 *narrows* rather than widens.
+That direction of failure was chosen deliberately.
 
-The one legitimate direct write became `clear_tier_row_image`, deliberately the
-narrowest RPC that does the job: it has no path parameter, so the only value it
-can write is NULL.
+## TLO-11 — tier-row moderation
 
-The storage SELECT policy was **not** touched, as the brief required. It did not
-need to be: after 016 a path can only enter the database through the grant flow,
-which is what "a user can only reference a path that was legitimately attached"
-actually means.
+One subject type added to the existing system. The storage policy was **not**
+touched: it resolves a tier picture by asking whether the tier row is visible,
+and visibility is decided by the policy that now consults `is_blocked`.
 
-Cross-list integrity in `attach_upload` fixed in the same function: both
-`p_row_id` and `p_tier_row_id` are now checked against the grant's list before
-the grant is spent. The wider TLO-03 remediation (a composite foreign key) is
-**not** in this pass.
+**A gap my own test found rather than review:** `Owners write their own custom
+tiers` was `for all`, and `for all` includes SELECT. Policies are OR'd, so the
+owner read their own tier rows through the ownership rule, around the moderation
+check — a blocked tier stayed visible to its owner, and storage served them the
+picture. Split into INSERT/UPDATE/DELETE; SELECT now only through the
+moderation-aware rule. Owners lose nothing, since that rule already grants them
+their own rows.
 
-## TLO-02 — auth callback open redirect
+## TLO-12 — auth error disclosure
 
-The old sanitizer checked the raw string and then handed it to `new URL()`,
-which strips ASCII tab/LF/CR *before* parsing — so `%09` arrived from
-`searchParams` decoded, passed every check, and became `//evil.com` inside the
-parser. Rewritten so the parser is the authority: parse against the origin from
-`SITE_URL`, compare `parsed.origin`, return only `pathname + search + hash`.
+Production was returning a `Location` header containing Supabase's explanation
+of PKCE verifier storage, complete with advice about which library to use
+server-side — a description of the deployment's internals, to anyone who can
+make the exchange fail, which is anyone.
 
-The trap worth recording: **comparing origins is not sufficient on its own.**
-`/..//evil.com` parses to *our* origin while its pathname is `//evil.com`, which
-leaves the origin again when the caller re-resolves it. There is a second guard
-for exactly that, and three test cases pinning it.
+The wire now carries one of three fixed codes; the real message goes to the log.
+The error page was the other half: `REASONS[raw] ?? raw` printed an unrecognised
+value verbatim, so anyone could put a sentence of their choosing on a page of
+this site by linking to it.
 
-## TLO-06 — Next.js 16.3.3, and the optimizer surface closed
+## TLO-13 — e2e fixture
 
-Upgraded from 16.3.0 (exact pins kept, matching how `react` is pinned here).
-`npm audit` clean. This is the patch for GHSA-2xp9-vwfh-vxw4.
+Gated at module scope, not per request: `notFound()` on a prerendered page
+removes the route from the bundle, which is stronger than answering 404.
+Production sets neither variable → 404. `playwright.config.ts` sets
+`E2E_FIXTURES=true` for the single build the suite shares. Verified both ways by
+hand.
 
-`remotePatterns` then emptied, which is the surface rather than the patch.
-Verified host by host that every entry was already in `DIRECT_HOSTS`, that every
-`<Image>` passes `unoptimized={isUnoptimizedSource(src)}`, that custom uploads
-are plain `<img>`, and — in the Next 16.3.3 source — that `generateImgAttrs`
-returns on `unoptimized` before the loader that validates the list. So nothing
-rendered changes, and `/_next/image` now answers 400 for a remote host instead
-of fetching and decoding it.
+## CSP — partially enforced
 
-## TLO-04 — rate limiting on the catalogue routes
+Three directives moved from report-only to **enforced**, each checked against
+the source rather than assumed: `object-src 'none'` (no `<object>`/`<embed>`
+anywhere), `base-uri 'self'` (no `<base>`), `form-action 'self'` (every form is
+an `onSubmit` handler with no `action`). Plus `frame-ancestors`, already
+enforced.
 
-No new SaaS dependency: the stack already has Postgres and has no Redis. The
-counter is a table plus one atomic upsert in `consume_rate_limit` (017), with
-RLS on and no policies, reachable only through the RPC.
+`script-src`, `style-src`, `img-src`, `connect-src` and `default-src` remain
+Report-Only. Next injects inline hydration scripts with no nonce, so an honest
+enforced `script-src` is either `'unsafe-inline'` — which buys little — or a
+nonce pipeline that would make every static page dynamic. That decision needs
+real violation reports, which I do not have.
 
-Budgets are priced by what a request costs **upstream**, not by page
-popularity — `youtube-search` is the strictest at 10/min anonymous, because
-`search.list` is 100 units of a 10,000-unit day and `discoverChannels` spends
-more than one call per visit.
-
-Two passes, cheapest first: count by address against the anonymous budget, and
-only look up a session when that budget is already exceeded — which is both the
-fast path for ordinary traffic and the exact moment the distinction matters. The
-session is read with `getUser()`, never from the cookie, because being
-recognised *raises* the ceiling.
-
-Fail-open when the limiter cannot be reached, logged at error level. Deliberate:
-guest-only mode configures no Supabase at all, and one dependency being down
-must not become the whole site being down. It does mean the limit is not a
-defence against someone who can take the database down.
-
-Request bounds added alongside: page numbers clamped (`?page=999999999` was
-forwarded verbatim to IGDB), `query` on the games route put through the shared
-sanitizer, and YouTube's `pageToken`/`regionCode` validated for shape.
-
-## TLO-07 — security headers
-
-`frame-ancestors 'none'` plus `X-Frame-Options: DENY` everywhere **except**
-`/widgets/**`, via a negative-lookahead source. Verified with curl: present on
-`/`, `/settings`, `/profile`, `/feed`, `/auth/*`; absent on
-`/widgets/tier-list/*`, so embedding still works.
-
-The full CSP ships **Report-Only**. Enforcing it today would be a guess: the App
-Router injects inline bootstrap scripts with no nonce plumbed through this app,
-so a correct enforced `script-src` is either `'unsafe-inline'` (which buys
-little) or a nonce pipeline touching every route. No `'unsafe-eval'` anywhere.
-The Supabase and PostHog origins are read from the same env the clients read, so
-a preview deployment gets a policy that matches it.
-
-HSTS at one year, without `includeSubDomains` and without `preload` — subdomains
-are not enumerated anywhere in this repository, so committing them to HTTPS-only
-is not a promise this file can make, and preload is effectively irreversible.
+**A Next behaviour worth recording:** two `headers()` rules setting the same key
+do not combine — the later rule *replaces* the earlier. Splitting
+`frame-ancestors` and the other three across the two rules produced a `/` that
+carried only `frame-ancestors` and had silently lost the rest. Caught by curl,
+fixed by joining them into one value per rule.
 
 ## Verified
 
-- `npm ci` — clean install from the lockfile
+- `npm ci` — clean install
 - `npm audit` — 0 vulnerabilities
 - `npm run lint` — clean (1 pre-existing unrelated warning)
 - `npm run typecheck` — clean
-- `npm test` — 1055/1055 across 83 files
+- `npm test` — 1168/1168 across 86 files
 - `npx playwright test` — 15/15
 - `npm run build` — clean
-- `supabase/testing/run.sh` — every existing check plus 10 new ones
-- `supabase/testing/run.sh --negative` — both check files abort on their own
-  exploit, so neither is passing vacuously
-- `curl` against the production build for every header assertion above
+- `supabase/testing/run.sh` — 87 checks across 10 files, 0 errors
+- `supabase/testing/run.sh --negative` — both original files still abort on
+  their own exploit
+- `curl` against production builds: enforced CSP correct on `/`, `/settings`,
+  `/profile`; widget still framable; e2e fixture 404 in a production build and
+  present in the Playwright build
+
+## Production is still behind
+
+Pass 1 code is live with **no migrations applied**. `clear_tier_row_image` is
+absent, so "remove this tier's picture" is broken in production right now, and
+TLO-01/04/05 are inert there. Nothing in this pass changes that; the deployment
+order is in the chat report.

@@ -29,7 +29,23 @@ alter table public.profiles enable row level security;
 drop policy if exists "Profiles are publicly readable" on public.profiles;
 create policy "Profiles are publicly readable"
   on public.profiles for select
-  using (true);
+  /*
+   * This was `using (true)`, which resolved /u/<username> for a stranger — the
+   * thing it was for — and also answered `select=*` with every account on the
+   * site, including accounts that had set `is_public = false` and never posted.
+   * The switch gated their rankings and never gated them.
+   *
+   * Narrowed here as well as in migration 021 so that re-running this file
+   * cannot restore the unconditional version. 021 widens it again by one
+   * clause, for accounts that have published a post: their handle is already
+   * on the post, and the feed's view joins this table, so refusing the row
+   * would drop their post from the feed rather than hide anything. That clause
+   * cannot live here — `public.posts` does not exist until 009, and a policy
+   * naming a missing table cannot be created — so re-running this file after
+   * 021 narrows the rule rather than widening it. Narrower is the safe
+   * direction for a re-run to fail in; see .ai/DECISIONS.md, 2026-08-31.
+   */
+  using (is_public or auth.uid() = id);
 
 drop policy if exists "Users can create their own profile" on public.profiles;
 create policy "Users can create their own profile"

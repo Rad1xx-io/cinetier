@@ -1,0 +1,168 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildReportNotification,
+  flattenForNotification,
+  NOTIFICATION_TEXT_MAX,
+  REPORT_REASON_MAX,
+} from "@/lib/moderation/report-notification";
+
+/**
+ * The report `reason` is typed by whoever is complaining and then rendered by
+ * a chat client. The old code built the message by concatenation, which handed
+ * the reporter the newline — and with it the ability to write lines that read
+ * as fields, or as a second report, or as `@everyone`.
+ *
+ * These are about the rendered message. The JSON was never what broke, so
+ * `JSON.stringify` producing valid JSON proves nothing on its own.
+ */
+
+const ZWSP = String.fromCharCode(0x200b);
+const SUBJECT = "11111111-1111-4111-8111-111111111111";
+
+function notify(reason: string) {
+  return buildReportNotification({ subjectType: "post", subjectId: SUBJECT, reason });
+}
+
+describe("flattenForNotification — the message cannot grow lines", () => {
+  it.each([
+    ["newline", "first\nsecond"],
+    ["carriage return", "first\rsecond"],
+    ["CRLF", "first\r\nsecond"],
+    ["vertical tab", "first\v second"],
+    ["form feed", "first\f second"],
+    ["NEL", `first${String.fromCharCode(0x85)}second`],
+    ["line separator", `first${String.fromCharCode(0x2028)}second`],
+    ["paragraph separator", `first${String.fromCharCode(0x2029)}second`],
+    ["null byte", `first${String.fromCharCode(0)}second`],
+  ])("flattens a %s into one line", (_name, input) => {
+    const out = flattenForNotification(input);
+    expect(out).not.toMatch(/[\r\n]/);
+    expect(out.split(" ").filter(Boolean).length).toBeGreaterThan(1);
+    // The words survive — this is flattening, not censoring.
+    expect(out).toContain("first");
+    expect(out).toContain("second");
+  });
+
+  it("cannot forge a line that reads as a second report", () => {
+    const forged = "spam\nTierListOnline: custom_item reported\n99999999-9999-4999-8999-999999999999\nnot really";
+    const out = flattenForNotification(forged);
+
+    expect(out).not.toMatch(/[\r\n]/);
+    expect(out.split(/\r?\n/)).toHaveLength(1);
+  });
+
+  it("collapses the runs of whitespace those replacements leave behind", () => {
+    expect(flattenForNotification("a\n\n\n\t\t  b")).toBe("a b");
+  });
+
+  it("leaves ordinary punctuation alone — this is not a censor", () => {
+    const reason = "It's a stolen photo (from flickr!), see: example.com/x?y=1 — 100% sure.";
+    expect(flattenForNotification(reason)).toBe(reason);
+  });
+});
+
+describe("flattenForNotification — platform mention syntax cannot be triggered", () => {
+  it.each([
+    ["@everyone", "@everyone look at this"],
+    ["@here", "@here urgent"],
+    ["Slack channel", "<!channel> please look"],
+    ["Slack here", "<!here> please look"],
+    ["Discord user mention", "<@123456789012345678> you did this"],
+    ["Discord role mention", "<@&987654321098765432> mods"],
+    ["Discord channel link", "<#111111111111111111>"],
+  ])("neutralises %s", (_name, input) => {
+    const out = flattenForNotification(input);
+
+    // The dangerous literal is gone...
+    expect(out).not.toContain(input.split(" ")[0]);
+    // ...but only because a zero-width space now sits inside it, so a human
+    // still reads what was written.
+    expect(out).toContain(ZWSP);
+    expect(out.split(ZWSP).join("")).toContain(input.split(" ")[0]);
+  });
+
+  it("sets the platform's own mention controls too, not just the text", () => {
+    const payload = notify("@everyone");
+
+    // Discord: authoritative regardless of what the text says.
+    expect(payload.allowed_mentions).toEqual({ parse: [] });
+    // Slack: stops its own control-sequence parsing.
+    expect(payload.mrkdwn).toBe(false);
+  });
+});
+
+describe("flattenForNotification — length", () => {
+  it("caps at the requested maximum", () => {
+    const out = flattenForNotification("x".repeat(5000), 100);
+    expect(out.length).toBe(100);
+  });
+
+  it("marks a truncated value as truncated", () => {
+    const out = flattenForNotification("x".repeat(5000), 100);
+    expect(out.endsWith(String.fromCharCode(0x2026))).toBe(true);
+  });
+
+  it("leaves a short value untouched", () => {
+    expect(flattenForNotification("short", 100)).toBe("short");
+  });
+});
+
+describe("buildReportNotification — the payload", () => {
+  it("keeps the identifying fields structured rather than only in a sentence", () => {
+    const payload = notify("A plain reason.");
+
+    expect(payload.subject_type).toBe("post");
+    expect(payload.subject_id).toBe(SUBJECT);
+    expect(payload.reason).toBe("A plain reason.");
+  });
+
+  it("puts a flattened summary in both platforms' text fields", () => {
+    const payload = notify("line one\nline two");
+
+    expect(payload.text).toBe(payload.content);
+    expect(String(payload.text)).not.toMatch(/[\r\n]/);
+  });
+
+  it("stays under the webhook body limit even for a maximum-length reason", () => {
+    const payload = notify("y".repeat(REPORT_REASON_MAX));
+
+    expect(String(payload.text).length).toBeLessThanOrEqual(NOTIFICATION_TEXT_MAX);
+    expect(String(payload.content).length).toBeLessThanOrEqual(NOTIFICATION_TEXT_MAX);
+  });
+
+  it("caps the stored reason at the same limit the database enforces", () => {
+    const payload = notify("z".repeat(REPORT_REASON_MAX + 500));
+    expect(String(payload.reason).length).toBe(REPORT_REASON_MAX);
+  });
+
+  it("cannot be made to add a field of the reporter's choosing", () => {
+    // The old payload spread the report object into the body. The keys are
+    // fixed here, so a reason that looks like JSON is a string and nothing more.
+    const payload = notify('", "admin": true, "x": "');
+
+    expect(payload).not.toHaveProperty("admin");
+    expect(Object.keys(payload).sort()).toEqual([
+      "allowed_mentions",
+      "content",
+      "mrkdwn",
+      "reason",
+      "subject_id",
+      "subject_type",
+      "text",
+    ]);
+  });
+
+  it("survives the round trip through JSON without changing shape", () => {
+    // A NUL, a real newline and a mention, all in one value. Built rather than
+    // written literally: a NUL byte in a source file makes git treat the whole
+    // file as binary, which costs every future reviewer the diff.
+    const payload = notify(
+      `weird ${String.fromCharCode(0)} \n   @everyone <!channel>`
+    );
+    const round = JSON.parse(JSON.stringify(payload));
+
+    expect(round.allowed_mentions).toEqual({ parse: [] });
+    expect(String(round.text)).not.toMatch(/[\r\n]/);
+    expect(String(round.text)).not.toContain("@everyone");
+  });
+});

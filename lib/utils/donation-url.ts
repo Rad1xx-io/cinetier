@@ -25,7 +25,24 @@ export function safeDonationUrl(raw: string | null | undefined): string | null {
     return null;
   }
 
-  if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+  /*
+   * HTTPS only.
+   *
+   * This used to allow `http:` as well, on the reasoning that some tip jars
+   * still are — but the link is typed by one person and clicked by another,
+   * which makes a plaintext hop somebody else's risk to carry. On the wire it
+   * can be rewritten to point somewhere other than where the author meant, and
+   * the visitor has no way to tell. Every donation platform this is realistically
+   * used for — Boosty, Patreon, Ko-fi, CloudTips — has been HTTPS-only for years,
+   * so refusing costs a real author nothing and the alternative is a
+   * downgrade-and-redirect that the site would be lending its credibility to.
+   *
+   * A scheme-less paste is still normalised to https above, so the common case
+   * of typing `boosty.to/name` keeps working — only an explicit `http://` is
+   * refused, and refused rather than silently upgraded, because silently
+   * changing where a link points is its own surprise.
+   */
+  if (url.protocol !== "https:") return null;
   // A host is what makes it a link somewhere. `https:///path` parses but goes nowhere.
   if (!url.hostname || !url.hostname.includes(".")) return null;
 

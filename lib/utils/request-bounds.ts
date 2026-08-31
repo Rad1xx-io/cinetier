@@ -42,6 +42,74 @@ export function boundedCount(raw: string | number | null | undefined, max: numbe
 }
 
 /**
+ * The largest external catalogue id worth forwarding.
+ *
+ * TMDB, AniList and Steam all number in the millions; ten million is comfortably
+ * past every real id and short of the point where the value stops being a
+ * plausible id at all. `Number.isFinite` alone was letting `-1`, `1.5` and
+ * `1e300` through to an upstream request, all of which can only ever come back
+ * as an error somebody else's quota paid for.
+ */
+export const MAX_EXTERNAL_ID = 10_000_000;
+
+/**
+ * A positive integer id, or null when the value cannot be one.
+ *
+ * Returns null rather than clamping: a page number that is out of range still
+ * has an obvious sensible answer, and an id does not — a caller asking for
+ * film `-1` has not asked for film 1, so the honest reply is 400 rather than a
+ * different film's details.
+ */
+export function boundedExternalId(raw: string | null | undefined): number | null {
+  if (raw === null || raw === undefined || raw.trim() === "") return null;
+  /*
+   * Digits only, checked before `Number()` ever sees the value. `Number()` is
+   * happy with `"0x1f"`, `"1e300"` and `"Infinity"`, and none of those is an id
+   * anybody typed — but each was finite, which is all the two details routes
+   * used to ask.
+   *
+   * Surrounding whitespace is forgiven rather than refused: `?id=%2012%20` is a
+   * sloppy caller, not a hostile one, and 12 is unambiguously what they meant.
+   */
+  if (!/^\d+$/.test(raw.trim())) return null;
+  const parsed = Number(raw.trim());
+  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > MAX_EXTERNAL_ID) return null;
+  return parsed;
+}
+
+/**
+ * A single YouTube channel id.
+ *
+ * `channels.list` takes a comma-separated list of up to fifty ids, and this
+ * value used to be forwarded to it verbatim — so one request could ask YouTube
+ * about fifty channels, or carry a string of any length at all, on nothing but
+ * the caller's word. The route only ever reads `items[0]`, so a list was never
+ * useful to anyone but somebody probing what else the parameter would accept.
+ *
+ * A channel id is `UC` followed by 22 characters of base64url. Matched exactly,
+ * which also refuses the comma.
+ */
+export function boundedChannelId(raw: string | null | undefined): string | null {
+  const trimmed = raw?.trim() ?? "";
+  return /^UC[A-Za-z0-9_-]{22}$/.test(trimmed) ? trimmed : null;
+}
+
+/**
+ * A short free-text filter value — a genre name, and the like.
+ *
+ * These are looked up against a known list or passed as a bound query variable
+ * rather than spliced into anything, so this is a ceiling on work rather than
+ * an injection defence: no genre has a sixty-character name, and a longer value
+ * is a string this server would otherwise carry around and hand upstream for
+ * no possible result.
+ */
+export function boundedFilterTerm(raw: string | null | undefined, max = 60): string | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.slice(0, max);
+}
+
+/**
  * An opaque upstream continuation token, bounded and stripped of anything that
  * is not one.
  *

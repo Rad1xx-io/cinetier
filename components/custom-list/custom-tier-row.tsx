@@ -6,6 +6,7 @@ import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 import { ImagePlus, Trash2, X } from "lucide-react";
 import type { CustomItem, CustomTierRow as TierRowModel } from "@/lib/types/custom-list";
 import { CustomCard } from "@/components/custom-list/custom-card";
+import { ReportButton } from "@/components/ui/report-button";
 import { cn } from "@/lib/utils/cn";
 
 interface CustomTierRowProps {
@@ -116,6 +117,25 @@ export function CustomTierRow({
           >
             <X className="h-3.5 w-3.5" aria-hidden />
           </button>
+        )}
+
+        {/*
+          * The other side of the owner's remove button: a visitor cannot take
+          * a tier's picture down, so they get the way to say it should come
+          * down. Offered only when there is a picture and only to somebody who
+          * does not own the board — the same two conditions the card's own
+          * report button uses, and the same component.
+          *
+          * Placed opposite the owner's control rather than beside it, since
+          * the two never appear together.
+          */}
+        {!canEdit && row.imageUrl && (
+          <ReportButton
+            subjectType="custom_tier_row"
+            subjectId={row.id}
+            label="Report this tier's picture"
+            className="absolute left-1 top-1 z-20"
+          />
         )}
 
         {canEdit ? (

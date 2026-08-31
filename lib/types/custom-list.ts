@@ -61,4 +61,11 @@ export const STARTER_ROWS: { label: string; color: string }[] = [
 ];
 
 /** Shared with the community feed's posts and comments, not only custom boards. */
-export type ReportSubjectType = "custom_item" | "custom_list" | "post" | "post_comment";
+export type ReportSubjectType =
+  | "custom_item"
+  // A tier carries an uploaded picture of its own, through the same grant
+  // flow as a card, so it is reportable on the same terms. See migration 022.
+  | "custom_tier_row"
+  | "custom_list"
+  | "post"
+  | "post_comment";

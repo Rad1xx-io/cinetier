@@ -508,9 +508,29 @@ export async function addComment(postId: string, text: string): Promise<PostComm
  * 009 — the table itself is not writable by visitors, deliberately.
  */
 export async function registerPostView(postId: string): Promise<void> {
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) return;
-  await supabase.rpc("increment_post_views", { p_post_id: postId });
+  /*
+   * Through the app's own route rather than straight at the RPC.
+   *
+   * The database cannot see who is asking — PostgREST is the client as far as
+   * it is concerned — so an anonymous reader had no identity to de-duplicate
+   * on, and the counter moved once per call for anybody who cared to call it.
+   * The route can see the address and turns it into an opaque handle, which is
+   * what lets one anonymous reader be told apart from another without either
+   * being recorded. See migration 018.
+   *
+   * Failure is swallowed: a view that did not count is not worth interrupting
+   * somebody's reading for, which is the behaviour this already had.
+   */
+  try {
+    await fetch("/api/post-views", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId }),
+      keepalive: true,
+    });
+  } catch {
+    // Offline, or the reader navigated away mid-flight.
+  }
 }
 
 /**
