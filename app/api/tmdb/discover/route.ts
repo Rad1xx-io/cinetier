@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
+import { boundedPage } from "@/lib/utils/request-bounds";
 import { TMDBError } from "@/lib/tmdb/client";
 import { discoverTitles } from "@/lib/tmdb/discover";
 import { isTitleSort } from "@/lib/tmdb/title-filters";
@@ -7,6 +9,9 @@ import type { TMDBMediaType } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const limited = await rateLimitOrNull(request, "search");
+  if (limited) return limited;
+
   const sp = request.nextUrl.searchParams;
   const typeRaw = sp.get("type") ?? "all";
   const type: "all" | TMDBMediaType =
@@ -17,8 +22,7 @@ export async function GET(request: NextRequest) {
   const ratingRaw = Number(sp.get("minRating") ?? 0);
   const minRating = Number.isFinite(ratingRaw) && ratingRaw > 0 ? ratingRaw : undefined;
   const sortRaw = sp.get("sort") ?? "";
-  const pageRaw = Number(sp.get("page") ?? 1);
-  const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1;
+  const page = boundedPage(sp.get("page"));
 
   try {
     const data = await discoverTitles({

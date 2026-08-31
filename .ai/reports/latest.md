@@ -1,115 +1,135 @@
-# YouTube category now actually snapshots channels on Publish
+# Security remediation pass 1 — TLO-06, 02, 01, 04, 07
 
-`.ai/reports/shots/` cleared before this round, then three new screenshots taken
-against the real built page: `youtube-post-card.png`, `youtube-post-dialog.png`,
-`mixed-post-dialog-titles-and-channels.png`.
+No screenshots this round: nothing user-visible changed. `.ai/reports/shots/`
+cleared per the convention. Header behaviour is verified with `curl` against the
+production build instead, which is the honest instrument for it.
 
 ## PR and CI
 
 _Filled in after the PR is opened and CI is confirmed — see chat for the final status table._
 
-## The gap
+## Two migrations must be run by hand before this deploys
 
-`PublishPostDialog` never had a `channels` prop. A "YouTube" category post always
-froze an empty snapshot regardless of what the author had actually ranked — flagged
-as a known, out-of-scope gap in the previous task (`.ai/DECISIONS.md`, 2026-08-29,
-last paragraph) and picked up here as its own task.
+`016_image_path_privileges.sql` and `017_rate_limits.sql`, in that order, in the
+Supabase SQL Editor. Both are idempotent and both self-check at the end.
 
-## The fork, and how it was resolved
+Ordering note for 016: it revokes the privilege that the old `clearTierRowImage`
+used. Run the migration **first**, then deploy. Between the two, "remove this
+tier's picture" is the one button that stops working; it fails quietly and
+nothing else is affected. Deploying first instead would break the same button
+for the same length of time, because the RPC would not exist yet.
 
-`RankedChannel` (`lib/types/youtube.ts`) has no `tmdbId` — it can't fit
-`RankedTitleSnapshotEntry`'s shape. The obvious precedent, `custom_list_publications`
-vs `ranked_title_publications` being deliberately separate tables (`.ai/DECISIONS.md`,
-2026-08-27), pointed toward a second table for channels too. Decided against it: that
-split exists because a custom board is a genuinely different *kind* of post
-(`category = 'custom'`, no catalogue at all). YouTube is not — it's one of the same
-tier-list's existing catalog filters, and a "mixed"/Everything post must hold titles
-*and* channels in the same post at once. Two tables would mean reading both on every
-non-custom post just to support that one combined case. Instead, `ranked_title_publications.snapshot`
-widened in place, in the same row: `{ titles: [...], channels: [...] }`. No migration
-needed — `snapshot` is untyped `jsonb` with no `CHECK` on its shape; old rows without a
-`channels` key read back as `channels: []`. Full reasoning in `.ai/DECISIONS.md`
-(2026-08-30) and `.ai/ARCHITECTURE.md`.
+## TLO-01 — image_path is no longer a user-writable column
 
-## What changed
+The audit's highest-priority finding. The RLS policies check who owns the row
+and never which column is being written, and no column-level grant existed, so
+an authenticated user could write a path they had seen into a row on their own
+public board and have the storage policy serve it back — defeating
+`content_moderation`, `hidden_at` and `is_public` at once.
 
-### Publishing
+Fixed with option A from the audit, column-level privilege separation, not a
+trigger. A trigger would have to distinguish "called from inside `attach_upload`"
+from a direct UPDATE, which means a session flag, which is itself the next
+bypass. A column grant has no such seam and PostgREST cannot argue with it.
 
-- `lib/supabase/feed.ts`: `RankedChannelSnapshotEntry`, `PostSnapshot` (the
-  `{titles, channels}` wrapper, now `getPostSnapshots`'s return type), `buildSnapshot`
-  (replaces `buildRankedTitleSnapshot`), `publishPost` takes an optional `channels`,
-  new `getAuthorChannels` mirroring `getAuthorTitles` exactly (same `order("id")`
-  before the cap, same reason).
-- `PublishPostDialog` gained `channels?: RankedChannel[]`. In `handleSubmit`: channels
-  go into the snapshot for `category === "mixed"` or `"youtube"`, `[]` otherwise.
-  `titles` needed no new case for "youtube" — the existing `mediaType === category`
-  filter already yields `[]` there, since no title's `mediaType` is ever `"youtube"`.
-- `tier-list-actions.tsx` now passes `channels={channels}` through (it already held
-  `channels` in scope for `CreateBattleModal`).
-- Resolved, from the previous task's open question: "Everything" now means literally
-  everything, channels included — not just the four catalogues that share a table.
+`INSERT` had to be closed too: `Owners write their own custom tiers` is a
+`FOR ALL` policy, so revoking UPDATE alone would have left the same attack
+available by inserting a new tier row carrying the path.
 
-### Rendering
+The one legitimate direct write became `clear_tier_row_image`, deliberately the
+narrowest RPC that does the job: it has no path parameter, so the only value it
+can write is NULL.
 
-- New `components/feed/channel-board.tsx` — `TierBoard`'s structure, `ChannelThumbnail`
-  instead of `Poster` (a channel has no poster path, and looks like itself — a round
-  avatar, not a film poster — through the same component every other channel view in
-  the app already uses).
-- `lib/feed/post-preview.ts`: `buildChannelTierRows`/`buildMiniChannelBoard`
-  (mirrors `buildTierRows`/`buildMiniBoard`, kept separate rather than genericized —
-  would have meant renaming `MiniTierRow.titles`, touching two already well-tested
-  shared consumers for a form that's genuinely different), `channelsByAuthor`,
-  `resolveSnapshotChannels`, `tierCountPhrase` (factored out of the existing
-  "N tiers"/"one tier" ternary, now shared by both captions).
-- `post-card.tsx` / `post-dialog.tsx`: both gained an optional `channels` prop and
-  render `ChannelBoard` alongside `TierBoard` when channels are present — a "youtube"
-  post shows only the channel board (no titles ever), a "mixed" post can show both,
-  stacked, each with its own count line. The two catalogues are never merged into one
-  set of tier rows — the live tier-list page never does that either (its picker
-  always scopes to exactly one catalog).
-- `post-dialog.tsx` also gained `getAuthorChannels`/`fullChannels`/
-  `resolveSnapshotChannels`, mirroring yesterday's `fullTitles` fix exactly — the same
-  bug for the same reason, closed here rather than left as a second known gap.
-- `feed-view.tsx`: `authorChannels` state, `getAuthorChannels(authorIds)` added to the
-  existing `Promise.all`, `channelsForPost` alongside `titlesForPost`, passed to both
-  `PostCard` and `PostDialog`.
+The storage SELECT policy was **not** touched, as the brief required. It did not
+need to be: after 016 a path can only enter the database through the grant flow,
+which is what "a user can only reference a path that was legitimately attached"
+actually means.
+
+Cross-list integrity in `attach_upload` fixed in the same function: both
+`p_row_id` and `p_tier_row_id` are now checked against the grant's list before
+the grant is spent. The wider TLO-03 remediation (a composite foreign key) is
+**not** in this pass.
+
+## TLO-02 — auth callback open redirect
+
+The old sanitizer checked the raw string and then handed it to `new URL()`,
+which strips ASCII tab/LF/CR *before* parsing — so `%09` arrived from
+`searchParams` decoded, passed every check, and became `//evil.com` inside the
+parser. Rewritten so the parser is the authority: parse against the origin from
+`SITE_URL`, compare `parsed.origin`, return only `pathname + search + hash`.
+
+The trap worth recording: **comparing origins is not sufficient on its own.**
+`/..//evil.com` parses to *our* origin while its pathname is `//evil.com`, which
+leaves the origin again when the caller re-resolves it. There is a second guard
+for exactly that, and three test cases pinning it.
+
+## TLO-06 — Next.js 16.3.3, and the optimizer surface closed
+
+Upgraded from 16.3.0 (exact pins kept, matching how `react` is pinned here).
+`npm audit` clean. This is the patch for GHSA-2xp9-vwfh-vxw4.
+
+`remotePatterns` then emptied, which is the surface rather than the patch.
+Verified host by host that every entry was already in `DIRECT_HOSTS`, that every
+`<Image>` passes `unoptimized={isUnoptimizedSource(src)}`, that custom uploads
+are plain `<img>`, and — in the Next 16.3.3 source — that `generateImgAttrs`
+returns on `unoptimized` before the loader that validates the list. So nothing
+rendered changes, and `/_next/image` now answers 400 for a remote host instead
+of fetching and decoding it.
+
+## TLO-04 — rate limiting on the catalogue routes
+
+No new SaaS dependency: the stack already has Postgres and has no Redis. The
+counter is a table plus one atomic upsert in `consume_rate_limit` (017), with
+RLS on and no policies, reachable only through the RPC.
+
+Budgets are priced by what a request costs **upstream**, not by page
+popularity — `youtube-search` is the strictest at 10/min anonymous, because
+`search.list` is 100 units of a 10,000-unit day and `discoverChannels` spends
+more than one call per visit.
+
+Two passes, cheapest first: count by address against the anonymous budget, and
+only look up a session when that budget is already exceeded — which is both the
+fast path for ordinary traffic and the exact moment the distinction matters. The
+session is read with `getUser()`, never from the cookie, because being
+recognised *raises* the ceiling.
+
+Fail-open when the limiter cannot be reached, logged at error level. Deliberate:
+guest-only mode configures no Supabase at all, and one dependency being down
+must not become the whole site being down. It does mean the limit is not a
+defence against someone who can take the database down.
+
+Request bounds added alongside: page numbers clamped (`?page=999999999` was
+forwarded verbatim to IGDB), `query` on the games route put through the shared
+sanitizer, and YouTube's `pageToken`/`regionCode` validated for shape.
+
+## TLO-07 — security headers
+
+`frame-ancestors 'none'` plus `X-Frame-Options: DENY` everywhere **except**
+`/widgets/**`, via a negative-lookahead source. Verified with curl: present on
+`/`, `/settings`, `/profile`, `/feed`, `/auth/*`; absent on
+`/widgets/tier-list/*`, so embedding still works.
+
+The full CSP ships **Report-Only**. Enforcing it today would be a guess: the App
+Router injects inline bootstrap scripts with no nonce plumbed through this app,
+so a correct enforced `script-src` is either `'unsafe-inline'` (which buys
+little) or a nonce pipeline touching every route. No `'unsafe-eval'` anywhere.
+The Supabase and PostHog origins are read from the same env the clients read, so
+a preview deployment gets a policy that matches it.
+
+HSTS at one year, without `includeSubDomains` and without `preload` — subdomains
+are not enumerated anywhere in this repository, so committing them to HTTPS-only
+is not a promise this file can make, and preload is effectively irreversible.
 
 ## Verified
 
+- `npm ci` — clean install from the lockfile
+- `npm audit` — 0 vulnerabilities
 - `npm run lint` — clean (1 pre-existing unrelated warning)
 - `npm run typecheck` — clean
-- `npm test` — 965/965 passing, including 27 new tests across
-  `feed-snapshots.test.ts` (`getAuthorChannels` ordering, `publishPost` freezing
-  channels thinly, `getPostSnapshots` defaulting a pre-existing row's missing
-  `channels` key to `[]`), `feed-post-preview.test.ts` (`buildChannelTierRows`,
-  `buildMiniChannelBoard`, `channelsByAuthor`, `resolveSnapshotChannels`,
-  `tierCountPhrase`), `publish-post-dialog.test.tsx` (channels snapshot for YouTube,
-  excluded from a single catalogue, included in Everything), and
-  `post-dialog-full-board-snapshot.test.tsx` (a youtube post's dialog stays scoped to
-  its own channel snapshot rather than the author's whole live channel list — the
-  same shape of bug fixed yesterday for titles, caught here before it shipped)
-- **Negative controls, both applied by temporarily reverting the real fix and
-  re-running:**
-  - Reverted `publish-post-dialog.tsx` → exactly the 4 new channel-scoping
-    assertions failed, the pre-existing 14 kept passing.
-  - Reverted `post-dialog.tsx` + `post-preview.ts` together → 4 of 5 dialog tests
-    failed, including a genuine crash (`resolveSnapshotTitles` given a non-iterable
-    wrapped snapshot) rather than only a text mismatch — confirms the tests exercise
-    real code paths, not vacuous assertions.
-- `npx playwright test` — 15/15 passing, including 2 new specs in
-  `e2e/feed-youtube-post.spec.ts` against the real built page (network stubbed): a
-  YouTube post's card shows its channel instead of "has not published their list",
-  and its dialog shows the channel in full with "1 channel across one tier".
+- `npm test` — 1055/1055 across 83 files
+- `npx playwright test` — 15/15
 - `npm run build` — clean
-- **Live screenshots**, taken with a throwaway Playwright script against the actual
-  built `/feed` (same route-stubbing as the e2e spec, not a mock of the rendering
-  code) rather than the in-app browser pane (blocked every JS/CSS chunk again this
-  session — same known unreliability as two tasks ago): the card and dialog for a
-  YouTube post, and the dialog for a mixed post showing both a title and a channel
-  stacked in one section. All three in `.ai/reports/shots/`.
-
-## Deliberately not addressed
-
-Nothing left open from this task's own scope. The two things flagged in the previous
-task's `.ai/DECISIONS.md` entry are both closed now: channels really do snapshot, and
-Rad1xx's next YouTube-category publish will freeze the real channel, not an empty list.
+- `supabase/testing/run.sh` — every existing check plus 10 new ones
+- `supabase/testing/run.sh --negative` — both check files abort on their own
+  exploit, so neither is passing vacuously
+- `curl` against the production build for every header assertion above

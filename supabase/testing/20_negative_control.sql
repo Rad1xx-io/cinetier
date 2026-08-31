@@ -1,10 +1,10 @@
--- Puts the two holes back, so the checks can be watched failing.
+-- Puts the holes back, so the checks can be watched failing.
 --
 -- A test that passes is worth nothing until it has been seen to fail for the
 -- reason it claims to test. Applied to a scratch copy of the database, this
--- restores the policies as they were written before review, and 10_rls_checks
--- should then abort on both exploits. If it still passes here, it is not
--- testing what it says it is.
+-- restores the policies and grants as they were written before review, and
+-- 10_rls_checks and 13_image_path_checks should then abort on their exploits.
+-- If they still pass here, they are not testing what they say they are.
 
 -- Hole 1: writing anywhere under one's own folder, which is what made every
 -- check in the upload route optional.
@@ -37,3 +37,10 @@ create policy "Custom cards follow their list"
         and (auth.uid() = l.user_id or (hidden_at is null and l.is_public))
     )
   );
+
+-- Hole 3: image_path as an ordinary user-editable column, which is what let a
+-- visible row on one board point at a picture on another and re-serve it after
+-- a block, a hide or a switch to private. Migration 016 took the column-level
+-- privilege away; this hands it back the way Supabase's default grants had it.
+grant update on public.custom_items to authenticated;
+grant insert, update on public.custom_tier_rows to authenticated;

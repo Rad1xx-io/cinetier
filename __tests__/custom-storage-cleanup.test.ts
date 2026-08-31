@@ -118,6 +118,25 @@ function fakeClient(world: World) {
         },
       };
     },
+    /*
+     * Stands in for the security-definer functions, which is where clearing a
+     * tier picture moved when migration 016 took column-level UPDATE on
+     * image_path away from clients. The fake mirrors the real contract: it
+     * returns the path it cleared, so the caller still has something to
+     * collect, and it nulls the column the way the function does.
+     */
+    async rpc(name: string, args: Record<string, unknown>) {
+      order.push(`rpc ${name}`);
+      if (name !== "clear_tier_row_image") return { data: null, error: null };
+      if (world.writeFails) return { data: null, error: { message: "no connection" } };
+
+      const row = table("custom_tier_rows").find((r) => r.id === args.p_row_id);
+      if (!row) return { data: null, error: null };
+
+      const previous = row.image_path ?? null;
+      row.image_path = null;
+      return { data: previous, error: null };
+    },
     storage: {
       from() {
         return {
@@ -241,7 +260,25 @@ describe("taking a picture off a tier", () => {
     await clearTierRowImage(client, "r1");
 
     expect(removed).toEqual([["u/l/tier.jpg"]]);
-    expect(order).toEqual(["update custom_tier_rows", "storage.remove"]);
+    // Through the RPC now, not a direct update: image_path stopped being a
+    // column any client may write in migration 016. The ordering matters for
+    // the same reason it always did — the path has to be read back before the
+    // file can be collected.
+    expect(order).toEqual(["rpc clear_tier_row_image", "storage.remove"]);
+  });
+
+  it("collects nothing when the write is refused", async () => {
+    // An unauthorised or blocked row answers with an error, and the file must
+    // not be deleted on the strength of a clear that did not happen.
+    const { client, removed } = fakeClient({
+      custom_tier_rows: [{ id: "r1", list_id: "l1", image_path: "u/l/tier.jpg", position: 0 }],
+      custom_items: [],
+      writeFails: true,
+    });
+
+    await clearTierRowImage(client, "r1");
+
+    expect(removed).toEqual([]);
   });
 });
 

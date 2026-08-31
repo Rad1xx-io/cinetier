@@ -400,15 +400,23 @@ export async function deleteCustomBoard(supabase: SupabaseClient, listId: string
   await removeUnreferencedFiles(supabase, paths);
 }
 
+/**
+ * A tier's own editable surface: what it is called and what colour it is.
+ *
+ * `imagePath` used to be accepted here too. It is gone rather than merely
+ * unused — no caller ever passed it, and since migration 016 a client has no
+ * privilege to write that column anyway, so leaving the parameter in the
+ * signature would only advertise a write that now fails. Setting a tier's
+ * picture is `attach_upload`; clearing it is `clearTierRowImage` above.
+ */
 export async function updateTierRow(
   supabase: SupabaseClient,
   rowId: string,
-  patch: { label?: string; color?: string; imagePath?: string | null }
+  patch: { label?: string; color?: string }
 ): Promise<void> {
   const update: Record<string, unknown> = {};
   if (patch.label !== undefined) update.label = patch.label;
   if (patch.color !== undefined) update.color = patch.color;
-  if (patch.imagePath !== undefined) update.image_path = patch.imagePath;
   if (Object.keys(update).length === 0) return;
   await supabase.from("custom_tier_rows").update(update).eq("id", rowId);
 }
@@ -447,20 +455,29 @@ export async function addTierRow(supabase: SupabaseClient, listId: string): Prom
  * gone are different things on a plan that charges by the gigabyte, and
  * somebody who removes a picture means removed.
  */
+/**
+ * Takes the picture off a tier, through the one route that may write the
+ * column.
+ *
+ * This used to read the path and then `update({ image_path: null })`, which is
+ * no longer a privilege any client holds: migration 016 revoked column-level
+ * UPDATE on `image_path` from `authenticated`, because a client that can write
+ * that column can point its own visible row at somebody else's file and
+ * re-serve a picture that was blocked, hidden or made private. The RPC is the
+ * narrow replacement — it takes no path, so the only value it can ever write
+ * is NULL.
+ *
+ * It hands back the path it cleared so the file can still be collected, which
+ * is what the direct read was for.
+ */
 export async function clearTierRowImage(supabase: SupabaseClient, rowId: string): Promise<void> {
-  const { data } = await supabase
-    .from("custom_tier_rows")
-    .select("image_path")
-    .eq("id", rowId)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("clear_tier_row_image", { p_row_id: rowId });
+  if (error) {
+    console.error("TierListOnline: clearing a tier picture failed —", error);
+    return;
+  }
 
-  const { error } = await supabase
-    .from("custom_tier_rows")
-    .update({ image_path: null })
-    .eq("id", rowId);
-  if (error) return;
-
-  await removeUnreferencedFiles(supabase, [(data as { image_path: string | null } | null)?.image_path ?? null]);
+  await removeUnreferencedFiles(supabase, [typeof data === "string" ? data : null]);
 }
 
 export async function deleteTierRow(supabase: SupabaseClient, rowId: string): Promise<void> {

@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { tmdbFetch, TMDBError } from "@/lib/tmdb/client";
 import { mapToDetails } from "@/lib/tmdb/mappers";
 import type { TMDBRawMovie, TMDBRawTVShow } from "@/lib/tmdb/types";
+import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const limited = await rateLimitOrNull(request, "details");
+  if (limited) return limited;
+
   const searchParams = request.nextUrl.searchParams;
   const id = searchParams.get("id");
   const type = searchParams.get("type") === "tv" ? "tv" : "movie";

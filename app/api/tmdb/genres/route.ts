@@ -1,10 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { TMDBError } from "@/lib/tmdb/client";
 import { getGenreVocabulary } from "@/lib/tmdb/genres";
+import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const limited = await rateLimitOrNull(request, "reference");
+  if (limited) return limited;
+
   try {
     const genres = await getGenreVocabulary();
     // The ids are an implementation detail of the discover query; the filter UI

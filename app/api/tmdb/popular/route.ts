@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
+import { boundedPage } from "@/lib/utils/request-bounds";
 import { tmdbFetch, TMDBError } from "@/lib/tmdb/client";
 import { mapToSummary } from "@/lib/tmdb/mappers";
 import type { TMDBPagedResponse, TMDBRawMovie, TMDBRawTVShow } from "@/lib/tmdb/types";
@@ -7,9 +9,12 @@ import type { SearchResponse } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const limited = await rateLimitOrNull(request, "search");
+  if (limited) return limited;
+
   const searchParams = request.nextUrl.searchParams;
   const type = searchParams.get("type") === "tv" ? "tv" : "movie";
-  const page = Number(searchParams.get("page") ?? "1") || 1;
+  const page = boundedPage(searchParams.get("page"));
 
   try {
     let payload: SearchResponse;
