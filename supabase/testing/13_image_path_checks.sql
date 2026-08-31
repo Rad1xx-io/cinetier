@@ -385,3 +385,70 @@ begin
 
   raise notice 'CONFIRMED: image_path is writable only by the upload flow';
 end $$;
+
+-- ------------------------------------------------ who may call the flow ----
+--
+-- Migration 023. `revoke all … from public` removes the PUBLIC pseudo-role's
+-- grant and leaves `anon`'s alone, and Supabase grants `anon` execute on every
+-- new function in `public` by default — so `grant execute … to authenticated`
+-- was stating an intent the database did not hold. Each function refused a
+-- session-less caller in its own body, which is why this was hardening rather
+-- than a hole, but the outer ring is back.
+
+do $$
+declare
+  v_leaky text;
+begin
+  select string_agg(p.proname, ', ') into v_leaky
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.proname in ('issue_upload_grant', 'attach_upload', 'clear_tier_row_image')
+    and has_function_privilege('anon', p.oid, 'EXECUTE');
+
+  if v_leaky is not null then
+    raise exception 'REGRESSION: anon can execute % — the upload flow is reachable without a session', v_leaky;
+  end if;
+
+  raise notice 'CONFIRMED: anon cannot execute the upload flow at all';
+end $$;
+
+-- The functions that are anon-callable on purpose must not have been swept up:
+-- is_blocked backs every public board's policy, and the other two count
+-- anonymous traffic.
+do $$
+begin
+  if not (
+    has_function_privilege('anon', 'public.is_blocked(text, uuid)', 'EXECUTE')
+    and has_function_privilege('anon', 'public.consume_rate_limit(text, integer, integer)', 'EXECUTE')
+    and has_function_privilege('anon', 'public.increment_post_views(uuid, text)', 'EXECUTE')
+  ) then
+    raise exception 'REGRESSION: an intentionally anon-callable function lost its grant';
+  end if;
+
+  raise notice 'CONFIRMED: public boards, rate limiting and view counting are still anon-callable';
+end $$;
+
+-- And the control: a signed-in owner can still complete an upload end to end,
+-- so the revoke above took the role it was aimed at and no other.
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}';
+
+do $$
+declare
+  v_path text;
+  v_item uuid;
+begin
+  v_path := public.issue_upload_grant(current_setting('test.alice_list')::uuid, true, 'png', false);
+  insert into storage.objects (bucket_id, name, owner, metadata)
+  values ('custom-uploads', v_path, auth.uid(), '{"size": 77, "mimetype": "image/png"}'::jsonb);
+  v_item := public.attach_upload(v_path, 'after the revoke', null, null);
+
+  if v_item is null then
+    raise exception 'REGRESSION: revoking anon broke the authenticated upload flow';
+  end if;
+
+  raise notice 'CONTROL PASSED: an authenticated upload still works after the revoke';
+end $$;
+
+rollback;

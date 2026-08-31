@@ -14,13 +14,23 @@
 -- first: the child table's foreign key would block dropping the parent.
 do $$
 begin
-  if to_regclass('public.battle_participants') is not null
-     and not exists (select 1 from public.battle_participants limit 1) then
-    drop table public.battle_participants cascade;
+  -- Nested rather than `to_regclass(...) is not null and not exists (...)`.
+  -- Postgres plans an IF condition as one expression, so the sub-select was
+  -- planned even when the guard's whole point was that the table might not
+  -- exist — and planning a select against a missing relation is an error, not
+  -- a false. That made this file impossible to apply to a clean database.
+  -- Splitting the test means the sub-select is only ever planned once the
+  -- table is known to be there. Same outcome wherever the table exists, which
+  -- is every database this has already run on.
+  if to_regclass('public.battle_participants') is not null then
+    if not exists (select 1 from public.battle_participants limit 1) then
+      drop table public.battle_participants cascade;
+    end if;
   end if;
-  if to_regclass('public.battles') is not null
-     and not exists (select 1 from public.battles limit 1) then
-    drop table public.battles cascade;
+  if to_regclass('public.battles') is not null then
+    if not exists (select 1 from public.battles limit 1) then
+      drop table public.battles cascade;
+    end if;
   end if;
 end $$;
 

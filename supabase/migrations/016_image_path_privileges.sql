@@ -139,6 +139,17 @@ $$;
 
 revoke all on function public.clear_tier_row_image(uuid) from public;
 grant execute on function public.clear_tier_row_image(uuid) to authenticated;
+-- `revoke all ... from public` above removes the PUBLIC pseudo-role's grant, and
+-- it does NOT remove `anon`'s. Supabase ships
+--   alter default privileges in schema public grant execute on functions to anon, authenticated;
+-- so this function was granted to `anon` the moment it was created, and the
+-- `to authenticated` line above states an intent the database was not enforcing.
+-- Verified by reading pg_proc.proacl, not assumed.
+--
+-- Not exploitable on its own — every one of these refuses a null auth.uid()
+-- in its own body — but the grant should say what is meant, so a future
+-- function that forgets its internal check is not the first to find out.
+revoke execute on function public.clear_tier_row_image(uuid) from anon;
 
 -- --------------------------------------- attach_upload: cross-list integrity --
 
@@ -262,6 +273,7 @@ $$;
 
 revoke all on function public.attach_upload(text, text, uuid, uuid) from public;
 grant execute on function public.attach_upload(text, text, uuid, uuid) to authenticated;
+revoke execute on function public.attach_upload(text, text, uuid, uuid) from anon;
 
 -- ------------------------------------------------------------- self-check --
 

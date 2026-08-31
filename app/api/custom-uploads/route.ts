@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { signCovers } from "@/lib/supabase/custom-lists";
 import { MAX_UPLOAD_BYTES, reviewUpload } from "@/lib/custom-lists/uploads";
+import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
 
 /**
  * The door pictures come in through.
@@ -26,6 +27,18 @@ function fail(status: number, message: string) {
 }
 
 export async function POST(request: Request) {
+  /*
+   * Before the body is read, and before the session is looked up.
+   *
+   * This route was the one without a limiter. The daily cap inside
+   * `issue_upload_grant` counts uploads that succeed, so a request refused for
+   * a bad magic number — or for an unticked rights box — cost a 2 MB body read
+   * and two counting queries and was charged against nothing at all. Ordering
+   * this first is what makes a refusal cheap.
+   */
+  const limited = await rateLimitOrNull(request, "upload");
+  if (limited) return limited;
+
   const supabase = await getSupabaseServerClient();
   if (!supabase) return fail(503, "Cloud accounts are not configured.");
 
