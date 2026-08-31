@@ -32,8 +32,8 @@ vi.mock("@/lib/supabase/server", () => ({
 
 const { checkRateLimit, rateLimitOrNull } = await import("@/lib/rate-limit/limiter");
 
-function request(headers: Record<string, string> = {}): Request {
-  return new Request("https://tierlistonline.com/api/youtube/search?query=x", { headers });
+function request(headers: Record<string, string> = {}, url?: string): Request {
+  return new Request(url ?? "https://tierlistonline.com/api/youtube/search?query=x", { headers });
 }
 
 beforeEach(() => {
@@ -97,6 +97,59 @@ describe("the bucket is derived, never accepted", () => {
     await checkRateLimit(request({ "x-forwarded-for": "1.1.1.1" }), "search");
     await checkRateLimit(request({ "x-forwarded-for": "1.1.1.1" }), "details");
     expect(bucketOf(0)).not.toBe(bucketOf(1));
+  });
+
+  /*
+   * The bypass worth checking for explicitly, because it is the obvious one to
+   * try and it would be invisible in production: if the bucket keyed on
+   * anything from the url, a fresh query string would mint a fresh budget and
+   * the limiter would be decorative. The bucket is built from tier and identity
+   * only, and these pin that.
+   */
+  it("is not moved by varying the query string", async () => {
+    const headers = { "x-forwarded-for": "1.1.1.1" };
+    await checkRateLimit(
+      request(headers, "https://tierlistonline.com/api/youtube/search?query=aaaa"),
+      "search"
+    );
+    await checkRateLimit(
+      request(headers, "https://tierlistonline.com/api/youtube/search?query=bbbb&extra=1"),
+      "search"
+    );
+    expect(bucketOf(0)).toBe(bucketOf(1));
+  });
+
+  it("is not moved by varying the page", async () => {
+    const headers = { "x-forwarded-for": "1.1.1.1" };
+    await checkRateLimit(
+      request(headers, "https://tierlistonline.com/api/tmdb/search?query=x&page=1"),
+      "search"
+    );
+    await checkRateLimit(
+      request(headers, "https://tierlistonline.com/api/tmdb/search?query=x&page=497"),
+      "search"
+    );
+    expect(bucketOf(0)).toBe(bucketOf(1));
+  });
+
+  it("is not moved by re-encoding the same parameters", async () => {
+    const headers = { "x-forwarded-for": "1.1.1.1" };
+    await checkRateLimit(
+      request(headers, "https://tierlistonline.com/api/tmdb/search?query=a%20b"),
+      "search"
+    );
+    await checkRateLimit(
+      request(headers, "https://tierlistonline.com/api/tmdb/search?query=a+b"),
+      "search"
+    );
+    expect(bucketOf(0)).toBe(bucketOf(1));
+  });
+
+  it("is not moved by the path within one tier", async () => {
+    const headers = { "x-forwarded-for": "1.1.1.1" };
+    await checkRateLimit(request(headers, "https://tierlistonline.com/api/tmdb/search"), "search");
+    await checkRateLimit(request(headers, "https://tierlistonline.com/api/games/search"), "search");
+    expect(bucketOf(0)).toBe(bucketOf(1));
   });
 
   it("gives the same address the same bucket twice", async () => {

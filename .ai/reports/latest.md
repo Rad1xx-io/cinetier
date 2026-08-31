@@ -1,124 +1,137 @@
-# Security remediation pass 1 — TLO-06, 02, 01, 04, 07
+# Security remediation pass 2 — TLO-05, 03, 08, 09, 15
 
-No screenshots this round: nothing user-visible changed. `.ai/reports/shots/`
-cleared per the convention. Header behaviour is verified with `curl` against the
-production build instead, which is the honest instrument for it.
+No screenshots: nothing user-visible changed. `.ai/reports/shots/` is empty and
+stays empty. Header behaviour is re-verified with `curl` against the production
+build, which is the honest instrument for it.
 
 ## PR and CI
 
 _Filled in after the PR is opened and CI is confirmed — see chat for the final status table._
 
-## Two migrations must be run by hand before this deploys
+## Stacked on pass 1
 
-`016_image_path_privileges.sql` and `017_rate_limits.sql`, in that order, in the
-Supabase SQL Editor. Both are idempotent and both self-check at the end.
+PR #52 is not merged yet, so this branches from `security-remediation-pass-1`
+rather than `main`. Four new migrations, and they must run **after** 016 and 017:
+**018 → 019 → 020**, in the Supabase SQL Editor, before this deploys. All three
+self-check at the end and abort with a sentence rather than a constraint error
+if anything did not take.
 
-Ordering note for 016: it revokes the privilege that the old `clearTierRowImage`
-used. Run the migration **first**, then deploy. Between the two, "remove this
-tier's picture" is the one button that stops working; it fails quietly and
-nothing else is affected. Deploying first instead would break the same button
-for the same length of time, because the RPC would not exist yet.
+018 depends on 017 (it calls `consume_rate_limit`), and refuses to run without it.
 
-## TLO-01 — image_path is no longer a user-writable column
+## TLO-05 — post views
 
-The audit's highest-priority finding. The RLS policies check who owns the row
-and never which column is being written, and no column-level grant existed, so
-an authenticated user could write a path they had seen into a row on their own
-public board and have the storage policy serve it back — defeating
-`content_moderation`, `hidden_at` and `is_public` at once.
+The function was security definer, granted to `anon`, and had no memory. The
+only guard was a React ref, which is not a guard.
 
-Fixed with option A from the audit, column-level privilege separation, not a
-trigger. A trigger would have to distinguish "called from inside `attach_upload`"
-from a direct UPDATE, which means a session flag, which is itself the next
-bypass. A column grant has no such seam and PostgREST cannot argue with it.
+The design constraint that decided the shape: **the database cannot tell one
+anonymous visitor from another.** PostgREST is the client as far as Postgres is
+concerned, so `inet_client_addr()` is the API server, not the reader. A
+DB-only de-duplication would therefore have had exactly one anonymous bucket,
+counting one view per post per window for the entire internet.
 
-`INSERT` had to be closed too: `Owners write their own custom tiers` is a
-`FOR ALL` policy, so revoking UPDATE alone would have left the same attack
-available by inserting a new tier row carrying the path.
+So three layers, and the middle one is the one that matters against a direct
+caller:
 
-The one legitimate direct write became `clear_tier_row_image`, deliberately the
-narrowest RPC that does the job: it has no path parameter, so the only value it
-can write is NULL.
+1. **Per-viewer dedup** — `auth.uid()` for a session (which no argument can
+   override), an opaque key from the app otherwise.
+2. **Per-post ceiling** — 300/hour whatever key arrives. This is what bounds an
+   attacker who sends a fresh key every call, which is what defeating layer 1
+   looks like.
+3. **Per-address limit** on the new `/api/post-views`, reusing 017.
 
-The storage SELECT policy was **not** touched, as the brief required. It did not
-need to be: after 016 a path can only enter the database through the grant flow,
-which is what "a user can only reference a path that was legitimately attached"
-actually means.
+The new route exists only because of layer 1 — the address is visible there and
+nowhere else. No raw address reaches the database: the app HMACs it, then the
+function `sha256`s that again.
 
-Cross-list integrity in `attach_upload` fixed in the same function: both
-`p_row_id` and `p_tier_row_id` are now checked against the grant's list before
-the grant is spent. The wider TLO-03 remediation (a composite foreign key) is
-**not** in this pass.
+**The one-argument overload is dropped, not left beside the new one.** Leaving
+it would have left the unthrottled function callable under a signature
+PostgREST resolves happily. The migration's self-check fails unless exactly one
+overload exists.
 
-## TLO-02 — auth callback open redirect
+`grant execute … to anon` is **kept**. Counting views for signed-out readers is
+the feature, not an oversight.
 
-The old sanitizer checked the raw string and then handed it to `new URL()`,
-which strips ASCII tab/LF/CR *before* parsing — so `%09` arrived from
-`searchParams` decoded, passed every check, and became `//evil.com` inside the
-parser. Rewritten so the parser is the authority: parse against the origin from
-`SITE_URL`, compare `parsed.origin`, return only `pathname + search + hash`.
+## TLO-03 — cross-list integrity
 
-The trap worth recording: **comparing origins is not sufficient on its own.**
-`/..//evil.com` parses to *our* origin while its pathname is `//evil.com`, which
-leaves the origin again when the caller re-resolves it. There is a second guard
-for exactly that, and three test cases pinning it.
+016 already validated both parameters before spending the grant, so this pass
+added the structural half: a composite FK `(list_id, row_id) → (list_id, id)`.
 
-## TLO-06 — Next.js 16.3.3, and the optimizer surface closed
+Both are needed, and the reason is specific: `attach_upload` covers card
+**creation**. `custom_items.row_id` is an ordinary column with an ordinary
+UPDATE grant — it is what `moveItem()` writes on every drag — and the RLS policy
+there checks the row's `list_id` and nothing about the tier it is moving to. The
+old single-column FK was satisfied by any tier row anywhere.
 
-Upgraded from 16.3.0 (exact pins kept, matching how `react` is pinned here).
-`npm audit` clean. This is the patch for GHSA-2xp9-vwfh-vxw4.
+**A defect my own test caught:** a plain `on delete set null` on a composite key
+nulls *every* referencing column, `list_id` included, and `list_id` is
+`not null` — so deleting a tier would have aborted instead of returning its
+cards to the pool, breaking behaviour 012 chose deliberately. Fixed with
+`on delete set null (row_id)` (Postgres 15+), and the migration's self-check
+reads `confdeltype`/`confdelsetcols` out of the catalogue rather than trusting
+that the syntax did what it looks like it does.
 
-`remotePatterns` then emptied, which is the surface rather than the patch.
-Verified host by host that every entry was already in `DIRECT_HOSTS`, that every
-`<Image>` passes `unoptimized={isUnoptimizedSource(src)}`, that custom uploads
-are plain `<img>`, and — in the Next 16.3.3 source — that `generateImgAttrs`
-returns on `unoptimized` before the loader that validates the list. So nothing
-rendered changes, and `/_next/image` now answers 400 for a remote host instead
-of fetching and decoding it.
+## TLO-08 — migration 012 idempotency
 
-## TLO-04 — rate limiting on the catalogue routes
+012 and 013 created the same policy under the same name, and 012's version was
+the vulnerable one. Re-running 012 over 013 silently restored the hole.
 
-No new SaaS dependency: the stack already has Postgres and has no Redis. The
-counter is a table plus one atomic upsert in `consume_rate_limit` (017), with
-RLS on and no policies, reachable only through the RPC.
+012 is already applied in production, so "rewrite history or forward-migrate"
+was a real question. **Corrected in 012 itself**, because: the resulting
+database state is unchanged (013's identical version is already there); a
+forward migration would not have helped, since re-running 012 would still
+restore the hole; and a file that says "safe to re-run" has to be. 013 remains
+what fixes already-deployed installs.
 
-Budgets are priced by what a request costs **upstream**, not by page
-popularity — `youtube-search` is the strictest at 10/min anonymous, because
-`search.list` is 100 units of a 10,000-unit day and `discoverChannels` spends
-more than one call per visit.
+The test does not check that the migration executes. It re-applies 012 over 013
+through `\ir` and then checks the property 013 exists for. Negative control
+confirmed: revert the qualification in 012 and the test fails with
+`REGRESSION SUCCEEDED: re-running 012 made a hidden card visible again`.
 
-Two passes, cheapest first: count by address against the anonymous budget, and
-only look up a session when that budget is already exceeded — which is both the
-fast path for ordinary traffic and the exact moment the distinction matters. The
-session is read with `getUser()`, never from the cookie, because being
-recognised *raises* the ceiling.
+## TLO-09 — report spam and webhook injection
 
-Fail-open when the limiter cannot be reached, logged at error level. Deliberate:
-guest-only mode configures no Supabase at all, and one dependency being down
-must not become the whole site being down. It does mean the limit is not a
-defence against someone who can take the database down.
+Two problems, deliberately fixed differently.
 
-Request bounds added alongside: page numbers clamped (`?page=999999999` was
-forwarded verbatim to IGDB), `query` on the games route put through the shared
-sanitizer, and YouTube's `pageToken`/`regionCode` validated for shape.
+**Spam** — a unique index on `(reporter_id, subject_type, subject_id)`,
+plus a `report` tier on the existing limiter and a 409 on the duplicate.
+The index excludes `reason` (reword it and you would mint a new report) and
+excludes `status` (wait for a dismissal and re-file, and "dismissed" becomes a
+state the reporter controls). Different people reporting the same thing stays
+allowed — that is the signal the feature collects.
 
-## TLO-07 — security headers
+**Injection** — the only genuinely broken thing was string concatenation with
+`\n` into the webhook text. **The log turned out to be safe already, and was
+left alone:** `console.error` with an object runs strings through
+`util.inspect`, which escapes the newline — checked empirically rather than
+assumed. So only the webhook changed: structured fields, a flattened summary,
+`allowed_mentions: {parse: []}` for Discord and `mrkdwn: false` for Slack as the
+authoritative controls, with zero-width spaces inside `@`/`<` as the fallback
+for a consumer that has neither.
 
-`frame-ancestors 'none'` plus `X-Frame-Options: DENY` everywhere **except**
-`/widgets/**`, via a negative-lookahead source. Verified with curl: present on
-`/`, `/settings`, `/profile`, `/feed`, `/auth/*`; absent on
-`/widgets/tier-list/*`, so embedding still works.
+`subjectId` is now validated as a uuid, which also stops a malformed value
+becoming a 500.
 
-The full CSP ships **Report-Only**. Enforcing it today would be a guess: the App
-Router injects inline bootstrap scripts with no nonce plumbed through this app,
-so a correct enforced `script-src` is either `'unsafe-inline'` (which buys
-little) or a nonce pipeline touching every route. No `'unsafe-eval'` anywhere.
-The Supabase and PostHog origins are read from the same env the clients read, so
-a preview deployment gets a policy that matches it.
+## TLO-15 — input bounds
 
-HSTS at one year, without `includeSubDomains` and without `preload` — subdomains
-are not enumerated anywhere in this repository, so committing them to HTTPS-only
-is not a promise this file can make, and preload is effectively irreversible.
+The real gap was `youtube/details`: `id` went to `channels.list` unvalidated,
+and that endpoint takes up to fifty comma-separated ids. The route reads only
+`items[0]`, so a batch bought an attacker nothing except a wider request made on
+their say-so.
+
+`Number.isFinite` in the two other details routes accepted `-1`, `1.5` and
+`1e300`, each of which became an upstream request that could only fail.
+Replaced with digits-only, positive, ≤ 10,000,000 — and **refusing** rather than
+clamping, because an out-of-range page has a sensible substitute and an id does
+not.
+
+## TLO-04 regression check
+
+The limiter buckets on tier and identity only, never on anything from the URL.
+Pinned with four new cases: varying the query string, the page, the encoding and
+the path all land in the same bucket.
+
+Order is limit → validate → upstream. Validation runs before any external call,
+so an invalid request never spends quota; keeping the limit first means a flood
+of garbage still costs the sender budget rather than being free.
 
 ## Verified
 
@@ -126,10 +139,12 @@ is not a promise this file can make, and preload is effectively irreversible.
 - `npm audit` — 0 vulnerabilities
 - `npm run lint` — clean (1 pre-existing unrelated warning)
 - `npm run typecheck` — clean
-- `npm test` — 1055/1055 across 83 files
+- `npm test` — 1136/1136 across 84 files
 - `npx playwright test` — 15/15
-- `npm run build` — clean
-- `supabase/testing/run.sh` — every existing check plus 10 new ones
-- `supabase/testing/run.sh --negative` — both check files abort on their own
-  exploit, so neither is passing vacuously
-- `curl` against the production build for every header assertion above
+- `npm run build` — clean, `/api/post-views` present
+- `supabase/testing/run.sh` — 68 checks across 8 files
+- `supabase/testing/run.sh --negative` — both original check files still abort on
+  their own exploit; TLO-08's control verified separately by reverting 012
+- `curl` against the production build: anti-framing headers still present on `/`
+  and `/settings`, still absent on `/widgets/*`; the new bounds return 400
+  before any upstream call

@@ -409,7 +409,22 @@ create policy "Custom cards follow their list"
       where l.id = list_id
         and (
           auth.uid() = l.user_id
-          or (hidden_at is null and l.is_public and l.hidden_at is null)
+          -- `custom_items.hidden_at`, qualified. Unqualified it read
+          -- `hidden_at is null and l.is_public and l.hidden_at is null`, and
+          -- inside a subquery selecting from custom_tier_lists that first
+          -- name binds to the LIST, not the card — so the rule checked the
+          -- list twice and never checked the card, and a card its owner had
+          -- hidden stayed visible to everyone.
+          --
+          -- Migration 013 already corrects this on any database that has run
+          -- it, and 013 remains the migration that fixes deployed installs.
+          -- It is corrected *here too* because this file says it is safe to
+          -- re-run, and it was not: re-running 012 on a database that had
+          -- already had 013 applied silently put the vulnerable policy back,
+          -- with no error and nothing to notice. The two definitions are now
+          -- identical, so the order they are applied in no longer decides
+          -- whether hidden cards stay hidden.
+          or (custom_items.hidden_at is null and l.is_public and l.hidden_at is null)
         )
     )
   );

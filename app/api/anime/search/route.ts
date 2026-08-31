@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
-import { boundedPage } from "@/lib/utils/request-bounds";
+import { boundedFilterTerm, boundedPage } from "@/lib/utils/request-bounds";
 import { sanitizeSearchQuery } from "@/lib/utils/search-query";
 import { AnimeSourceError, getAnimeSource } from "@/lib/anime-sources";
 import { isAnimeFormat, type AnimeSortMode } from "@/lib/anilist/anime-filters";
@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
 
   const sp = request.nextUrl.searchParams;
   const query = sanitizeSearchQuery(sp.get("query") ?? "") || undefined;
-  const genre = sp.get("genre")?.trim() || undefined;
+  // Looked up against a known genre list downstream rather than forwarded,
+  // so this is a ceiling on work rather than an injection defence.
+  const genre = boundedFilterTerm(sp.get("genre"));
   const yearRaw = sp.get("year");
   const year = yearRaw ? Number(yearRaw) : undefined;
   const seasonRaw = sp.get("season");
