@@ -26,9 +26,18 @@ end $$;
 -- hold rows is left untouched for a human to look at.
 do $$
 begin
-  if to_regclass('public.criteria_scores') is not null
-     and not exists (select 1 from public.criteria_scores limit 1) then
-    drop table public.criteria_scores cascade;
+  -- Nested rather than `to_regclass(...) is not null and not exists (...)`.
+  -- Postgres plans an IF condition as one expression, so the sub-select was
+  -- planned even when the guard's whole point was that the table might not
+  -- exist — and planning a select against a missing relation is an error, not
+  -- a false. That made this file impossible to apply to a clean database.
+  -- Splitting the test means the sub-select is only ever planned once the
+  -- table is known to be there. Same outcome wherever the table exists, which
+  -- is every database this has already run on.
+  if to_regclass('public.criteria_scores') is not null then
+    if not exists (select 1 from public.criteria_scores limit 1) then
+      drop table public.criteria_scores cascade;
+    end if;
   end if;
 end $$;
 
