@@ -26,7 +26,7 @@ $PSQL -d "$DB" -f "$HERE/00_platform.sql" > /dev/null
 # goes stale exactly the same way again.
 for migration in "$HERE"/../migrations/*.sql; do
   case "$(basename "$migration")" in
-    009_*|012_*|013_*|014_*|015_*|016_*|017_*|018_*|019_*|020_*) $PSQL -d "$DB" -f "$migration" > /dev/null ;;
+    004_*|009_*|012_*|013_*|014_*|015_*|016_*|017_*|018_*|019_*|020_*|021_*|022_*) $PSQL -d "$DB" -f "$migration" > /dev/null ;;
   esac
 done
 
@@ -44,7 +44,7 @@ if [ "$negative" = "1" ]; then
   exit 0
 fi
 
-for checks in 10_rls_checks.sql 11_publication_checks.sql 12_ranked_title_publication_checks.sql 13_image_path_checks.sql 14_post_view_checks.sql 15_cross_list_checks.sql 16_migration_idempotency_checks.sql 17_report_dedup_checks.sql; do
+for checks in 10_rls_checks.sql 11_publication_checks.sql 12_ranked_title_publication_checks.sql 13_image_path_checks.sql 14_post_view_checks.sql 15_cross_list_checks.sql 16_migration_idempotency_checks.sql 17_report_dedup_checks.sql 18_profile_visibility_checks.sql 19_tier_row_moderation_checks.sql; do
   [ -f "$HERE/$checks" ] || continue
   $PSQL -d "$DB" -f "$HERE/$checks" 2>&1 | grep -E "NOTICE|ERROR" | sed 's/^.*NOTICE:  //'
 done

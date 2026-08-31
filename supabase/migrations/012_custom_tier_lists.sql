@@ -86,7 +86,7 @@ create index if not exists custom_items_list_idx
 create table if not exists public.content_reports (
   id uuid primary key default gen_random_uuid(),
   reporter_id uuid references auth.users (id) on delete set null,
-  subject_type text not null check (subject_type in ('custom_item', 'custom_list')),
+  subject_type text not null check (subject_type in ('custom_item', 'custom_list', 'custom_tier_row')),
   subject_id uuid not null,
   reason text not null check (char_length(trim(reason)) between 3 and 1000),
   status text not null default 'open' check (status in ('open', 'actioned', 'dismissed')),
@@ -105,7 +105,7 @@ create index if not exists content_reports_subject_idx
 -- API role a single privilege on this table — no select, no insert, no update,
 -- no delete — so the only way in or out is this editor.
 create table if not exists public.content_moderation (
-  subject_type text not null check (subject_type in ('custom_item', 'custom_list')),
+  subject_type text not null check (subject_type in ('custom_item', 'custom_list', 'custom_tier_row')),
   subject_id uuid not null,
   blocked_at timestamptz not null default now(),
   note text,
@@ -384,18 +384,66 @@ create policy "Owners delete their own custom lists"
 drop policy if exists "Custom tiers follow their list" on public.custom_tier_rows;
 create policy "Custom tiers follow their list"
   on public.custom_tier_rows for select
-  using (exists (
-    select 1 from public.custom_tier_lists l
-    where l.id = list_id and ((l.is_public and l.hidden_at is null) or auth.uid() = l.user_id)
+  using (
+    -- A tier carries an uploaded picture of its own, so it needs the same
+    -- takedown lever a card has. Without this clause the only way to remove a
+    -- tier's image was to block the whole board, and the storage read policy
+    -- resolves a tier picture through THIS rule — so a block that this does
+    -- not see is a block the signed url does not honour.
+    not public.is_blocked('custom_tier_row', id)
+    and exists (
+      select 1 from public.custom_tier_lists l
+      where l.id = list_id and ((l.is_public and l.hidden_at is null) or auth.uid() = l.user_id)
+    )
+  );
+
+/*
+ * Split by command, and the reason is the SELECT that is no longer here.
+ *
+ * This was one `for all` policy. `for all` includes SELECT, and policies are
+ * OR'd — so the owner reached their own tier rows through this rule, which
+ * asks only about ownership, rather than through `Custom tiers follow their
+ * list`, which is the one that consults the moderation table. A blocked tier
+ * was therefore still visible to the person whose board it was on, and the
+ * storage read policy resolves a tier picture through whichever rule lets the
+ * reader see the row — so the block did not reach the owner's signed url
+ * either.
+ *
+ * Owners lose nothing: the SELECT policy already grants them their own rows
+ * via `auth.uid() = l.user_id`. What they lose is the second, unconditional
+ * route to the same rows.
+ *
+ * UPDATE additionally refuses a blocked row, matching `custom_items` and
+ * `custom_tier_lists`: a block its subject can edit around is not a block.
+ * DELETE deliberately does not — removing the content entirely is not an
+ * escape from moderation, and `custom_items` treats it the same way.
+ */
+drop policy if exists "Owners write their own custom tiers" on public.custom_tier_rows;
+
+drop policy if exists "Owners create their own custom tiers" on public.custom_tier_rows;
+create policy "Owners create their own custom tiers"
+  on public.custom_tier_rows for insert
+  with check (exists (
+    select 1 from public.custom_tier_lists l where l.id = list_id and auth.uid() = l.user_id
   ));
 
-drop policy if exists "Owners write their own custom tiers" on public.custom_tier_rows;
-create policy "Owners write their own custom tiers"
-  on public.custom_tier_rows for all
-  using (exists (
-    select 1 from public.custom_tier_lists l where l.id = list_id and auth.uid() = l.user_id
-  ))
+drop policy if exists "Owners update their own custom tiers" on public.custom_tier_rows;
+create policy "Owners update their own custom tiers"
+  on public.custom_tier_rows for update
+  using (
+    not public.is_blocked('custom_tier_row', id)
+    and exists (
+      select 1 from public.custom_tier_lists l where l.id = list_id and auth.uid() = l.user_id
+    )
+  )
   with check (exists (
+    select 1 from public.custom_tier_lists l where l.id = list_id and auth.uid() = l.user_id
+  ));
+
+drop policy if exists "Owners delete their own custom tiers" on public.custom_tier_rows;
+create policy "Owners delete their own custom tiers"
+  on public.custom_tier_rows for delete
+  using (exists (
     select 1 from public.custom_tier_lists l where l.id = list_id and auth.uid() = l.user_id
   ));
 

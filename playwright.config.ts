@@ -49,6 +49,16 @@ export default defineConfig({
       // other spec in this suite already runs against.
       NEXT_PUBLIC_SUPABASE_URL: "https://stub.supabase.co",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "stub-anon-key",
+      /*
+       * Builds `/e2e/custom-board` into this bundle and no other.
+       *
+       * The fixture used to be in every build, production included, where it
+       * answered 200 to anyone who guessed the path. It is read at module
+       * scope in the page, so this variable decides whether the route exists
+       * in the bundle rather than whether it responds — and it is set here,
+       * where `command` runs both the build and the server.
+       */
+      E2E_FIXTURES: "true",
     },
   },
 });

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { CustomBoard } from "@/components/custom-list/custom-board";
 import type { CustomBoard as Board } from "@/lib/types/custom-list";
 
@@ -19,6 +20,27 @@ import type { CustomBoard as Board } from "@/lib/types/custom-list";
  * person would navigate.
  */
 export const metadata: Metadata = { robots: { index: false, follow: false } };
+
+/**
+ * Whether this fixture exists at all in the build being produced.
+ *
+ * It used to exist in every build, including production, where it answered 200
+ * to anyone who guessed the path — `noindex` keeps a page out of a search
+ * index, which is not the same as keeping it off the internet, and unlinked is
+ * not a access control either.
+ *
+ * Read at module scope so the decision is made when the bundle is built rather
+ * than per request: `notFound()` on a statically prerendered page turns it into
+ * a 404 for that build, which is the strongest form of "not in production"
+ * short of deleting the file. A production build sets neither variable, so the
+ * page is a 404 there and nothing else in the app links to it.
+ *
+ * `E2E_FIXTURES` is set by playwright.config.ts for the one build the suite
+ * shares; development keeps it for the sake of anyone debugging the fixture by
+ * hand.
+ */
+const FIXTURES_AVAILABLE =
+  process.env.E2E_FIXTURES === "true" || process.env.NODE_ENV === "development";
 
 const board: Board = {
   list: {
@@ -49,5 +71,6 @@ const board: Board = {
 };
 
 export default function CustomBoardFixturePage() {
+  if (!FIXTURES_AVAILABLE) notFound();
   return <CustomBoard board={board} />;
 }

@@ -136,12 +136,41 @@ create policy "Users can update their own ranked titles"
 create policy "Users can delete their own ranked titles"
   on public.ranked_titles for delete using (auth.uid() = user_id);
 
+-- The channel half of the same board, for the same reason: it lives in
+-- schema.sql rather than in a numbered migration, so a harness that replays
+-- only the numbered ones never sees it. Migration 004 adds a policy to it, so
+-- the moment 004 joined the replayed set this became load-bearing.
+--
+-- Only the columns and the one policy 004 touches — a stand-in, not a copy.
+-- (Line comments, not a block: a glob like migrations-slash-star opens a
+-- nested block comment in Postgres and never closes it.)
+create table if not exists public.ranked_channels (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  channel_id text not null,
+  title text not null,
+  thumbnail_url text,
+  country text,
+  tier text not null check (tier in ('S', 'A', 'B', 'C', 'D', 'F', 'Unrated')),
+  "order" integer not null default 0,
+  subscriber_count bigint,
+  added_at bigint not null,
+  updated_at bigint not null,
+  unique (user_id, channel_id)
+);
+
+alter table public.ranked_channels enable row level security;
+
+create policy "Users can view their own ranked channels"
+  on public.ranked_channels for select using (auth.uid() = user_id);
+
 grant usage on schema public, auth, storage to anon, authenticated, service_role;
 grant select on auth.users to anon, authenticated;
 grant select on storage.buckets to anon, authenticated;
 grant select, insert, update, delete on storage.objects to anon, authenticated;
 grant select, insert, update, delete on public.profiles to anon, authenticated;
 grant select, insert, update, delete on public.ranked_titles to anon, authenticated;
+grant select, insert, update, delete on public.ranked_channels to anon, authenticated;
 
 -- Anything 012 creates afterwards gets the same treatment, so no test can be
 -- rescued by a missing privilege.

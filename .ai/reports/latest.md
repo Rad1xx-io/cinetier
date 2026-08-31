@@ -1,150 +1,111 @@
-# Security remediation pass 2 — TLO-05, 03, 08, 09, 15
+# Security remediation pass 3 — TLO-10, 11, 12, 13, 14, 16, 17 + CSP
 
-No screenshots: nothing user-visible changed. `.ai/reports/shots/` is empty and
-stays empty. Header behaviour is re-verified with `curl` against the production
-build, which is the honest instrument for it.
+No screenshots: the only visible change is a report button on a tier row, which
+follows the existing card pattern exactly. Header behaviour is verified with
+`curl` against production builds, which is the honest instrument for it.
 
 ## PR and CI
 
 _Filled in after the PR is opened and CI is confirmed — see chat for the final status table._
 
-## Stacked on pass 1
+## Stacked
 
-PR #52 is not merged yet, so this branches from `security-remediation-pass-1`
-rather than `main`. Four new migrations, and they must run **after** 016 and 017:
-**018 → 019 → 020**, in the Supabase SQL Editor, before this deploys. All three
-self-check at the end and abort with a sentence rather than a constraint error
-if anything did not take.
+Branches from `security-remediation-pass-2`, which is PR #53 and not merged.
+PR #52 (Pass 1) **is** merged and live.
 
-018 depends on 017 (it calls `consume_rate_limit`), and refuses to run without it.
+Two new migrations, **021 and 022**, on top of the five already pending.
 
-## TLO-05 — post views
+## TLO-10 — profile enumeration
 
-The function was security definer, granted to `anon`, and had no memory. The
-only guard was a React ref, which is not a guard.
+`using (true)` did the job it was written for — resolving `/u/<username>` with
+no session — and also answered the same query without a username, returning
+every account including those with `is_public = false`.
 
-The design constraint that decided the shape: **the database cannot tell one
-anonymous visitor from another.** PostgREST is the client as far as Postgres is
-concerned, so `inet_client_addr()` is the API server, not the reader. A
-DB-only de-duplication would therefore have had exactly one anonymous bucket,
-counting one view per post per window for the entire internet.
+The trap that makes the obvious fix wrong: `post_feed` joins profiles with
+`security_invoker`, so a profile the reader cannot see is a post that silently
+vanishes from the feed — and a private account is allowed to post (`post_feed`
+selects `is_public` precisely so the card can decide whether to offer Fork).
+So the rule is `is_public OR own OR has posted`. What stops being readable is a
+private account that has never published anything, which nothing ever read.
 
-So three layers, and the middle one is the one that matters against a direct
-caller:
+004 was narrowed to `is_public or auth.uid() = id` as well, so re-running it
+cannot restore `using (true)`. The posts clause cannot go there — `public.posts`
+does not exist until 009 — so a re-run of 004 *narrows* rather than widens.
+That direction of failure was chosen deliberately.
 
-1. **Per-viewer dedup** — `auth.uid()` for a session (which no argument can
-   override), an opaque key from the app otherwise.
-2. **Per-post ceiling** — 300/hour whatever key arrives. This is what bounds an
-   attacker who sends a fresh key every call, which is what defeating layer 1
-   looks like.
-3. **Per-address limit** on the new `/api/post-views`, reusing 017.
+## TLO-11 — tier-row moderation
 
-The new route exists only because of layer 1 — the address is visible there and
-nowhere else. No raw address reaches the database: the app HMACs it, then the
-function `sha256`s that again.
+One subject type added to the existing system. The storage policy was **not**
+touched: it resolves a tier picture by asking whether the tier row is visible,
+and visibility is decided by the policy that now consults `is_blocked`.
 
-**The one-argument overload is dropped, not left beside the new one.** Leaving
-it would have left the unthrottled function callable under a signature
-PostgREST resolves happily. The migration's self-check fails unless exactly one
-overload exists.
+**A gap my own test found rather than review:** `Owners write their own custom
+tiers` was `for all`, and `for all` includes SELECT. Policies are OR'd, so the
+owner read their own tier rows through the ownership rule, around the moderation
+check — a blocked tier stayed visible to its owner, and storage served them the
+picture. Split into INSERT/UPDATE/DELETE; SELECT now only through the
+moderation-aware rule. Owners lose nothing, since that rule already grants them
+their own rows.
 
-`grant execute … to anon` is **kept**. Counting views for signed-out readers is
-the feature, not an oversight.
+## TLO-12 — auth error disclosure
 
-## TLO-03 — cross-list integrity
+Production was returning a `Location` header containing Supabase's explanation
+of PKCE verifier storage, complete with advice about which library to use
+server-side — a description of the deployment's internals, to anyone who can
+make the exchange fail, which is anyone.
 
-016 already validated both parameters before spending the grant, so this pass
-added the structural half: a composite FK `(list_id, row_id) → (list_id, id)`.
+The wire now carries one of three fixed codes; the real message goes to the log.
+The error page was the other half: `REASONS[raw] ?? raw` printed an unrecognised
+value verbatim, so anyone could put a sentence of their choosing on a page of
+this site by linking to it.
 
-Both are needed, and the reason is specific: `attach_upload` covers card
-**creation**. `custom_items.row_id` is an ordinary column with an ordinary
-UPDATE grant — it is what `moveItem()` writes on every drag — and the RLS policy
-there checks the row's `list_id` and nothing about the tier it is moving to. The
-old single-column FK was satisfied by any tier row anywhere.
+## TLO-13 — e2e fixture
 
-**A defect my own test caught:** a plain `on delete set null` on a composite key
-nulls *every* referencing column, `list_id` included, and `list_id` is
-`not null` — so deleting a tier would have aborted instead of returning its
-cards to the pool, breaking behaviour 012 chose deliberately. Fixed with
-`on delete set null (row_id)` (Postgres 15+), and the migration's self-check
-reads `confdeltype`/`confdelsetcols` out of the catalogue rather than trusting
-that the syntax did what it looks like it does.
+Gated at module scope, not per request: `notFound()` on a prerendered page
+removes the route from the bundle, which is stronger than answering 404.
+Production sets neither variable → 404. `playwright.config.ts` sets
+`E2E_FIXTURES=true` for the single build the suite shares. Verified both ways by
+hand.
 
-## TLO-08 — migration 012 idempotency
+## CSP — partially enforced
 
-012 and 013 created the same policy under the same name, and 012's version was
-the vulnerable one. Re-running 012 over 013 silently restored the hole.
+Three directives moved from report-only to **enforced**, each checked against
+the source rather than assumed: `object-src 'none'` (no `<object>`/`<embed>`
+anywhere), `base-uri 'self'` (no `<base>`), `form-action 'self'` (every form is
+an `onSubmit` handler with no `action`). Plus `frame-ancestors`, already
+enforced.
 
-012 is already applied in production, so "rewrite history or forward-migrate"
-was a real question. **Corrected in 012 itself**, because: the resulting
-database state is unchanged (013's identical version is already there); a
-forward migration would not have helped, since re-running 012 would still
-restore the hole; and a file that says "safe to re-run" has to be. 013 remains
-what fixes already-deployed installs.
+`script-src`, `style-src`, `img-src`, `connect-src` and `default-src` remain
+Report-Only. Next injects inline hydration scripts with no nonce, so an honest
+enforced `script-src` is either `'unsafe-inline'` — which buys little — or a
+nonce pipeline that would make every static page dynamic. That decision needs
+real violation reports, which I do not have.
 
-The test does not check that the migration executes. It re-applies 012 over 013
-through `\ir` and then checks the property 013 exists for. Negative control
-confirmed: revert the qualification in 012 and the test fails with
-`REGRESSION SUCCEEDED: re-running 012 made a hidden card visible again`.
-
-## TLO-09 — report spam and webhook injection
-
-Two problems, deliberately fixed differently.
-
-**Spam** — a unique index on `(reporter_id, subject_type, subject_id)`,
-plus a `report` tier on the existing limiter and a 409 on the duplicate.
-The index excludes `reason` (reword it and you would mint a new report) and
-excludes `status` (wait for a dismissal and re-file, and "dismissed" becomes a
-state the reporter controls). Different people reporting the same thing stays
-allowed — that is the signal the feature collects.
-
-**Injection** — the only genuinely broken thing was string concatenation with
-`\n` into the webhook text. **The log turned out to be safe already, and was
-left alone:** `console.error` with an object runs strings through
-`util.inspect`, which escapes the newline — checked empirically rather than
-assumed. So only the webhook changed: structured fields, a flattened summary,
-`allowed_mentions: {parse: []}` for Discord and `mrkdwn: false` for Slack as the
-authoritative controls, with zero-width spaces inside `@`/`<` as the fallback
-for a consumer that has neither.
-
-`subjectId` is now validated as a uuid, which also stops a malformed value
-becoming a 500.
-
-## TLO-15 — input bounds
-
-The real gap was `youtube/details`: `id` went to `channels.list` unvalidated,
-and that endpoint takes up to fifty comma-separated ids. The route reads only
-`items[0]`, so a batch bought an attacker nothing except a wider request made on
-their say-so.
-
-`Number.isFinite` in the two other details routes accepted `-1`, `1.5` and
-`1e300`, each of which became an upstream request that could only fail.
-Replaced with digits-only, positive, ≤ 10,000,000 — and **refusing** rather than
-clamping, because an out-of-range page has a sensible substitute and an id does
-not.
-
-## TLO-04 regression check
-
-The limiter buckets on tier and identity only, never on anything from the URL.
-Pinned with four new cases: varying the query string, the page, the encoding and
-the path all land in the same bucket.
-
-Order is limit → validate → upstream. Validation runs before any external call,
-so an invalid request never spends quota; keeping the limit first means a flood
-of garbage still costs the sender budget rather than being free.
+**A Next behaviour worth recording:** two `headers()` rules setting the same key
+do not combine — the later rule *replaces* the earlier. Splitting
+`frame-ancestors` and the other three across the two rules produced a `/` that
+carried only `frame-ancestors` and had silently lost the rest. Caught by curl,
+fixed by joining them into one value per rule.
 
 ## Verified
 
-- `npm ci` — clean install from the lockfile
+- `npm ci` — clean install
 - `npm audit` — 0 vulnerabilities
 - `npm run lint` — clean (1 pre-existing unrelated warning)
 - `npm run typecheck` — clean
-- `npm test` — 1136/1136 across 84 files
+- `npm test` — 1168/1168 across 86 files
 - `npx playwright test` — 15/15
-- `npm run build` — clean, `/api/post-views` present
-- `supabase/testing/run.sh` — 68 checks across 8 files
-- `supabase/testing/run.sh --negative` — both original check files still abort on
-  their own exploit; TLO-08's control verified separately by reverting 012
-- `curl` against the production build: anti-framing headers still present on `/`
-  and `/settings`, still absent on `/widgets/*`; the new bounds return 400
-  before any upstream call
+- `npm run build` — clean
+- `supabase/testing/run.sh` — 87 checks across 10 files, 0 errors
+- `supabase/testing/run.sh --negative` — both original files still abort on
+  their own exploit
+- `curl` against production builds: enforced CSP correct on `/`, `/settings`,
+  `/profile`; widget still framable; e2e fixture 404 in a production build and
+  present in the Playwright build
+
+## Production is still behind
+
+Pass 1 code is live with **no migrations applied**. `clear_tier_row_image` is
+absent, so "remove this tier's picture" is broken in production right now, and
+TLO-01/04/05 are inert there. Nothing in this pass changes that; the deployment
+order is in the chat report.

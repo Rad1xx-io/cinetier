@@ -6,9 +6,23 @@ export const metadata = {
   title: "Sign-in failed — TierListOnline",
 };
 
+/**
+ * The complete set of things this page will say, keyed by the codes
+ * app/auth/callback/route.ts is allowed to send.
+ *
+ * A lookup with no fallback, deliberately. This used to read
+ * `REASONS[raw] ?? raw`, so an unrecognised value was printed as-is — which
+ * meant the page rendered whatever the callback had put in the query string,
+ * and the callback was putting Supabase's internal error text there. Two
+ * separate problems met in that `?? raw`: the provider's words became public,
+ * and anybody could put a sentence of their own choosing on a page of this
+ * site by linking to it with a made-up `reason`.
+ */
 const REASONS: Record<string, string> = {
   "no-code": "The sign-in link is incomplete — it carries no confirmation code.",
   "not-configured": "Cloud accounts are not configured on this deployment.",
+  "exchange-failed":
+    "That sign-in link could not be confirmed. It may have already been used, expired, or been opened in a different browser from the one that requested it.",
 };
 
 /**
@@ -19,7 +33,10 @@ const REASONS: Record<string, string> = {
 export default async function AuthCodeErrorPage(props: PageProps<"/auth/auth-code-error">) {
   const { reason } = await props.searchParams;
   const raw = Array.isArray(reason) ? reason[0] : reason;
-  const detail = raw ? (REASONS[raw] ?? raw) : null;
+  // No `?? raw`: an unrecognised code says nothing rather than repeating
+  // itself back. The paragraph above the detail already explains the common
+  // case, so an unknown reason degrades to that rather than to silence.
+  const detail = raw ? (REASONS[raw] ?? null) : null;
 
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-24 text-center">

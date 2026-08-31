@@ -15,7 +15,14 @@ import { buildReportNotification, REPORT_REASON_MAX } from "@/lib/moderation/rep
  * it is not read at all — which is exactly why it must not fail quietly.
  */
 
-const SUBJECT_TYPES = new Set(["custom_item", "custom_list", "post", "post_comment"]);
+const SUBJECT_TYPES = new Set([
+  "custom_item",
+  // A tier's own picture, which had no way to be reported until migration 022.
+  "custom_tier_row",
+  "custom_list",
+  "post",
+  "post_comment",
+]);
 
 /**
  * Every subject this route can point at is a uuid column.

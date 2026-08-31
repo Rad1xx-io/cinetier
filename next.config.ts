@@ -111,6 +111,37 @@ const BASELINE_HEADERS = [
 ];
 
 /**
+ * The part of the policy that is enforced today, on every route.
+ *
+ * Separate from the report-only policy above because these three directives
+ * need no runtime evidence to be safe. Each was checked against the source
+ * rather than assumed:
+ *
+ *   * `object-src 'none'` — there is no `<object>` or `<embed>` anywhere in
+ *     app/, components/ or lib/. Plugin content is a classic way to get script
+ *     execution back after script-src has been tightened, and nothing here
+ *     loses anything by refusing it.
+ *   * `base-uri 'self'` — nothing sets a `<base>` tag. An injected one
+ *     re-points every relative url on the page, which turns a small injection
+ *     into control of where the page's own scripts come from.
+ *   * `form-action 'self'` — every `<form>` in the app is an `onSubmit`
+ *     handler with no `action` attribute, so none of them natively posts
+ *     anywhere. This stops an injected form from posting somewhere else.
+ *
+ * Deliberately not here: `script-src`, `style-src`, `img-src`, `connect-src`
+ * and `default-src`. Those are the ones whose correctness depends on what the
+ * page actually loads at runtime, which is what the report-only policy is for.
+ * A browser applies every CSP header it is sent, so this policy and the
+ * report-only one coexist without either weakening the other.
+ */
+const ENFORCED_CSP_DIRECTIVES = ["object-src 'none'", "base-uri 'self'", "form-action 'self'"];
+
+const ENFORCED_CSP_HEADER = {
+  key: "Content-Security-Policy",
+  value: ENFORCED_CSP_DIRECTIVES.join("; "),
+};
+
+/**
  * Clickjacking protection, applied everywhere except the embed routes.
  *
  * `/widgets/*` exists to be put in somebody else's page — that is the whole
@@ -119,13 +150,23 @@ const BASELINE_HEADERS = [
  * clickjacked settings page.
  *
  * Both headers, because `frame-ancestors` is the one browsers honour and
- * `X-Frame-Options` is what older ones understand. A CSP carrying only
- * `frame-ancestors` restricts nothing else, so this can be enforced today
- * while the full policy above is still only reporting.
+ * `X-Frame-Options` is what older ones understand.
+ *
+ * `frame-ancestors` is joined onto ENFORCED_CSP_DIRECTIVES rather than sent as
+ * a second `Content-Security-Policy` header, because Next does not send two:
+ * where a later rule sets a key an earlier rule already set, the later value
+ * REPLACES it. Verified by hand — with the two split across the two rules,
+ * `/` came back carrying only `frame-ancestors` and had silently lost
+ * `object-src`, `base-uri` and `form-action`. The widget rule keeps the
+ * shorter list, which is the same policy minus the one directive that would
+ * stop it being embeddable.
  */
 const ANTI_FRAMING_HEADERS = [
   { key: "X-Frame-Options", value: "DENY" },
-  { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+  {
+    key: "Content-Security-Policy",
+    value: [...ENFORCED_CSP_DIRECTIVES, "frame-ancestors 'none'"].join("; "),
+  },
 ];
 
 const nextConfig: NextConfig = {
@@ -187,6 +228,9 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: [
           ...BASELINE_HEADERS,
+          // Enforced on every route, widgets included — none of these three
+          // directives has anything to do with framing.
+          ENFORCED_CSP_HEADER,
           {
             key: "Content-Security-Policy-Report-Only",
             value: contentSecurityPolicyReportOnly(),
