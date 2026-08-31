@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
+import { boundedPage } from "@/lib/utils/request-bounds";
 import { sanitizeSearchQuery } from "@/lib/utils/search-query";
 import { tmdbFetch, TMDBError } from "@/lib/tmdb/client";
 import { mapToSummary } from "@/lib/tmdb/mappers";
@@ -63,10 +65,18 @@ async function runSearch(
 }
 
 export async function GET(request: NextRequest) {
+  /*
+   * One request here can become several upstream: the fallback path below
+   * retries a thin result with corrected spellings and then again in en-US.
+   * Metered before any of that happens.
+   */
+  const limited = await rateLimitOrNull(request, "search");
+  if (limited) return limited;
+
   const searchParams = request.nextUrl.searchParams;
   const query = sanitizeSearchQuery(searchParams.get("query") ?? "");
   const type = searchParams.get("type") ?? "all";
-  const page = Number(searchParams.get("page") ?? "1") || 1;
+  const page = boundedPage(searchParams.get("page"));
 
   if (!query) {
     const empty: SearchResponse = { page: 1, totalPages: 0, totalResults: 0, results: [] };

@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
+import { boundedPage } from "@/lib/utils/request-bounds";
+import { sanitizeSearchQuery } from "@/lib/utils/search-query";
 import { SteamError } from "@/lib/steam/client";
 import { IGDBError } from "@/lib/igdb/client";
 import { discoverGames } from "@/lib/games/source";
@@ -13,14 +16,21 @@ import type { GameSearchResponse } from "@/lib/types/game";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const limited = await rateLimitOrNull(request, "search");
+  if (limited) return limited;
+
   const sp = request.nextUrl.searchParams;
-  const query = sp.get("query")?.trim() || undefined;
+  // Was `.trim()` alone, which put a term of any length in front of IGDB's
+  // query syntax and Steam's store search. The shared sanitizer caps it at 120
+  // characters and drops the control and brace characters those two edges
+  // answer with a bare 403.
+  const query = sanitizeSearchQuery(sp.get("query") ?? "") || undefined;
   const genreRaw = sp.get("genre") ?? "";
   const platformRaw = sp.get("platform") ?? "";
   const categoryRaw = sp.get("category") ?? "";
   const sortRaw = sp.get("sort") ?? "";
-  const pageRaw = Number(sp.get("page") ?? 0);
-  const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 0;
+  // Zero-based upstream, and capped: `?page=999999999` was forwarded verbatim.
+  const page = boundedPage(sp.get("page"), true);
 
   try {
     const { results, hasMore, stale, correctedQuery } = await discoverGames({

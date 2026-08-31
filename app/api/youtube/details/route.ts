@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { youtubeFetch, YouTubeError } from "@/lib/youtube/client";
 import { mapChannelToDetails } from "@/lib/youtube/mappers";
 import type { YouTubeChannelsResponse } from "@/lib/youtube/types";
+import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const limited = await rateLimitOrNull(request, "details");
+  if (limited) return limited;
+
   const searchParams = request.nextUrl.searchParams;
   const id = searchParams.get("id");
 

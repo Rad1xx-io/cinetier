@@ -26,7 +26,7 @@ $PSQL -d "$DB" -f "$HERE/00_platform.sql" > /dev/null
 # goes stale exactly the same way again.
 for migration in "$HERE"/../migrations/*.sql; do
   case "$(basename "$migration")" in
-    009_*|012_*|013_*|014_*) $PSQL -d "$DB" -f "$migration" > /dev/null ;;
+    009_*|012_*|013_*|014_*|016_*) $PSQL -d "$DB" -f "$migration" > /dev/null ;;
   esac
 done
 
@@ -34,12 +34,17 @@ if [ "$negative" = "1" ]; then
   # Puts the holes back, so the checks can be watched failing.
   $PSQL -d "$DB" -f "$HERE/20_negative_control.sql" > /dev/null
   echo "--- negative control: these checks are EXPECTED to fail ---"
-  if $PSQL -d "$DB" -f "$HERE/10_rls_checks.sql" 2>&1 | grep -E "SUCCEEDED|NOTICE"; then :; fi
+  # Each file separately: the first one aborts on its own exploit, and running
+  # them in one psql would stop before the later file was ever reached.
+  for checks in 10_rls_checks.sql 13_image_path_checks.sql; do
+    echo "  ($checks)"
+    if $PSQL -d "$DB" -f "$HERE/$checks" 2>&1 | grep -E "SUCCEEDED"; then :; fi
+  done
   echo "--- if nothing above says EXPLOIT ... SUCCEEDED, the checks prove nothing ---"
   exit 0
 fi
 
-for checks in 10_rls_checks.sql 11_publication_checks.sql 12_ranked_title_publication_checks.sql; do
+for checks in 10_rls_checks.sql 11_publication_checks.sql 12_ranked_title_publication_checks.sql 13_image_path_checks.sql; do
   [ -f "$HERE/$checks" ] || continue
   $PSQL -d "$DB" -f "$HERE/$checks" 2>&1 | grep -E "NOTICE|ERROR" | sed 's/^.*NOTICE:  //'
 done

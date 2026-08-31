@@ -1,72 +1,163 @@
 import type { NextConfig } from "next";
 
+/**
+ * The origin of a configured service, for the connect-src list below.
+ *
+ * Returns null rather than throwing when the variable is unset or unparseable:
+ * every one of these integrations is optional (guest-only mode configures no
+ * Supabase, most deployments configure no PostHog), and a policy that names a
+ * service nobody uses is noise. `new URL().origin` strips any path, so a
+ * variable someone set with a trailing path still yields a bare origin.
+ */
+function originOf(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Where the app is genuinely allowed to send and fetch.
+ *
+ * Built from the same environment variables the clients themselves read, so a
+ * preview deployment pointed at a different Supabase project gets a policy that
+ * matches it instead of one that silently blocks it.
+ */
+const SUPABASE_ORIGIN = originOf(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const POSTHOG_ORIGIN = originOf(process.env.NEXT_PUBLIC_POSTHOG_HOST);
+
+/**
+ * The image CDNs, mirroring DIRECT_HOSTS in lib/utils/image-source.ts.
+ *
+ * Restated here rather than imported: next.config.ts is evaluated by Node
+ * before the TypeScript path aliases exist, and a stale copy of this list only
+ * ever shows up as a report-only violation, never as a broken image.
+ */
+const IMAGE_HOSTS = [
+  "https://image.tmdb.org",
+  "https://*.anilist.co",
+  "https://cdn.myanimelist.net",
+  "https://images.igdb.com",
+  "https://*.steamstatic.com",
+  "https://*.akamaihd.net",
+  "https://*.steampowered.com",
+  "https://yt3.googleusercontent.com",
+  "https://*.ggpht.com",
+];
+
+/**
+ * The full policy, shipped report-only.
+ *
+ * Enforcing this today would be a guess. Next's App Router injects inline
+ * bootstrap and streaming scripts with no nonce plumbed through this app, so a
+ * correct enforced `script-src` here is either `'unsafe-inline'` — which buys
+ * little — or a nonce pipeline that touches every route. Report-only collects
+ * the real violations from real traffic first; the directives that need no such
+ * evidence are enforced separately below.
+ */
+function contentSecurityPolicyReportOnly(): string {
+  const connect = ["'self'", SUPABASE_ORIGIN, POSTHOG_ORIGIN, "https://*.vercel-scripts.com"]
+    .filter(Boolean)
+    .join(" ");
+
+  return [
+    "default-src 'self'",
+    // 'unsafe-inline' is listed because Next's own hydration scripts are
+    // inline. It is exactly the thing the report-only run exists to measure
+    // before anything is enforced. No 'unsafe-eval': nothing here needs it,
+    // and a report will say so if that is ever wrong.
+    "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com",
+    // Tailwind ships a stylesheet, but Radix and the tier plates set inline
+    // custom properties, so style-src has to allow inline for now.
+    "style-src 'self' 'unsafe-inline'",
+    // Fonts are self-hosted: next/font/google downloads Geist at build time,
+    // so no font CDN belongs here.
+    "font-src 'self'",
+    `img-src 'self' data: blob: ${[SUPABASE_ORIGIN, ...IMAGE_HOSTS].filter(Boolean).join(" ")}`,
+    `connect-src ${connect}`,
+    // The only iframe in the app is the widget preview, which is same-origin.
+    "frame-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join("; ");
+}
+
+/**
+ * Headers every route gets, none of which depends on runtime evidence.
+ *
+ * HSTS is included because the production origin is served by Vercel, which
+ * terminates TLS and has no plaintext listener to fall back to. Deliberately
+ * without `includeSubDomains` and without `preload`: subdomains of this domain
+ * are not enumerated anywhere in this repository, so committing them to
+ * HTTPS-only is a promise this file is not in a position to make, and preload
+ * is effectively irreversible.
+ */
+const BASELINE_HEADERS = [
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=31536000",
+  },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  {
+    // Nothing here uses any of them. The upload form is an ordinary file input,
+    // which needs no camera permission.
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+  },
+];
+
+/**
+ * Clickjacking protection, applied everywhere except the embed routes.
+ *
+ * `/widgets/*` exists to be put in somebody else's page — that is the whole
+ * feature — so it is the one place that must stay framable. Every other route
+ * is not, and `/settings` is the reason why: a framable settings page is a
+ * clickjacked settings page.
+ *
+ * Both headers, because `frame-ancestors` is the one browsers honour and
+ * `X-Frame-Options` is what older ones understand. A CSP carrying only
+ * `frame-ancestors` restricts nothing else, so this can be enforced today
+ * while the full policy above is still only reporting.
+ */
+const ANTI_FRAMING_HEADERS = [
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+];
+
 const nextConfig: NextConfig = {
   images: {
     /**
-     * Opt-in escape hatch for NAT64 networks, set only in .env.local.
+     * Deliberately empty: nothing in this app is served through the image
+     * optimizer, so it is given no remote host it may fetch from.
      *
-     * Next 16 refuses to optimize an image whose hostname resolves to a private
-     * address. On an IPv6-only link with NAT64 — a phone hotspot, for instance —
-     * every public host resolves through the 64:ff9b::/96 prefix, which trips
-     * that check and turns every remote cover into a broken image locally.
-     * Hosting platforms have ordinary dual-stack DNS and never hit this, so the
-     * relaxation stays off unless the developer asks for it, and `remotePatterns`
-     * below still limits fetches to the known CDNs either way.
+     * Every `<Image>` here passes `unoptimized={isUnoptimizedSource(src)}`, and
+     * `DIRECT_HOSTS` in lib/utils/image-source.ts covers every catalogue CDN
+     * this app renders — TMDB, AniList, MyAnimeList, IGDB, the Steam CDNs and
+     * the YouTube avatar hosts. Custom uploads are plain `<img>` on signed
+     * urls. `unoptimized` short-circuits inside `generateImgAttrs` before the
+     * loader that validates this list ever runs, so removing these entries
+     * changes not one rendered pixel — checked host by host against
+     * DIRECT_HOSTS before it was emptied.
+     *
+     * What it does change is the reachability of `/_next/image`, which is a
+     * public endpoint whether or not the app's own components use it: an
+     * entry here lets anyone ask this server to fetch and decode a remote
+     * image. `**.akamaihd.net`, `**.steamstatic.com` and `**.steampowered.com`
+     * were wildcards over shared CDN namespaces, so "an allowed host" was a
+     * wider set than the Steam assets they were added for. With the list
+     * empty the optimizer has no remote fetch to make, which is what closes
+     * the AVIF decode path of GHSA-2xp9-vwfh-vxw4 rather than only patching it
+     * (the Next 16.3.3 upgrade is the patch; this is the surface).
+     *
+     * Adding a `next/image` without `unoptimized` now fails loudly in
+     * development rather than quietly reopening that endpoint — which is the
+     * intended trade.
      */
-    dangerouslyAllowLocalIP: process.env.ALLOW_LOCAL_IP_IMAGES === "true",
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "image.tmdb.org",
-        pathname: "/t/p/**",
-      },
-      {
-        protocol: "https",
-        hostname: "yt3.googleusercontent.com",
-      },
-      {
-        protocol: "https",
-        hostname: "yt3.ggpht.com",
-      },
-      {
-        protocol: "https",
-        hostname: "s4.anilist.co",
-      },
-      {
-        protocol: "https",
-        hostname: "s1.anilist.co",
-      },
-      {
-        protocol: "https",
-        hostname: "s2.anilist.co",
-      },
-      // MyAnimeList, reached through Jikan. Kept alongside the AniList hosts
-      // rather than replacing them: boards saved while AniList was the source
-      // still hold s4.anilist.co poster URLs, and dropping the host would blank
-      // every one of them.
-      {
-        protocol: "https",
-        hostname: "cdn.myanimelist.net",
-      },
-      // Steam serves the same asset from several CDNs and swaps between them
-      // per request, so match the whole family rather than chasing hostnames.
-      {
-        protocol: "https",
-        hostname: "**.steamstatic.com",
-      },
-      {
-        protocol: "https",
-        hostname: "**.akamaihd.net",
-      },
-      {
-        protocol: "https",
-        hostname: "**.steampowered.com",
-      },
-      {
-        protocol: "https",
-        hostname: "images.igdb.com",
-      },
-    ],
+    remotePatterns: [],
   },
 
   /**
@@ -84,6 +175,32 @@ const nextConfig: NextConfig = {
         source: "/films",
         destination: "/discover",
         permanent: true,
+      },
+    ];
+  },
+
+  async headers() {
+    return [
+      {
+        // Everything, including the widget routes: none of these headers has
+        // anything to do with framing.
+        source: "/:path*",
+        headers: [
+          ...BASELINE_HEADERS,
+          {
+            key: "Content-Security-Policy-Report-Only",
+            value: contentSecurityPolicyReportOnly(),
+          },
+        ],
+      },
+      {
+        // Everything except /widgets/**. The negative lookahead is the
+        // documented way to say "not this prefix" in a header source — a
+        // second, broader rule would not override the first, it would be sent
+        // alongside it, and two conflicting frame-ancestors is the most
+        // restrictive of the two, which would break the embeds.
+        source: "/((?!widgets/).*)",
+        headers: ANTI_FRAMING_HEADERS,
       },
     ];
   },

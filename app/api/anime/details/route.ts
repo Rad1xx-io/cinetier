@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AnimeSourceError, getAnimeSource } from "@/lib/anime-sources";
+import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const limited = await rateLimitOrNull(request, "details");
+  if (limited) return limited;
+
   const idRaw = request.nextUrl.searchParams.get("id");
   const id = idRaw ? Number(idRaw) : NaN;
 

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
+import { boundedCount, boundedPageToken, boundedRegion } from "@/lib/utils/request-bounds";
 import { sanitizeSearchQuery } from "@/lib/utils/search-query";
 import { YouTubeError } from "@/lib/youtube/client";
 import { discoverChannels } from "@/lib/youtube/channel-lookup";
@@ -17,12 +19,22 @@ const VALID_SORTS: ChannelSortMode[] = [
 ];
 
 export async function GET(request: NextRequest) {
+  /*
+   * The strictest budget in the app, and the reason the limiter exists.
+   * `discoverChannels` below spends a search.list — 100 units of a
+   * 10,000-unit day — plus a channels.list per batch, so a hundred unmetered
+   * requests would take YouTube off this site until the quota resets. Checked
+   * first, before a single parameter is read, so a refused request costs
+   * nothing upstream.
+   */
+  const limited = await rateLimitOrNull(request, "youtube-search");
+  if (limited) return limited;
+
   const searchParams = request.nextUrl.searchParams;
   const query = sanitizeSearchQuery(searchParams.get("query") ?? "") || undefined;
-  const country = searchParams.get("country")?.trim() || undefined;
-  const pageToken = searchParams.get("pageToken") ?? undefined;
-  const minSubscribersRaw = Number(searchParams.get("minSubscribers") ?? 0);
-  const minSubscribers = Number.isFinite(minSubscribersRaw) ? minSubscribersRaw : 0;
+  const country = boundedRegion(searchParams.get("country"));
+  const pageToken = boundedPageToken(searchParams.get("pageToken"));
+  const minSubscribers = boundedCount(searchParams.get("minSubscribers"), 1_000_000_000);
   const sortRaw = searchParams.get("sort") ?? "subscribers_desc";
   const sort = VALID_SORTS.includes(sortRaw as ChannelSortMode) ? (sortRaw as ChannelSortMode) : "subscribers_desc";
 

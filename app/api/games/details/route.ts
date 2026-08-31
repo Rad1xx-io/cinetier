@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SteamError } from "@/lib/steam/client";
 import { getGameDetails } from "@/lib/games/source";
+import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const limited = await rateLimitOrNull(request, "details");
+  if (limited) return limited;
+
   const raw = request.nextUrl.searchParams.get("id");
   const appId = raw ? Number(raw) : NaN;
 
