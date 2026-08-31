@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SteamError } from "@/lib/steam/client";
 import { getGameDetails } from "@/lib/games/source";
 import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
+import { boundedExternalId } from "@/lib/utils/request-bounds";
 
 export const dynamic = "force-dynamic";
 
@@ -9,10 +10,11 @@ export async function GET(request: NextRequest) {
   const limited = await rateLimitOrNull(request, "details");
   if (limited) return limited;
 
-  const raw = request.nextUrl.searchParams.get("id");
-  const appId = raw ? Number(raw) : NaN;
+  // See the note in the anime route: a finite number is not the same as a
+  // plausible app id, and Steam was being asked about both.
+  const appId = boundedExternalId(request.nextUrl.searchParams.get("id"));
 
-  if (!Number.isFinite(appId)) {
+  if (appId === null) {
     return NextResponse.json({ error: "Invalid game id." }, { status: 400 });
   }
 

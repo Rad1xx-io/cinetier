@@ -3,6 +3,7 @@ import { youtubeFetch, YouTubeError } from "@/lib/youtube/client";
 import { mapChannelToDetails } from "@/lib/youtube/mappers";
 import type { YouTubeChannelsResponse } from "@/lib/youtube/types";
 import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
+import { boundedChannelId } from "@/lib/utils/request-bounds";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,11 @@ export async function GET(request: NextRequest) {
   if (limited) return limited;
 
   const searchParams = request.nextUrl.searchParams;
-  const id = searchParams.get("id");
+  // One channel, checked for shape. `channels.list` accepts up to fifty
+  // comma-separated ids and this was forwarding whatever arrived; the route
+  // reads `items[0]` regardless, so a list only ever widened the request this
+  // server makes on somebody else's say-so.
+  const id = boundedChannelId(searchParams.get("id"));
 
   if (!id) {
     return NextResponse.json({ error: "Invalid channel id." }, { status: 400 });

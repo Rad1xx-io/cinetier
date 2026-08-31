@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  boundedChannelId,
   boundedCount,
+  boundedExternalId,
+  boundedFilterTerm,
   boundedPage,
   boundedPageToken,
   boundedRegion,
+  MAX_EXTERNAL_ID,
   MAX_PAGE,
 } from "@/lib/utils/request-bounds";
 
@@ -113,5 +117,107 @@ describe("boundedRegion", () => {
     expect(boundedRegion("U")).toBeUndefined();
     expect(boundedRegion("12")).toBeUndefined();
     expect(boundedRegion(null)).toBeUndefined();
+  });
+});
+
+
+describe("boundedExternalId", () => {
+  it.each([
+    ["a plain id", "27205", 27205],
+    ["one", "1", 1],
+    ["the ceiling itself", String(MAX_EXTERNAL_ID), MAX_EXTERNAL_ID],
+  ])("accepts %s", (_name, input, expected) => {
+    expect(boundedExternalId(input)).toBe(expected);
+  });
+
+  /*
+   * Every one of these passed `Number.isFinite`, which is what the two details
+   * routes used to check, and every one became an upstream request that could
+   * only ever come back as an error paid for out of somebody's quota.
+   */
+  it.each([
+    ["negative", "-1"],
+    ["zero", "0"],
+    ["fractional", "1.5"],
+    ["exponent notation", "1e300"],
+    ["hex", "0x1f"],
+    ["past the ceiling", String(MAX_EXTERNAL_ID + 1)],
+    ["beyond a safe integer", "99999999999999999999"],
+    ["not a number at all", "abc"],
+    ["a uuid", "11111111-1111-4111-8111-111111111111"],
+    ["empty", ""],
+    ["whitespace only", "   "],
+    ["null", null],
+    ["undefined", undefined],
+    ["NaN spelled out", "NaN"],
+    ["Infinity spelled out", "Infinity"],
+  ])("refuses %s", (_name, input) => {
+    expect(boundedExternalId(input)).toBeNull();
+  });
+
+  it("forgives surrounding whitespace — a sloppy caller, not a hostile one", () => {
+    expect(boundedExternalId(" 12 ")).toBe(12);
+  });
+
+  it("refuses rather than clamping, because a different id is a different answer", () => {
+    // A page number out of range has an obvious sensible substitute. An id
+    // does not: somebody asking for film -1 has not asked for film 1.
+    expect(boundedExternalId("-1")).toBeNull();
+    expect(boundedExternalId(String(MAX_EXTERNAL_ID + 1))).toBeNull();
+  });
+});
+
+describe("boundedChannelId", () => {
+  it("accepts a real channel id", () => {
+    expect(boundedChannelId("UCXuqSBlHAE6Xw-yeJA0Tunw")).toBe("UCXuqSBlHAE6Xw-yeJA0Tunw");
+  });
+
+  it("trims surrounding whitespace", () => {
+    expect(boundedChannelId("  UCXuqSBlHAE6Xw-yeJA0Tunw  ")).toBe("UCXuqSBlHAE6Xw-yeJA0Tunw");
+  });
+
+  /*
+   * `channels.list` takes up to fifty comma-separated ids and this value was
+   * forwarded verbatim. The route only ever reads items[0], so a batch was
+   * never useful to anyone except somebody widening the request this server
+   * makes on their say-so.
+   */
+  it("refuses a comma-separated batch", () => {
+    expect(boundedChannelId("UCXuqSBlHAE6Xw-yeJA0Tunw,UCXuqSBlHAE6Xw-yeJA0Tunx")).toBeNull();
+  });
+
+  it.each([
+    ["an over-long string", "UC" + "a".repeat(500)],
+    ["too short", "UCshort"],
+    ["missing the UC prefix", "XXXuqSBlHAE6Xw-yeJA0Tunw"],
+    ["a query fragment", "UCXuqSBlHAE6Xw-yeJA0Tunw&part=snippet"],
+    ["a url", "https://youtube.com/channel/UCXuqSBlHAE6Xw-yeJA0Tunw"],
+    ["empty", ""],
+    ["null", null],
+  ])("refuses %s", (_name, input) => {
+    expect(boundedChannelId(input)).toBeNull();
+  });
+});
+
+describe("boundedFilterTerm", () => {
+  it("keeps an ordinary genre name", () => {
+    expect(boundedFilterTerm("Science Fiction")).toBe("Science Fiction");
+  });
+
+  it("caps a long value rather than carrying it upstream", () => {
+    expect(boundedFilterTerm("g".repeat(500))?.length).toBe(60);
+  });
+
+  it("honours a caller-supplied ceiling", () => {
+    expect(boundedFilterTerm("g".repeat(500), 10)?.length).toBe(10);
+  });
+
+  it.each([
+    ["empty", ""],
+    ["whitespace only", "   "],
+    ["null", null],
+    ["undefined", undefined],
+  ])("returns undefined for %s", (_name, input) => {
+    expect(boundedFilterTerm(input)).toBeUndefined();
   });
 });

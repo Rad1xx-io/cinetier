@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
-import { boundedPage } from "@/lib/utils/request-bounds";
+import { boundedFilterTerm, boundedPage } from "@/lib/utils/request-bounds";
 import { TMDBError } from "@/lib/tmdb/client";
 import { discoverTitles } from "@/lib/tmdb/discover";
 import { isTitleSort } from "@/lib/tmdb/title-filters";
@@ -16,7 +16,9 @@ export async function GET(request: NextRequest) {
   const typeRaw = sp.get("type") ?? "all";
   const type: "all" | TMDBMediaType =
     typeRaw === "movie" || typeRaw === "tv" ? (typeRaw as TMDBMediaType) : "all";
-  const genre = sp.get("genre")?.trim() || undefined;
+  // Looked up against a known genre list downstream rather than forwarded,
+  // so this is a ceiling on work rather than an injection defence.
+  const genre = boundedFilterTerm(sp.get("genre"));
   const yearRaw = Number(sp.get("year") ?? 0);
   const year = Number.isFinite(yearRaw) && yearRaw > 1800 ? yearRaw : undefined;
   const ratingRaw = Number(sp.get("minRating") ?? 0);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AnimeSourceError, getAnimeSource } from "@/lib/anime-sources";
 import { rateLimitOrNull } from "@/lib/rate-limit/limiter";
+import { boundedExternalId } from "@/lib/utils/request-bounds";
 
 export const dynamic = "force-dynamic";
 
@@ -8,10 +9,11 @@ export async function GET(request: NextRequest) {
   const limited = await rateLimitOrNull(request, "details");
   if (limited) return limited;
 
-  const idRaw = request.nextUrl.searchParams.get("id");
-  const id = idRaw ? Number(idRaw) : NaN;
+  // `Number.isFinite` alone accepted -1, 1.5 and 1e300, each of which became
+  // an upstream request that could only ever fail.
+  const id = boundedExternalId(request.nextUrl.searchParams.get("id"));
 
-  if (!Number.isFinite(id)) {
+  if (id === null) {
     return NextResponse.json({ error: "Invalid anime id." }, { status: 400 });
   }
 
