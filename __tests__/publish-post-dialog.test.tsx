@@ -52,6 +52,11 @@ function categoryButton(name: RegExp): HTMLButtonElement {
   return within(group).getByRole("button", { name }) as HTMLButtonElement;
 }
 
+/** The one checkbox in the dialog — ticking it is required before Publish can be pressed. */
+function tickRules() {
+  fireEvent.click(screen.getByRole("checkbox"));
+}
+
 beforeEach(() => {
   publishPost.mockResolvedValue({ ok: true, postId: "post-1" });
   HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
@@ -86,7 +91,18 @@ describe("PublishPostDialog — the form", () => {
     open();
 
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+    tickRules();
 
+    expect(submitButton().disabled).toBe(false);
+  });
+
+  it("stays disabled until the content-rules box is ticked, title aside", () => {
+    open();
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+    expect(submitButton().disabled).toBe(true);
+
+    tickRules();
     expect(submitButton().disabled).toBe(false);
   });
 
@@ -123,6 +139,7 @@ describe("PublishPostDialog — publishing", () => {
   function fill(title = "Мой топ сай-фая", description = "Почему именно так") {
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: title } });
     fireEvent.change(screen.getByLabelText(/Description/), { target: { value: description } });
+    tickRules();
   }
 
   it("sends the title, description and category", async () => {
@@ -139,6 +156,7 @@ describe("PublishPostDialog — publishing", () => {
       category: "anime",
       titles: [anime],
       channels: [],
+      rulesConfirmed: true,
     });
   });
 
@@ -320,6 +338,7 @@ describe("PublishPostDialog — a category with nothing ranked in it", () => {
   it("re-enables once a category with content is picked again", () => {
     open({ suggestedCategory: "movie", titles: [movie] });
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+    tickRules();
     fireEvent.click(categoryButton(/Anime/));
     expect(submitButton().disabled).toBe(true);
 
@@ -332,9 +351,46 @@ describe("PublishPostDialog — a category with nothing ranked in it", () => {
   it("never disables Everything, since it always means the whole board", () => {
     open({ suggestedCategory: "movie", titles: [movie] });
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+    tickRules();
 
     fireEvent.click(categoryButton(/Everything/));
 
     expect(submitButton().disabled).toBe(false);
+  });
+});
+
+/*
+ * Whether the whole post follows the site's rules — a separate confirmation
+ * from the upload dialog's per-picture "I confirm I have the right to use
+ * this image", and the only one a regular tier-list post (no uploads at all)
+ * ever shows.
+ */
+describe("PublishPostDialog — the content-rules confirmation", () => {
+  it("starts unticked, and Publish stays disabled with everything else filled in", () => {
+    open();
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
+    expect(submitButton().disabled).toBe(true);
+  });
+
+  it("does not call publishPost if Publish is somehow triggered while unticked", () => {
+    open();
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+
+    fireEvent.click(submitButton());
+
+    expect(publishPost).not.toHaveBeenCalled();
+  });
+
+  it("resets to unticked when the dialog is reopened, rather than carrying a stale yes", () => {
+    const { rerender } = open();
+    tickRules();
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
+
+    rerender(<PublishPostDialog open={false} onClose={onClose} titles={[anyTitle]} />);
+    rerender(<PublishPostDialog open onClose={onClose} titles={[anyTitle]} />);
+
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
   });
 });

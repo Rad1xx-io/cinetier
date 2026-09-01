@@ -151,11 +151,17 @@ export function CustomBoard({ board }: CustomBoardProps) {
    * board afterwards leaves the post alone, while hiding a card, or having one
    * taken down, empties it out of the post immediately.
    */
-  async function handlePublish(title: string, description: string) {
+  async function handlePublish(title: string, description: string, rulesConfirmed: boolean) {
     if (!supabase || publishing) return;
     setPublishing(true);
     setNotice("");
-    const outcome = await publishCustomBoard(supabase, { ...board, rows, items }, title, description);
+    const outcome = await publishCustomBoard(
+      supabase,
+      { ...board, rows, items },
+      title,
+      description,
+      rulesConfirmed
+    );
     setPublishing(false);
     if (!("error" in outcome)) setAskingToPublish(false);
     setNotice(
@@ -400,7 +406,9 @@ export function CustomBoard({ board }: CustomBoardProps) {
           boardTitle={board.list.title}
           busy={publishing}
           onCancel={() => setAskingToPublish(false)}
-          onPublish={(title, description) => void handlePublish(title, description)}
+          onPublish={(title, description, rulesConfirmed) =>
+            void handlePublish(title, description, rulesConfirmed)
+          }
         />
       )}
 

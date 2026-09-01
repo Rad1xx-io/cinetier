@@ -117,9 +117,44 @@ post should be called"), publishing a Custom board was a single click with
 *no* dialog at all — no title, no description, nothing. That commit added
 friction, it didn't remove any.
 
-**Nothing changed for this item.** Per the instruction — worth deciding with
-Denis whether a publish-time confirmation should be added now, as new scope,
-not as a restoration.
+**Denis's call, asked directly: add it now, in this PR.** New checkbox — "I
+confirm this post follows the site's content rules." — in both dialogs,
+`PublishBoardDialog` and `PublishPostDialog`. Deliberately different wording
+from the upload-time checkbox: that one is about one picture, at upload; this
+one is about the post as a whole, at publish, and applies to a regular tier
+list too (no uploaded pictures at all). The shared text lives in one place —
+`RULES_CONFIRMATION_LABEL` in `lib/feed/post-preview.ts` — so both dialogs say
+exactly the same sentence.
+
+**Enforcement mirrors the upload flow's `rightsConfirmed`, and bug #1's own
+fix:** the checkbox disables Publish in the UI, and the boolean is also
+threaded through as an explicit parameter to `publishCustomBoard`/`publishPost`,
+checked again inside the function — not because the UI can be tricked, but
+because a check that only lives in a disabled-button is not a check, it's a
+suggestion; the function is what makes it true regardless of how it's reached.
+
+**Honestly scoped limit, stated rather than hidden:** unlike the upload and
+delete-board flows, `publishCustomBoard`/`publishPost` still write to
+`posts`/`custom_list_publications`/`ranked_title_publications` through plain
+client inserts, not a `SECURITY DEFINER` RPC — so a caller with a valid JWT
+could in principle reach the PostgREST API directly and skip both this check
+and bug #1's empty-board check. This is not a new hole from this change — bug
+#1's fix already had the same characteristic, at the same layer, and nobody
+asked for the publish pipeline to be rearchitected into an RPC. Worth flagging
+as a real candidate for a future security pass, not something to fix quietly
+as a side effect of adding a checkbox.
+
+**Tests:** new "content-rules confirmation" describe block in
+`publish-post-dialog.test.tsx` (starts unticked, blocks submit, resets on
+reopen), a matching new test in `publish-board-title.test.tsx`. Every existing
+test that filled in a publish form and expected success now also ticks the
+box — the same kind of fixture update bug #1's empty-board check needed,
+same reason: a state the tests used to treat as valid no longer is.
+
+**Verified visually** against the same `/e2e/custom-board` fixture used for
+bug #1: the checkbox renders with the exact label text, Publish stays
+disabled with a valid title until it's ticked, and ticking it enables the
+button immediately.
 
 ## Verification
 
@@ -127,7 +162,7 @@ not as a restoration.
 |---|---|
 | `npm run lint` | 0 errors (1 pre-existing warning) |
 | `npm run typecheck` | clean |
-| `npm test` | 1195 passed, 89 files (was 1182 / 87) |
+| `npm test` | 1200 passed, 89 files (was 1182 / 87) |
 | `npx playwright test` | 15 passed |
 | `npm run build` | clean |
 | `supabase/testing/run.sh` | all checks pass, including the two new ones |

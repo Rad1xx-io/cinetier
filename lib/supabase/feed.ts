@@ -315,12 +315,22 @@ export async function publishPost(input: {
   titles: RankedTitle[];
   /** Same freezing, for the other store a board can be made of. */
   channels?: RankedChannel[];
+  /** The dialog's checkbox — kept true only by the time Publish can be clicked. */
+  rulesConfirmed: boolean;
 }): Promise<PublishResult> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return { ok: false, error: "Cloud accounts are not configured." };
 
   const userId = currentUserId();
   if (!userId) return { ok: false, error: "Sign in to publish posts." };
+
+  // Checked again here for the same reason publishCustomBoard checks it again:
+  // the dialog's own checkbox already keeps this true by the time this can be
+  // reached through it, so this is for whatever reaches the function by a
+  // path other than that button.
+  if (!input.rulesConfirmed) {
+    return { ok: false, error: "Confirm the post follows the site's content rules before publishing." };
+  }
 
   // Same rule as publishCustomBoard, checked again here for the same reason:
   // the caller already filters `titles`/`channels` down to the chosen

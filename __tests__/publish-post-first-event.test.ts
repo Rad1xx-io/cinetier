@@ -74,7 +74,7 @@ describe("first_post_published — a ranked list as the first publish", () => {
     const { provider, events } = collector();
     registerProvider(provider);
 
-    const outcome = await publishPost({ title: "My list", description: "", category: "movie", titles: [someTitle] });
+    const outcome = await publishPost({ title: "My list", description: "", category: "movie", titles: [someTitle], rulesConfirmed: true });
 
     expect(outcome.ok).toBe(true);
     const fired = events.filter((e) => e.event === "first_post_published");
@@ -83,11 +83,11 @@ describe("first_post_published — a ranked list as the first publish", () => {
   });
 
   it("does not fire on a second post from the same account", async () => {
-    await publishPost({ title: "First list", description: "", category: "movie", titles: [someTitle] });
+    await publishPost({ title: "First list", description: "", category: "movie", titles: [someTitle], rulesConfirmed: true });
 
     const { provider, events } = collector();
     registerProvider(provider);
-    await publishPost({ title: "Second list", description: "", category: "tv", titles: [someTitle] });
+    await publishPost({ title: "Second list", description: "", category: "tv", titles: [someTitle], rulesConfirmed: true });
 
     expect(events.map((e) => e.event)).not.toContain("first_post_published");
   });

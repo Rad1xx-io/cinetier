@@ -84,7 +84,7 @@ describe("publishing a post freezes the board that was on screen", () => {
       { tmdbId: 2, mediaType: "anime" as const, title: "B", posterPath: null, releaseDate: null, tier: "A" as const, order: 1, addedAt: 0, updatedAt: 0 },
     ];
 
-    const result = await publishPost({ title: "My list", description: "", category: "mixed", titles });
+    const result = await publishPost({ title: "My list", description: "", category: "mixed", titles, rulesConfirmed: true });
 
     expect(result).toEqual({ ok: true, postId: "post-1" });
     expect(inserted).toHaveLength(1);
@@ -132,6 +132,7 @@ describe("publishing a post freezes the board that was on screen", () => {
       category: "youtube",
       titles: [],
       channels,
+      rulesConfirmed: true,
     });
 
     expect(result).toEqual({ ok: true, postId: "post-1" });
@@ -167,7 +168,7 @@ describe("publishing a post freezes the board that was on screen", () => {
     const titles = [
       { tmdbId: 1, mediaType: "movie" as const, title: "A", posterPath: null, releaseDate: null, tier: "S" as const, order: 0, addedAt: 0, updatedAt: 0 },
     ];
-    const result = await publishPost({ title: "My list", description: "", category: "mixed", titles });
+    const result = await publishPost({ title: "My list", description: "", category: "mixed", titles, rulesConfirmed: true });
 
     expect(result).toEqual({ ok: false, error: "Could not publish the post. Please try again." });
     // The half-made post — no snapshot behind it — must not survive to be

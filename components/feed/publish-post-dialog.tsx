@@ -11,6 +11,7 @@ import type { RankedChannel } from "@/lib/types/youtube";
 import {
   POST_DESCRIPTION_MAX,
   POST_TITLE_MAX,
+  RULES_CONFIRMATION_LABEL,
   validatePost,
 } from "@/lib/feed/post-preview";
 import { trackListPublished, trackPostPublished } from "@/lib/analytics/events";
@@ -49,6 +50,7 @@ export function PublishPostDialog({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<PostCategory>(suggestedCategory);
+  const [rulesConfirmed, setRulesConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +63,7 @@ export function PublishPostDialog({
       setTitle("");
       setDescription("");
       setCategory(suggestedCategory);
+      setRulesConfirmed(false);
       setError(null);
     }
   }
@@ -109,6 +112,10 @@ export function PublishPostDialog({
       setError("Nothing is ranked in this category yet — pick a different one, or rank something first.");
       return;
     }
+    if (!rulesConfirmed) {
+      setError("Confirm the post follows the site's content rules before publishing.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -118,6 +125,7 @@ export function PublishPostDialog({
       category,
       titles: snapshotTitles,
       channels: snapshotChannels,
+      rulesConfirmed,
     });
     setSaving(false);
 
@@ -217,6 +225,16 @@ export function PublishPostDialog({
           )}
         </fieldset>
 
+        <label className="mt-3 flex items-start gap-2 text-xs text-muted">
+          <input
+            type="checkbox"
+            checked={rulesConfirmed}
+            onChange={(e) => setRulesConfirmed(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-border"
+          />
+          <span>{RULES_CONFIRMATION_LABEL}</span>
+        </label>
+
         {error && (
           <p className="mt-3 flex items-start gap-1.5 text-xs text-tier-s">
             <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -228,7 +246,11 @@ export function PublishPostDialog({
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" size="sm" disabled={saving || !validation.ok || !hasContent}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={saving || !validation.ok || !hasContent || !rulesConfirmed}
+          >
             {saving ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
             ) : (

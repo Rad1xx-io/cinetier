@@ -632,7 +632,8 @@ export async function publishCustomBoard(
   supabase: SupabaseClient,
   board: CustomBoard,
   title: string,
-  description: string
+  description: string,
+  rulesConfirmed: boolean
 ): Promise<PublishOutcome> {
   /*
    * The post's title is asked for rather than taken from the board.
@@ -651,6 +652,14 @@ export async function publishCustomBoard(
   const postTitle = title.trim();
   const validation = validatePost(postTitle, description);
   if (!validation.ok) return { error: validation.error };
+
+  // The dialog's own checkbox already keeps this true by the time Publish can
+  // be clicked — checked again here, the same way issue_upload_grant checks
+  // rightsConfirmed again rather than trusting the box was really ticked, for
+  // whatever reaches this function by a path other than that button.
+  if (!rulesConfirmed) {
+    return { error: "Confirm the post follows the site's content rules before publishing." };
+  }
 
   // Checked here as well as at the button that opens this dialog: the button
   // check is what a person actually sees, this one is what makes it true

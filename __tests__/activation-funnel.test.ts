@@ -127,7 +127,7 @@ describe("first_post_published — a custom board as the first publish", () => {
     const { provider, events } = collector();
     registerProvider(provider);
 
-    await publishCustomBoard(fakeSupabase(0), board(), "My board title", "");
+    await publishCustomBoard(fakeSupabase(0), board(), "My board title", "", true);
 
     const fired = events.filter((e) => e.event === "first_post_published");
     expect(fired).toHaveLength(1);
@@ -136,11 +136,11 @@ describe("first_post_published — a custom board as the first publish", () => {
 
   it("does not fire a second time when that same account publishes again", async () => {
     const client = fakeSupabase(0);
-    await publishCustomBoard(client, board(), "First board", "");
+    await publishCustomBoard(client, board(), "First board", "", true);
 
     const { provider, events } = collector();
     registerProvider(provider);
-    await publishCustomBoard(client, board(), "Second board", "");
+    await publishCustomBoard(client, board(), "Second board", "", true);
 
     expect(events.map((e) => e.event)).not.toContain("first_post_published");
   });
@@ -150,7 +150,7 @@ describe("first_post_published — a custom board as the first publish", () => {
     registerProvider(provider);
 
     // fakeSupabase(1): one post already on record for this user.
-    await publishCustomBoard(fakeSupabase(1), board(), "Second board ever", "");
+    await publishCustomBoard(fakeSupabase(1), board(), "Second board ever", "", true);
 
     expect(events.map((e) => e.event)).not.toContain("first_post_published");
   });

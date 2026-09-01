@@ -27,7 +27,7 @@ describe("a board whose name is shorter than a post title may be", () => {
 
     // "ez" — a perfectly good board name, two characters long, and the exact
     // one that came back from production as a check constraint violation.
-    const outcome = await publishCustomBoard(supabase, board("ez"), "ez", "");
+    const outcome = await publishCustomBoard(supabase, board("ez"), "ez", "", true);
 
     expect(outcome).toEqual({ error: "The title is too short." });
     // Nothing was written, so nothing has to be taken back.
@@ -46,7 +46,7 @@ describe("a board whose name is shorter than a post title may be", () => {
     }));
     const supabase = { from } as unknown as SupabaseClient;
 
-    await publishCustomBoard(supabase, board("  best  "), "  best  ", "");
+    await publishCustomBoard(supabase, board("  best  "), "  best  ", "", true);
 
     expect(from).toHaveBeenCalledWith("posts");
     // Trimmed on the way in, the way the feed's own publishing does it.
@@ -60,7 +60,7 @@ describe("a board with no cards may not be published", () => {
     const supabase = { from } as unknown as SupabaseClient;
 
     const empty = board("A real title, just no pictures on it yet");
-    const outcome = await publishCustomBoard(supabase, { ...empty, items: [] }, empty.list.title, "");
+    const outcome = await publishCustomBoard(supabase, { ...empty, items: [] }, empty.list.title, "", true);
 
     expect(outcome).toEqual({ error: "Add at least one picture before publishing." });
     // Nothing was written, so nothing has to be taken back — same shape as the
@@ -73,7 +73,7 @@ describe("a board with no cards may not be published", () => {
     const from = vi.fn();
     const supabase = { from } as unknown as SupabaseClient;
 
-    const outcome = await publishCustomBoard(supabase, { ...board("ez"), items: [] }, "ez", "");
+    const outcome = await publishCustomBoard(supabase, { ...board("ez"), items: [] }, "ez", "", true);
 
     expect(outcome).toEqual({ error: "The title is too short." });
   });
@@ -102,8 +102,21 @@ describe("the dialog that asks for the title", () => {
     render(<PublishBoardDialog boardTitle="ez" busy={false} onCancel={() => {}} onPublish={onPublish} />);
 
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "ez tier list" } });
+    fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: /publish/i }));
 
-    expect(onPublish).toHaveBeenCalledWith("ez tier list", "");
+    expect(onPublish).toHaveBeenCalledWith("ez tier list", "", true);
+  });
+
+  it("keeps Publish disabled until the content-rules box is ticked", () => {
+    const onPublish = vi.fn();
+    render(<PublishBoardDialog boardTitle="ez" busy={false} onCancel={() => {}} onPublish={onPublish} />);
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "ez tier list" } });
+    const publish = screen.getByRole("button", { name: /publish/i });
+    expect(publish).toHaveProperty("disabled", true);
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(publish).toHaveProperty("disabled", false);
   });
 });
