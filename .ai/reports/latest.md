@@ -1,148 +1,138 @@
-# Security remediation pass 5 — abuse surfaces, migration coherence, remaining blockers
+# Custom-board publishing — three bugs
 
-No screenshots: the only visible change is a "too many requests" view on three
-detail pages, and it appears only when the limiter refuses.
+Three independent reports, all around publishing Custom boards.
 
-## PR and CI
+## 1 — Publishing an empty board was never blocked
 
-_Filled in after the PR is opened and CI is confirmed — see chat for the final
-status table._
+Neither `publishCustomBoard` nor `publishPost` ever checked how many cards
+were on the board — only title and description. An empty Custom board, or a
+regular tier list whose *selected category* was empty, published exactly as
+described: a post with a default title, an author, the "Photos" badge, zero
+likes/comments/views, and no picture behind any of it.
 
-## Where the repository actually is
+**Fix, two layers, matching the request:**
 
-PR #55 was merged during the previous pass, as PR #54 was during the one before
-it. `main` is `4c9ec04` and contains passes 1–4 in full — verified per commit
-rather than assumed, including the NUL-byte fix and migrations 016–023. Nothing
-is stranded on an obsolete branch.
+- **In the publish functions themselves** (`lib/supabase/custom-lists.ts`,
+  `lib/supabase/feed.ts`) — checked after the title/description validation, so
+  the two errors are never shown for the same click. This is the layer that
+  makes the rule true regardless of how it's reached.
+- **In the UI, before the dialog opens** — an explicit message, not a silent
+  disabled button. Custom board: the Publish button refuses via the existing
+  `notice` paragraph. Regular tier list: the button refuses via `onNotify`,
+  the same channel already used for "sign in to publish."
 
-## One new finding: the catalogue pages were never metered
+**The regular tier list had a second, narrower case.** The whole board can be
+non-empty while the *category chosen inside `PublishPostDialog`* filters down
+to zero — the snapshot is scoped to the picked category, not the whole board.
+Caught inside the dialog itself: `hasContent` is computed once at render time
+and reused for both the live message and the submit gate, rather than
+recomputed separately in each place — this is the exact shape of bug Clear
+List had (two places filtering the same thing, only one kept in sync), so it's
+computed once this time.
 
-The limiter lived only in the `/api` route handlers. But `/title/[id]`,
-`/anime/[id]` and `/youtube/channel/[id]` call TMDB, AniList and YouTube
-themselves during their server render, with an id taken straight from the url.
-Same upstream call, same quota, no counting — so asking for the page instead of
-the API was a way to spend the budget for free.
+**Tests:** `__tests__/publish-board-title.test.tsx` (function-level empty
+check), `__tests__/custom-board-empty-publish.test.tsx` (button-level, new),
+`__tests__/tier-list-actions-empty-publish.test.tsx` (button-level, new),
+`__tests__/publish-post-dialog.test.tsx` (new describe block for the
+empty-category case). Existing tests that happened to publish an empty board
+as their baseline (`activation-funnel.test.ts`, `feed-snapshots.test.ts`,
+`publish-post-first-event.test.ts`) were given real content — they were
+testing something else and were incidentally exercising a state that is no
+longer valid.
 
-The id is the cache key, so the five-minute `revalidate` does not help: distinct
-ids miss the cache every time by construction. On YouTube, whose quota is the
-scarce one at 10,000 units a day and one unit per `channels.list`, walking
-distinct channel ids takes the catalogue off the site until the quota resets —
-without touching a metered endpoint once. `/youtube/channel/[id]` does not even
-validate the id, so those ids need not exist.
+## 2 — No way to delete the board itself
 
-This is the same shape as the `/api/custom-uploads` finding from pass 4: a
-control placed at the business action while the cost is incurred elsewhere.
+Confirmed exactly as reported: a `deleteCustomBoard` function already existed
+in `lib/supabase/custom-lists.ts`, with its own test
+(`custom-storage-cleanup.test.ts`) — but **no UI component ever called it**.
+The RLS policy that allows an owner to delete their own board has existed
+since migration 012; the gap was purely the missing button.
 
-**Fix.** `catalogueGate(tier)` in `lib/rate-limit/limiter.ts` — the same
-decision the routes get, for a server component. Identity is rebuilt from
-`headers()` (only the two headers that identify a caller), and the answer is a
-boolean because a page cannot return 429 the way a route can; the caller renders
-a "try again shortly" view instead.
+**The real problem was deeper than a missing button.** The old implementation
+deleted `custom_tier_lists` directly through the ordinary client. Tiers and
+cards cascade away with it, and so does `custom_list_publications` (its
+`list_id` FK is `on delete cascade`) — but `posts` carries no foreign key back
+to the board at all. A plain delete would have left a published post orphaned
+in the feed with nothing left to render: the same hole as bug #1, reached
+through a different door. Verified concretely: `getPublishedBoards` would
+return an empty map for that post, and `post-card.tsx` falls back to "This
+author has not published their list" — the wrong message for a board that
+*was* published and got deleted out from under its post.
 
-Two details without which the fix would be wrong, both deliberate:
+**Fix:** new migration **024**, `delete_custom_board(p_list_id uuid)` —
+SECURITY DEFINER, same shape as `clear_tier_row_image`. It looks up the
+post via `custom_list_publications` by reading the table directly (bypassing
+its read-facing RLS policy on purpose — that policy governs what a *reader*
+may see, including a `hidden_at` pause nothing in the app sets today but might
+later; this function re-derives ownership from `auth.uid()` itself, so going
+around it here is safe), deletes the post first if one exists, then the board.
+Ownership and the moderation block (`is_blocked('custom_list', id)`) are both
+re-checked inside the function — the same defense-in-depth every definer
+function here uses. **A board under a moderation block cannot be deleted by
+its own owner**, matching the existing RLS DELETE policy exactly: a block its
+subject can delete their way out of is not a block.
 
-1. The gate is wrapped in React `cache()`. `generateMetadata` and the component
-   load the same data, so an unmemoised gate would charge two units for one page
-   view and silently halve every budget. The loaders are wrapped for the same
-   reason.
-2. The gate sits *after* the free id check and *before* the upstream call. A
-   malformed id should cost nothing rather than a unit of somebody's budget.
+`deleteCustomBoard` now calls this RPC instead of deleting the row directly,
+still collecting and sweeping orphaned files afterward. `BoardGrid` (`/custom`)
+is now a client component with local state; each board card gets an
+`OverflowMenu` (reused, not reinvented) with a destructive "Delete board" item
+and a `window.confirm` whose wording depends on `isPublished` — a new field on
+`CustomBoardSummary`, computed with one extra batched query.
 
-**Test.** `__tests__/catalogue-page-metering.test.ts` states it as an invariant
-over the tree rather than as three assertions: it finds every dynamic page that
-imports a catalogue client and requires `catalogueGate` before the first
-upstream call, plus `cache()` on the loader. The failure it is really written
-for is a *fourth* detail page added later by someone with no reason to know any
-of this. Verified as a negative control — deleting the gate from one page fails
-the suite. Five behavioural tests cover the gate itself.
+**Tests:** `supabase/testing/21_custom_board_deletion_checks.sql` — deleting
+an unpublished board (removes tiers, reports no post removed), deleting a
+published board (removes the post, the publication row, the board itself —
+this is the hole the migration closes), refused for a different account,
+refused for a blocked board even by its owner, `anon` cannot execute it.
+`__tests__/custom-storage-cleanup.test.ts` extended: goes through the RPC
+rather than a direct delete, reports `removedPost` correctly, surfaces a
+refusal instead of touching storage.
 
-## A second, smaller change: a missing salt now complains
+**Verified visually** in the browser against a fixture route (created and
+removed for this check, not part of the deliverable): the overflow menu opens
+correctly at the leftmost card without clipping, and the confirm text differs
+correctly — "It also removes its post from the feed…" for a published board,
+"This board was never published…" for an unpublished one.
 
-The fallback rate-limit salt is a constant in a public repository. A deployment
-that never set `RATE_LIMIT_SECRET` does not merely lose anonymity — every bucket
-key becomes computable, and `consume_rate_limit` is anon-callable by design
-(the server calls it as `anon`), so a computed key is a way to spend another
-visitor's budget for them. They still cannot raise their own.
+## 3 — Was there ever a content-confirmation step at publish time?
 
-Not made fatal: guest-only and preview deployments run happily without it, and
-failing closed would turn a missing variable into an outage. Instead one loud
-`console.error` in production, on first use.
+Investigated in git history before touching anything, per the instruction.
+**Conclusion: no, there never was one — nothing to restore.**
 
-**This stays unresolved in production until the operator sets the variable.** It
-cannot be checked from here.
+Checked: full pickaxe search across all history for `confirm`, `guideline`,
+`rules`, `rightsConfirmed`, and any `window.confirm` near a publish action;
+the complete commit history of both publish dialogs from their very first
+commit (`c0f275d` for the feed, `8c8786a`/`12b94d1` for the custom board).
 
-## What was examined and is not a finding
+What actually exists, and has existed unchanged since it was introduced
+(`8c8786a`, never modified since): the checkbox **"I confirm I have the right
+to use this image and that it does not break the site's rules"** in
+`UploadDialog` — but that's a per-**picture** confirmation at **upload** time,
+enforced both client-side and server-side (`issue_upload_grant` raises if
+`p_rights_confirmed` is not true). It has never been a publish-time step for
+the whole board.
 
-Recorded so the next pass does not re-derive it:
+If anything, the trend went the other way: before `12b94d1` ("Ask what the
+post should be called"), publishing a Custom board was a single click with
+*no* dialog at all — no title, no description, nothing. That commit added
+friction, it didn't remove any.
 
-- **Infrastructure tables are deny-all.** `rate_limits`, `upload_grants`,
-  `post_view_marks` and `content_moderation` each have RLS enabled and **zero
-  policies**, so the broad table grants reach nothing; only the definer
-  functions can touch them. Read out of `pg_policy`, not assumed.
-- **`search_path = public` on the older definer functions is not exploitable.**
-  `CREATE` on schema `public` is denied to `anon`, `authenticated` and
-  `service_role`, every table reference in those functions is schema-qualified,
-  and Postgres does not search `pg_temp` for functions or operators at all.
-- **Grant accumulation does not defeat the daily upload cap.** The storage
-  policy calls `has_upload_grant`, which requires a grant younger than ten
-  minutes; and the cap of 50 a day bounds long-run storage growth regardless of
-  when grants are spent.
-- **All fifteen `/api` routes call the limiter as their first statement** —
-  checked line by line. The three that looked otherwise had only comments
-  in between.
-- **The clean-install defect has no other instance.** Only 005 and 006 ever had
-  the `IF cond AND SELECT FROM missing-table` shape; 021's guard is the safe
-  single-condition form.
-- **Client/server boundary is clean.** The only `process.env` reads in client
-  components are `NEXT_PUBLIC_POSTHOG_*` and `NODE_ENV`.
-- **Auth redirect and error surfaces are intact.** `next` still goes through
-  `safeRedirectPath`; catalogue routes surface an upstream message only for
-  their own error class at 429/503, and a fixed string otherwise.
-- **Migration 023 is idempotent** — applied twice against a clean chain, self-
-  check passing both times — and produces exactly the intended graph:
-  `issue_upload_grant`, `attach_upload` and `clear_tier_row_image` are
-  `anon=false authenticated=true`, while `is_blocked`, `consume_rate_limit`,
-  `increment_post_views` and `has_upload_grant` keep their anon grant.
-
-## Production
-
-**DEPLOYMENT BLOCKED — NO AUTHORIZED PRODUCTION MUTATION PATH.** No
-`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_SERVICE_ROLE_KEY` or
-`VERCEL_TOKEN`; neither CLI installed; no `config.toml`, so the project is not
-linked.
-
-Re-probed today, read-only:
-
-| probe | result | meaning |
-|---|---|---|
-| `GET /rest/v1/profiles` | 200 | the anon key works |
-| `GET /rest/v1/rate_limits` | 404 PGRST205 | 017 still not applied |
-| `GET /rest/v1/post_view_marks` | 404 PGRST205 | 018 still not applied |
-| `GET /rest/v1/upload_grants` | 200 `[]` | 012 applied; RLS returns nothing |
-| `GET /api/post-views` | 405 | route exists — pass-2 code deployed |
-| `GET /e2e/custom-board` | 404 | TLO-13 holding: the fixture is not in the bundle |
-
-Merging #55 put pass-4 code live at 12:04 UTC today. **The upload rate limiter
-shipped in that pass is therefore inert right now**: it calls
-`consume_rate_limit`, which does not exist, so it logs an error and fails open.
-The same will be true of `catalogueGate` the moment this pass is merged. That is
-the migration-first invariant restating itself — shipping a limiter before its
-table is shipping nothing.
+**Nothing changed for this item.** Per the instruction — worth deciding with
+Denis whether a publish-time confirmation should be added now, as new scope,
+not as a restoration.
 
 ## Verification
 
 | check | result |
 |---|---|
-| `npm audit` | 0 vulnerabilities |
 | `npm run lint` | 0 errors (1 pre-existing warning) |
 | `npm run typecheck` | clean |
-| `npm test` | **1182 passed, 87 files** (was 1170 / 86) |
+| `npm test` | 1195 passed, 89 files (was 1182 / 87) |
 | `npx playwright test` | 15 passed |
-| `npm run build` | clean; the three pages stay dynamic |
-| `run.sh` | 72 checks, 0 failures |
-| `run.sh --negative` | exploits still demonstrated |
-| `run.sh --fresh` | every migration 002–023 applies to an empty database |
+| `npm run build` | clean |
+| `supabase/testing/run.sh` | all checks pass, including the two new ones |
+| `run.sh --negative` | both exploits still demonstrated |
+| `run.sh --fresh` | migrations 002–024 apply to an empty database |
 
-`npm ci` was run earlier in the session and no dependency changed since.
-
-No negative control was weakened or deleted.
+No negative control was weakened. No migration was edited in place — 024 is
+new, append-only.

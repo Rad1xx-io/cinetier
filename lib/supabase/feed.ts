@@ -322,6 +322,15 @@ export async function publishPost(input: {
   const userId = currentUserId();
   if (!userId) return { ok: false, error: "Sign in to publish posts." };
 
+  // Same rule as publishCustomBoard, checked again here for the same reason:
+  // the caller already filters `titles`/`channels` down to the chosen
+  // category before this runs, and a category with nothing ranked in it — or
+  // a whole board with nothing ranked at all — would otherwise publish as a
+  // post with nothing to show.
+  if ((input.titles?.length ?? 0) === 0 && (input.channels?.length ?? 0) === 0) {
+    return { ok: false, error: "Rank at least one title before publishing." };
+  }
+
   const isFirstPost = await isFirstPostForUser(supabase, userId);
 
   const { data, error } = await supabase

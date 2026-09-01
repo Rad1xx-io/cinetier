@@ -164,7 +164,10 @@ describe("publishing a post freezes the board that was on screen", () => {
       throw new Error(`unexpected table ${table}`);
     });
 
-    const result = await publishPost({ title: "My list", description: "", category: "mixed", titles: [] });
+    const titles = [
+      { tmdbId: 1, mediaType: "movie" as const, title: "A", posterPath: null, releaseDate: null, tier: "S" as const, order: 0, addedAt: 0, updatedAt: 0 },
+    ];
+    const result = await publishPost({ title: "My list", description: "", category: "mixed", titles });
 
     expect(result).toEqual({ ok: false, error: "Could not publish the post. Please try again." });
     // The half-made post — no snapshot behind it — must not survive to be

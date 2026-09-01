@@ -74,30 +74,41 @@ export function PublishPostDialog({
 
   const validation = validatePost(title, description);
 
+  /*
+   * Same bug as Clear List (see the comment above `clearableCount` in
+   * tier-list-actions.tsx): the picker's category never reached the
+   * publish call, so every post snapshotted the whole unfiltered board
+   * no matter which button was clicked. "Everything" is the one option
+   * that is supposed to mean that — every other one should snapshot only
+   * its own catalog.
+   *
+   * Channels live in their own store with no `mediaType` to filter by —
+   * filtering `titles` already yields `[]` for "youtube" on its own, since
+   * no title's `mediaType` is ever "youtube". They snapshot for "youtube"
+   * and for "mixed" ("Everything" means everything on the board, channels
+   * included, not just the four catalogues that happen to share a table).
+   *
+   * Computed here, at render time, rather than inside `handleSubmit`: the
+   * empty-category check below needs the same value the submit does, and
+   * computing it twice is exactly how the Clear List bug happened in the
+   * first place — two places doing the same filter, only one of them kept
+   * in sync when the picker changed.
+   */
+  const snapshotTitles =
+    category === "mixed" ? titles : titles.filter((t) => t.mediaType === category);
+  const snapshotChannels = category === "mixed" || category === "youtube" ? channels : [];
+  const hasContent = snapshotTitles.length > 0 || snapshotChannels.length > 0;
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!validation.ok) {
       setError(validation.error);
       return;
     }
-
-    /*
-     * Same bug as Clear List (see the comment above `clearableCount` in
-     * tier-list-actions.tsx): the picker's category never reached the
-     * publish call, so every post snapshotted the whole unfiltered board
-     * no matter which button was clicked. "Everything" is the one option
-     * that is supposed to mean that — every other one should snapshot only
-     * its own catalog.
-     *
-     * Channels live in their own store with no `mediaType` to filter by —
-     * filtering `titles` already yields `[]` for "youtube" on its own, since
-     * no title's `mediaType` is ever "youtube". They snapshot for "youtube"
-     * and for "mixed" ("Everything" means everything on the board, channels
-     * included, not just the four catalogues that happen to share a table).
-     */
-    const snapshotTitles =
-      category === "mixed" ? titles : titles.filter((t) => t.mediaType === category);
-    const snapshotChannels = category === "mixed" || category === "youtube" ? channels : [];
+    if (!hasContent) {
+      setError("Nothing is ranked in this category yet — pick a different one, or rank something first.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -196,6 +207,14 @@ export function PublishPostDialog({
               </button>
             ))}
           </div>
+          {/* Rare on open — `suggestedCategory` already lands on whichever
+              catalog has the most in it — so this only shows up once someone
+              deliberately picks a category they have not ranked anything in. */}
+          {!hasContent && (
+            <p className="mt-1.5 text-xs text-muted">
+              Nothing is ranked in tiers for &ldquo;{CATEGORY_OPTIONS.find((o) => o.value === category)?.label}&rdquo; yet.
+            </p>
+          )}
         </fieldset>
 
         {error && (
@@ -209,7 +228,7 @@ export function PublishPostDialog({
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" size="sm" disabled={saving || !validation.ok}>
+          <Button type="submit" size="sm" disabled={saving || !validation.ok || !hasContent}>
             {saving ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
             ) : (

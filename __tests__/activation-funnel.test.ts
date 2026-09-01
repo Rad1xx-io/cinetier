@@ -89,7 +89,12 @@ describe("first_post_published — a custom board as the first publish", () => {
     return {
       list: { id: "l1", userId: "u1", title: "My board", isPublic: true, hiddenAt: null, updatedAt: "2026-01-01" },
       rows: [{ id: "r1", listId: "l1", position: 0, label: "S", color: "#ef4444", imagePath: null, imageUrl: null }],
-      items: [],
+      // Non-empty: an empty board is refused before any of this runs (see
+      // custom-board-empty-publish.test.tsx), and these tests are about the
+      // first-post event, not about that refusal.
+      items: [
+        { id: "i1", listId: "l1", rowId: "r1", position: 0, caption: "", imagePath: "l1/i1.jpg", imageUrl: null, hiddenAt: null },
+      ],
       canEdit: true,
     };
   }
