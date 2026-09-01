@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createHmac } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -152,9 +153,38 @@ function identify(request: Request, userId: string | null): string {
  * of addresses; what is lost is only that second property. Set
  * `RATE_LIMIT_SECRET` in production to keep it.
  */
+let saltWarningSaid = false;
+
+/**
+ * The salt, and a complaint the first time production runs without one.
+ *
+ * The fallback below is a constant in a public repository, so a deployment that
+ * never set `RATE_LIMIT_SECRET` is not merely less anonymous — every bucket key
+ * becomes computable by anyone. `consume_rate_limit` is callable with the anon
+ * key by design (the server calls it as `anon`), so a computed key is a way to
+ * spend another visitor's budget for them. They still cannot raise their own.
+ *
+ * Not fatal, because guest-only and preview deployments run happily without it
+ * and failing closed would turn a missing variable into an outage. Loud
+ * instead, once, because this is the sort of thing nobody discovers on time.
+ */
+function saltFor(): string {
+  const configured = process.env.RATE_LIMIT_SECRET;
+  if (configured) return configured;
+
+  if (!saltWarningSaid && process.env.NODE_ENV === "production") {
+    saltWarningSaid = true;
+    console.error(
+      "TierListOnline: RATE_LIMIT_SECRET is not set — rate-limit buckets are derived from a " +
+        "public constant, so anyone can compute another visitor's bucket and exhaust it. " +
+        "Set it to any long random string, identical across instances."
+    );
+  }
+  return "tierlistonline-unsalted";
+}
+
 function bucketFor(tier: RateLimitTier, identity: string): string {
-  const secret = process.env.RATE_LIMIT_SECRET ?? "tierlistonline-unsalted";
-  return createHmac("sha256", secret).update(`${tier}:${identity}`).digest("base64url").slice(0, 32);
+  return createHmac("sha256", saltFor()).update(`${tier}:${identity}`).digest("base64url").slice(0, 32);
 }
 
 /**
@@ -172,8 +202,7 @@ function bucketFor(tier: RateLimitTier, identity: string): string {
  * collide.
  */
 export function viewerKeyFor(request: Request, userId: string | null): string {
-  const secret = process.env.RATE_LIMIT_SECRET ?? "tierlistonline-unsalted";
-  return createHmac("sha256", secret)
+  return createHmac("sha256", saltFor())
     .update(`viewer:${identify(request, userId)}`)
     .digest("base64url")
     .slice(0, 40);
@@ -296,16 +325,58 @@ function refusal(retryAfter: number): NextResponse {
  * their own bucket at the higher ceiling, so a busy account is never charged
  * for whoever else shares its address.
  */
+async function decide(request: Request, tier: RateLimitTier): Promise<RateLimitDecision> {
+  const anonymous = await checkRateLimit(request, tier, null);
+  if (anonymous.allowed) return anonymous;
+
+  const userId = await verifiedUserId();
+  if (!userId) return anonymous;
+
+  return checkRateLimit(request, tier, userId);
+}
+
 export async function rateLimitOrNull(
   request: Request,
   tier: RateLimitTier
 ): Promise<NextResponse | null> {
-  const anonymous = await checkRateLimit(request, tier, null);
-  if (anonymous.allowed) return null;
-
-  const userId = await verifiedUserId();
-  if (!userId) return refusal(anonymous.retryAfter);
-
-  const authenticated = await checkRateLimit(request, tier, userId);
-  return authenticated.allowed ? null : refusal(authenticated.retryAfter);
+  const decision = await decide(request, tier);
+  return decision.allowed ? null : refusal(decision.retryAfter);
 }
+
+/**
+ * The same decision, for a page rather than a route handler.
+ *
+ * The catalogue detail pages call TMDB, AniList and YouTube directly during
+ * their server render, with an id taken from the url. That is the same upstream
+ * spend as the metered details routes under /api, drawn from the same quota —
+ * but the limiter lived
+ * only in those handlers, so asking for the page instead of the API was a
+ * way to make the call without being counted. On YouTube, whose quota is the
+ * scarce one, walking distinct channel ids could take the catalogue off the
+ * site for the rest of the day without ever touching a metered endpoint.
+ *
+ * A page has no `Request`, so the identity is rebuilt from `headers()` — and
+ * only the two that identify the caller, because nothing else here reads the
+ * request. The result is a boolean: a page cannot answer 429 the way a route
+ * can, so the caller renders its "try again shortly" view instead.
+ *
+ * Memoised for the render, which is what makes the count honest:
+ * `generateMetadata` and the component both load the same data, and a gate
+ * that ran twice would charge two units for one page view.
+ */
+export const catalogueGate = cache(async (tier: RateLimitTier): Promise<boolean> => {
+  const { headers } = await import("next/headers");
+  const incoming = await headers();
+
+  const identifying = new Headers();
+  for (const name of ["x-forwarded-for", "x-real-ip"]) {
+    const value = incoming.get(name);
+    if (value) identifying.set(name, value);
+  }
+
+  const decision = await decide(
+    new Request("https://tierlistonline.com/", { headers: identifying }),
+    tier
+  );
+  return !decision.allowed;
+});

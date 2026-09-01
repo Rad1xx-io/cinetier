@@ -30,7 +30,14 @@ vi.mock("@/lib/supabase/server", () => ({
   getSupabaseServerClient: async () => ({ auth: { getUser: () => getUser() } }),
 }));
 
-const { checkRateLimit, rateLimitOrNull } = await import("@/lib/rate-limit/limiter");
+// The page gate reads the caller's address through next/headers rather than a
+// Request, so the header set is the thing under test here.
+let pageHeaders = new Headers();
+vi.mock("next/headers", () => ({ headers: async () => pageHeaders }));
+
+const { checkRateLimit, rateLimitOrNull, catalogueGate } = await import(
+  "@/lib/rate-limit/limiter"
+);
 
 function request(headers: Record<string, string> = {}, url?: string): Request {
   return new Request(url ?? "https://tierlistonline.com/api/youtube/search?query=x", { headers });
@@ -287,6 +294,69 @@ describe("a limiter that cannot answer does not take the site down with it", () 
     const decision = await checkRateLimit(request({ "x-forwarded-for": "1.1.1.1" }), "search");
 
     expect(decision.allowed).toBe(true);
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
+  });
+});
+
+describe("the catalogue detail pages are metered like the routes beside them", () => {
+  /*
+   * The gap this closes: /title/[id], /anime/[id] and /youtube/channel/[id]
+   * call TMDB, AniList and YouTube during their server render, with an id
+   * taken straight from the url. That is the same upstream spend as the
+   * metered `/api` details routes and it comes out of the same quota, but only
+   * the routes were counted — so requesting the page instead of the API made
+   * the call for free. On YouTube, whose daily quota is the scarce one,
+   * walking distinct channel ids could take the catalogue off the site for the
+   * rest of the day without touching a metered endpoint once.
+   */
+  beforeEach(() => {
+    pageHeaders = new Headers({ "x-forwarded-for": "9.9.9.9" });
+  });
+
+  it("lets a page render while the budget holds", async () => {
+    rpc.mockResolvedValue({ data: 0, error: null });
+    expect(await catalogueGate("details")).toBe(false);
+    expect(rpc).toHaveBeenCalled();
+  });
+
+  it("refuses the page once the budget is gone", async () => {
+    rpc.mockResolvedValue({ data: 30, error: null });
+    getUser.mockResolvedValue({ data: { user: null } });
+
+    expect(await catalogueGate("details")).toBe(true);
+  });
+
+  it("counts the caller by address, not by anything they can name", async () => {
+    rpc.mockResolvedValue({ data: 0, error: null });
+
+    await catalogueGate("details");
+    const first = rpc.mock.calls.at(-1)?.[1].p_bucket;
+
+    pageHeaders = new Headers({ "x-forwarded-for": "8.8.8.8" });
+    await catalogueGate("details");
+    const second = rpc.mock.calls.at(-1)?.[1].p_bucket;
+
+    expect(first).not.toEqual(second);
+    // And the bucket is opaque: the address must not survive into the table.
+    expect(String(first)).not.toContain("9.9.9.9");
+  });
+
+  it("still refuses when the address cannot be read at all", async () => {
+    // Everyone in that situation shares one bucket, which fails toward
+    // limiting rather than away from it.
+    pageHeaders = new Headers();
+    rpc.mockResolvedValue({ data: 12, error: null });
+    getUser.mockResolvedValue({ data: { user: null } });
+
+    expect(await catalogueGate("details")).toBe(true);
+  });
+
+  it("does not take the catalogue down when the limiter cannot be consulted", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    rpc.mockResolvedValue({ data: null, error: { message: "connection refused" } });
+
+    expect(await catalogueGate("details")).toBe(false);
     expect(logged).toHaveBeenCalled();
     logged.mockRestore();
   });

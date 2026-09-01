@@ -1,4 +1,7 @@
+import { cache } from "react";
 import { notFound } from "next/navigation";
+import { catalogueGate } from "@/lib/rate-limit/limiter";
+import { CatalogueBusy } from "@/components/media/catalogue-busy";
 import type { Metadata } from "next";
 import { detailMetadata } from "@/lib/seo/detail-metadata";
 import { channelJsonLd } from "@/lib/seo/json-ld";
@@ -12,9 +15,15 @@ import { ChannelDetailsError } from "@/components/youtube-channel-details/channe
 type LoadResult =
   | { kind: "not-found" }
   | { kind: "error" }
+  | { kind: "busy" }
   | { kind: "ok"; details: ReturnType<typeof mapChannelToDetails> };
 
-async function loadChannel(id: string): Promise<LoadResult> {
+const loadChannel = cache(async (id: string): Promise<LoadResult> => {
+  // Before the upstream call, and before anything is parsed. This page spends
+  // the same catalogue quota as the metered `/api` route beside it, so it has
+  // to be counted the same way; see `catalogueGate`.
+  if (await catalogueGate("details")) return { kind: "busy" };
+
   try {
     const data = await youtubeFetch<YouTubeChannelsResponse>("/channels", {
       part: "snippet,statistics,brandingSettings",
@@ -27,7 +36,7 @@ async function loadChannel(id: string): Promise<LoadResult> {
     if (error instanceof YouTubeError && error.status === 404) return { kind: "not-found" };
     return { kind: "error" };
   }
-}
+});
 
 export async function generateMetadata(props: PageProps<"/youtube/channel/[id]">): Promise<Metadata> {
   const { id } = await props.params;
@@ -48,6 +57,8 @@ export default async function ChannelDetailsPage(props: PageProps<"/youtube/chan
   const result = await loadChannel(id);
 
   if (result.kind === "not-found") notFound();
+  if (result.kind === "busy")
+    return <CatalogueBusy backHref="/youtube" backLabel="Back to search" />;
   if (result.kind === "error") return <ChannelDetailsError />;
 
   return (
