@@ -5,15 +5,41 @@ EXECUTE grants, one rate-limit tier, a plpgsql guard and a test harness mode.
 
 ## PR and CI
 
-_Filled in after the PR is updated and CI is confirmed — see chat for the final
-status table._
+PR #55 — https://github.com/Rad1xx-io/cinetier/pull/55, branched from `main`.
 
-## Stacked
+## Branching
 
-Continues on `security-remediation-pass-3`, which is PR #54, retargeted at
-`main` so it carries passes 2 and 3 together. PR #52 (pass 1) is merged and
-live. One new migration, **023**, on top of the seven already pending — the
-pending set is now **016–023**.
+PR #54 was **merged while this pass was in progress**, so the branch this work
+started on stopped being the right base mid-flight. The commit was cherry-picked
+onto a fresh branch off the new `main`; the resulting tree is identical. Worth
+remembering as a habit rather than as an incident: check the PR state again
+before pushing, not only before starting.
+
+PR #52 (pass 1), #53 (pass 2) and #54 (passes 2+3) are all merged. One new
+migration, **023**, on top of the seven already pending — the pending set is
+**016–023**, and none of them are applied.
+
+## Production is behind its own code, right now
+
+Probed directly at the end of this pass, not inferred:
+
+| probe | result | meaning |
+|---|---|---|
+| `GET /rest/v1/rate_limits` | 404 PGRST205 | 017 not applied |
+| `GET /rest/v1/post_view_marks` | 404 PGRST205 | 018 not applied |
+| `GET /rest/v1/profiles` | 200 | the key works — the 404s are absence, not auth |
+| `GET /api/post-views` | 405 | the route exists, so pass-2 code **is** deployed |
+
+Merging #54 deployed the code without the migrations going first. What that
+breaks live: `/api/post-views` calls the two-argument `increment_post_views`
+from 018, which does not exist, so view counting fails outright; the rate
+limiter cannot find `consume_rate_limit` and fails open, leaving every
+catalogue route unmetered; `clearTierRowImage()` cannot find its function;
+reporting a tier picture hits a CHECK that does not accept `custom_tier_row`.
+TLO-10, the composite FK and report dedup remain unfixed live.
+
+This does not resolve itself and does not need a redeploy — applying
+016 → 023 in order brings the schema back into agreement with what is running.
 
 ## What this pass was looking for
 
