@@ -1,199 +1,148 @@
-# Production readiness — final verification & hardening, pass 4
+# Security remediation pass 5 — abuse surfaces, migration coherence, remaining blockers
 
-No screenshots: nothing in this pass changes a pixel. The whole of it is three
-EXECUTE grants, one rate-limit tier, a plpgsql guard and a test harness mode.
+No screenshots: the only visible change is a "too many requests" view on three
+detail pages, and it appears only when the limiter refuses.
 
 ## PR and CI
 
-PR #55 — https://github.com/Rad1xx-io/cinetier/pull/55, branched from `main`.
+_Filled in after the PR is opened and CI is confirmed — see chat for the final
+status table._
 
-## Branching
+## Where the repository actually is
 
-PR #54 was **merged while this pass was in progress**, so the branch this work
-started on stopped being the right base mid-flight. The commit was cherry-picked
-onto a fresh branch off the new `main`; the resulting tree is identical. Worth
-remembering as a habit rather than as an incident: check the PR state again
-before pushing, not only before starting.
+PR #55 was merged during the previous pass, as PR #54 was during the one before
+it. `main` is `4c9ec04` and contains passes 1–4 in full — verified per commit
+rather than assumed, including the NUL-byte fix and migrations 016–023. Nothing
+is stranded on an obsolete branch.
 
-PR #52 (pass 1), #53 (pass 2) and #54 (passes 2+3) are all merged. One new
-migration, **023**, on top of the seven already pending — the pending set is
-**016–023**, and none of them are applied.
+## One new finding: the catalogue pages were never metered
 
-## Production is behind its own code, right now
+The limiter lived only in the `/api` route handlers. But `/title/[id]`,
+`/anime/[id]` and `/youtube/channel/[id]` call TMDB, AniList and YouTube
+themselves during their server render, with an id taken straight from the url.
+Same upstream call, same quota, no counting — so asking for the page instead of
+the API was a way to spend the budget for free.
 
-Probed directly at the end of this pass, not inferred:
+The id is the cache key, so the five-minute `revalidate` does not help: distinct
+ids miss the cache every time by construction. On YouTube, whose quota is the
+scarce one at 10,000 units a day and one unit per `channels.list`, walking
+distinct channel ids takes the catalogue off the site until the quota resets —
+without touching a metered endpoint once. `/youtube/channel/[id]` does not even
+validate the id, so those ids need not exist.
+
+This is the same shape as the `/api/custom-uploads` finding from pass 4: a
+control placed at the business action while the cost is incurred elsewhere.
+
+**Fix.** `catalogueGate(tier)` in `lib/rate-limit/limiter.ts` — the same
+decision the routes get, for a server component. Identity is rebuilt from
+`headers()` (only the two headers that identify a caller), and the answer is a
+boolean because a page cannot return 429 the way a route can; the caller renders
+a "try again shortly" view instead.
+
+Two details without which the fix would be wrong, both deliberate:
+
+1. The gate is wrapped in React `cache()`. `generateMetadata` and the component
+   load the same data, so an unmemoised gate would charge two units for one page
+   view and silently halve every budget. The loaders are wrapped for the same
+   reason.
+2. The gate sits *after* the free id check and *before* the upstream call. A
+   malformed id should cost nothing rather than a unit of somebody's budget.
+
+**Test.** `__tests__/catalogue-page-metering.test.ts` states it as an invariant
+over the tree rather than as three assertions: it finds every dynamic page that
+imports a catalogue client and requires `catalogueGate` before the first
+upstream call, plus `cache()` on the loader. The failure it is really written
+for is a *fourth* detail page added later by someone with no reason to know any
+of this. Verified as a negative control — deleting the gate from one page fails
+the suite. Five behavioural tests cover the gate itself.
+
+## A second, smaller change: a missing salt now complains
+
+The fallback rate-limit salt is a constant in a public repository. A deployment
+that never set `RATE_LIMIT_SECRET` does not merely lose anonymity — every bucket
+key becomes computable, and `consume_rate_limit` is anon-callable by design
+(the server calls it as `anon`), so a computed key is a way to spend another
+visitor's budget for them. They still cannot raise their own.
+
+Not made fatal: guest-only and preview deployments run happily without it, and
+failing closed would turn a missing variable into an outage. Instead one loud
+`console.error` in production, on first use.
+
+**This stays unresolved in production until the operator sets the variable.** It
+cannot be checked from here.
+
+## What was examined and is not a finding
+
+Recorded so the next pass does not re-derive it:
+
+- **Infrastructure tables are deny-all.** `rate_limits`, `upload_grants`,
+  `post_view_marks` and `content_moderation` each have RLS enabled and **zero
+  policies**, so the broad table grants reach nothing; only the definer
+  functions can touch them. Read out of `pg_policy`, not assumed.
+- **`search_path = public` on the older definer functions is not exploitable.**
+  `CREATE` on schema `public` is denied to `anon`, `authenticated` and
+  `service_role`, every table reference in those functions is schema-qualified,
+  and Postgres does not search `pg_temp` for functions or operators at all.
+- **Grant accumulation does not defeat the daily upload cap.** The storage
+  policy calls `has_upload_grant`, which requires a grant younger than ten
+  minutes; and the cap of 50 a day bounds long-run storage growth regardless of
+  when grants are spent.
+- **All fifteen `/api` routes call the limiter as their first statement** —
+  checked line by line. The three that looked otherwise had only comments
+  in between.
+- **The clean-install defect has no other instance.** Only 005 and 006 ever had
+  the `IF cond AND SELECT FROM missing-table` shape; 021's guard is the safe
+  single-condition form.
+- **Client/server boundary is clean.** The only `process.env` reads in client
+  components are `NEXT_PUBLIC_POSTHOG_*` and `NODE_ENV`.
+- **Auth redirect and error surfaces are intact.** `next` still goes through
+  `safeRedirectPath`; catalogue routes surface an upstream message only for
+  their own error class at 429/503, and a fixed string otherwise.
+- **Migration 023 is idempotent** — applied twice against a clean chain, self-
+  check passing both times — and produces exactly the intended graph:
+  `issue_upload_grant`, `attach_upload` and `clear_tier_row_image` are
+  `anon=false authenticated=true`, while `is_blocked`, `consume_rate_limit`,
+  `increment_post_views` and `has_upload_grant` keep their anon grant.
+
+## Production
+
+**DEPLOYMENT BLOCKED — NO AUTHORIZED PRODUCTION MUTATION PATH.** No
+`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_SERVICE_ROLE_KEY` or
+`VERCEL_TOKEN`; neither CLI installed; no `config.toml`, so the project is not
+linked.
+
+Re-probed today, read-only:
 
 | probe | result | meaning |
 |---|---|---|
-| `GET /rest/v1/rate_limits` | 404 PGRST205 | 017 not applied |
-| `GET /rest/v1/post_view_marks` | 404 PGRST205 | 018 not applied |
-| `GET /rest/v1/profiles` | 200 | the key works — the 404s are absence, not auth |
-| `GET /api/post-views` | 405 | the route exists, so pass-2 code **is** deployed |
+| `GET /rest/v1/profiles` | 200 | the anon key works |
+| `GET /rest/v1/rate_limits` | 404 PGRST205 | 017 still not applied |
+| `GET /rest/v1/post_view_marks` | 404 PGRST205 | 018 still not applied |
+| `GET /rest/v1/upload_grants` | 200 `[]` | 012 applied; RLS returns nothing |
+| `GET /api/post-views` | 405 | route exists — pass-2 code deployed |
+| `GET /e2e/custom-board` | 404 | TLO-13 holding: the fixture is not in the bundle |
 
-Merging #54 deployed the code without the migrations going first. What that
-breaks live: `/api/post-views` calls the two-argument `increment_post_views`
-from 018, which does not exist, so view counting fails outright; the rate
-limiter cannot find `consume_rate_limit` and fails open, leaving every
-catalogue route unmetered; `clearTierRowImage()` cannot find its function;
-reporting a tier picture hits a CHECK that does not accept `custom_tier_row`.
-TLO-10, the composite FK and report dedup remain unfixed live.
-
-This does not resolve itself and does not need a redeploy — applying
-016 → 023 in order brings the schema back into agreement with what is running.
-
-## What this pass was looking for
-
-Everything fixable in code, repository or configuration without production
-credentials. Two genuinely new findings, one pre-existing defect that had never
-been caught because nothing ever built the database from scratch, and a
-documentation gap. Nothing else surfaced: the fifteen phases re-walked the
-findings of passes 1–3 and confirmed each fix still stands in the tree.
-
-## Finding A — `/api/custom-uploads` was unbounded
-
-The most expensive request the app serves: up to 2 MB read into memory, sniffed
-byte by byte, then two counting queries and a write to Storage.
-
-`issue_upload_grant` already caps a person at fifty granted uploads a day, and
-that looked like the limit. It is not — it counts what *succeeds*. A request
-refused earlier in the handler (wrong format, rights box unticked, oversized)
-never reaches the grant and so was never counted against anything. The
-expensive half of the route was therefore unbounded for anyone holding an
-account, and the cheapest way to abuse it was to send requests that fail.
-
-Fixed by adding an `upload` tier to `lib/rate-limit/limiter.ts` — 5 anonymous,
-15 authenticated, per minute — and calling the limiter as the **first**
-statement of the handler, before the Supabase client is even constructed. That
-ordering is the point: a limiter that runs after the body is read has already
-paid the cost it exists to prevent.
-
-Fifteen a minute is far above deliberate use (a person picks files one at a
-time) and far below what a script needs to be a nuisance.
-
-## Finding B — `anon` held EXECUTE on the upload functions
-
-Migrations 012 and 016 each end a definer function with
-
-    revoke all on function … from public;
-    grant  execute on function … to authenticated;
-
-which reads as "authenticated only" and is not. `public` there is the PUBLIC
-pseudo-role; revoking it does not touch a grant held by `anon`. Supabase ships
-`alter default privileges … grant execute on functions to anon, authenticated`,
-so all three functions were granted to `anon` the moment they were created, and
-the later `grant … to authenticated` neither added nor removed anything for that
-role. Read out of `pg_proc.proacl`, not assumed:
-
-    attach_upload        :: postgres=X/postgres anon=X/postgres authenticated=X/postgres
-    issue_upload_grant   :: postgres=X/postgres anon=X/postgres authenticated=X/postgres
-    clear_tier_row_image :: postgres=X/postgres anon=X/postgres authenticated=X/postgres
-
-**Not exploitable today**, and that was established by calling all three as
-`anon` rather than by reading them:
-
-    issue_upload_grant   -> refused: "Sign in to upload a picture."
-    attach_upload        -> refused: "No upload was granted for that file."
-    clear_tier_row_image -> refused: "Sign in to edit a board."
-
-Each refuses because its own body tests `auth.uid()`. The grant was meant to be
-the outer ring that makes that test the second line of defence rather than the
-only one, so migration 023 restores it. The next definer function somebody
-writes should not be the one that discovers the internal check was load-bearing.
-
-Three functions are deliberately left anon-callable, and 023 asserts they stay
-that way: `is_blocked` (the RLS policies of every public board call it),
-`consume_rate_limit` (anonymous traffic is most of what it counts) and
-`increment_post_views` (counting a signed-out visitor is the feature).
-`has_upload_grant` is also left alone: the storage INSERT policy calls it as the
-caller, so revoking it would turn a clean row-level-security refusal into a
-permission-denied error on a function. Both refuse the write; only one of them
-is a sentence anybody can act on.
-
-012 and 016 were amended in place as well, so a fresh install never has the gap
-in the first place — 023 exists for the database that already ran them.
-
-## Finding C — a clean install was broken, and had been for a long time
-
-Migrations 005 and 006 guarded a destructive drop with
-
-    if to_regclass('public.criteria_scores') is not null
-       and not exists (select 1 from public.criteria_scores limit 1) then
-
-plpgsql plans an `IF` condition as a single expression, so the second half is
-parsed even when the first is false. On an empty database the migration died on
-a table that does not exist. 005, 006 and 007 all failed; the guard is now
-nested, and every migration 002–023 applies to an empty database.
-
-This had never been noticed because production was built incrementally and the
-harness always replayed against a database that already had the tables.
-
-## The regression check, and why it needed a second fix of its own
-
-`supabase/testing/run.sh --fresh` builds a database from nothing — platform
-primitives, `schema.sql`, then every migration in order — and exits 1 with
-`--- a clean rebuild is BROKEN ---` on the first failure.
-
-Getting it right took two corrections worth recording, both caught by running it
-rather than by reading it:
-
-1. It first selected the platform primitives out of the stub with
-   `sed -n '1,95p'`. Line numbers silently became wrong the moment a table was
-   added to the stub, and because the resulting psql exit code met `set -e`, the
-   script aborted **with no output whatsoever** — a check that appears to pass.
-   Now selected by marker, and a stub that will not apply says so and exits 1.
-2. The stub carries abbreviated stand-ins for the application tables, which is
-   correct in normal mode (production already has them; no migration creates
-   them). In fresh mode it is exactly backwards: `create table if not exists`
-   means the stub's short version wins, `profiles` loses `updated_at`, and 011
-   fails on a column that exists in production. Fresh mode now drops every
-   application table from the stub and lets the real owner create it — 004 for
-   `profiles`, `schema.sql` for the two `ranked_*`.
-
-Verified as a negative control, not just as a pass: reintroducing the 005 guard
-defect makes it fail with `FAIL 005_criteria_scores.sql` and exit 1.
-
-## Documentation
-
-`NEXT_PUBLIC_ANALYTICS_ENDPOINT` is browser-visible by construction — the events
-are sent from the page, so the address is inlined into the bundle. `.env.example`
-now says so, and says the thing that follows from it: it must never be a url
-carrying a token or a secret path. This sits next to the opposite warning
-already written for `CONTENT_REPORT_WEBHOOK_URL`, which must never gain the
-prefix.
-
-## Deployment
-
-**DEPLOYMENT BLOCKED — NO AUTHORIZED PRODUCTION MUTATION PATH.**
-
-Unchanged from the previous pass and re-confirmed here: the project is not
-linked to the Supabase CLI, and no authorized production mutation mechanism is
-available in this environment. Migrations 016–023 are applied by hand in the
-Supabase SQL Editor, in order, and **must precede** the deployment that depends
-on them. Until they are, production runs pass-1 code with none of them:
-`clearTierRowImage()` is broken live, the rate limiter fails open, and TLO-01
-and TLO-05 remain reachable.
+Merging #55 put pass-4 code live at 12:04 UTC today. **The upload rate limiter
+shipped in that pass is therefore inert right now**: it calls
+`consume_rate_limit`, which does not exist, so it logs an error and fails open.
+The same will be true of `catalogueGate` the moment this pass is merged. That is
+the migration-first invariant restating itself — shipping a limiter before its
+table is shipping nothing.
 
 ## Verification
 
-Every command below was run in this pass.
-
 | check | result |
 |---|---|
-| `npm ci` | clean |
 | `npm audit` | 0 vulnerabilities |
-| `npm run lint` | 0 errors (1 pre-existing warning in `__tests__/post-delete.test.tsx`) |
+| `npm run lint` | 0 errors (1 pre-existing warning) |
 | `npm run typecheck` | clean |
-| `npm test` | 1170 passed, 86 files |
+| `npm test` | **1182 passed, 87 files** (was 1170 / 86) |
 | `npx playwright test` | 15 passed |
-| `npm run build` | clean |
-| `run.sh` | 0 failures |
-| `run.sh --negative` | both exploits still succeed — the controls prove something |
-| `run.sh --fresh` | every migration applies to an empty database |
+| `npm run build` | clean; the three pages stay dynamic |
+| `run.sh` | 72 checks, 0 failures |
+| `run.sh --negative` | exploits still demonstrated |
+| `run.sh --fresh` | every migration 002–023 applies to an empty database |
 
-The three new SQL assertions:
+`npm ci` was run earlier in the session and no dependency changed since.
 
-    CONFIRMED: anon cannot execute the upload flow at all
-    CONFIRMED: public boards, rate limiting and view counting are still anon-callable
-    CONTROL PASSED: an authenticated upload still works after the revoke
-
-No negative control was weakened or deleted to make anything pass.
+No negative control was weakened or deleted.

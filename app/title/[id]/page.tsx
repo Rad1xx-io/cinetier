@@ -1,4 +1,7 @@
+import { cache } from "react";
 import { notFound } from "next/navigation";
+import { catalogueGate } from "@/lib/rate-limit/limiter";
+import { CatalogueBusy } from "@/components/media/catalogue-busy";
 import type { Metadata } from "next";
 import { detailMetadata } from "@/lib/seo/detail-metadata";
 import { titleJsonLd } from "@/lib/seo/json-ld";
@@ -14,15 +17,22 @@ import { TitleDetailsError } from "@/components/title-details/title-details-erro
 type LoadResult =
   | { kind: "not-found" }
   | { kind: "error" }
+  | { kind: "busy" }
   | {
       kind: "ok";
       details: Awaited<ReturnType<typeof mapToDetails>>;
       watchLinks: Record<string, string>;
     };
 
-async function loadDetails(id: string): Promise<LoadResult> {
+const loadDetails = cache(async (id: string): Promise<LoadResult> => {
   const parsed = parseTitleParam(id);
   if (!parsed) return { kind: "not-found" };
+
+  // Metered before the upstream call, and after the free check above so a
+  // malformed id costs nobody anything. This page spends the same catalogue
+  // quota as the metered `/api` route beside it; see `catalogueGate`.
+  if (await catalogueGate("details")) return { kind: "busy" };
+
 
   try {
     const mediaType = parsed.mediaType === "tv" ? "tv" : "movie";
@@ -49,7 +59,7 @@ async function loadDetails(id: string): Promise<LoadResult> {
     }
     return { kind: "error" };
   }
-}
+});
 
 export async function generateMetadata(props: PageProps<"/title/[id]">): Promise<Metadata> {
   const { id } = await props.params;
@@ -70,6 +80,8 @@ export default async function TitleDetailsPage(props: PageProps<"/title/[id]">) 
   const result = await loadDetails(id);
 
   if (result.kind === "not-found") notFound();
+  if (result.kind === "busy")
+    return <CatalogueBusy backHref="/discover" backLabel="Back to browsing" />;
   if (result.kind === "error") return <TitleDetailsError />;
 
   return (
