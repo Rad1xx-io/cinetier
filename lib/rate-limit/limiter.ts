@@ -39,7 +39,8 @@ export type RateLimitTier =
   | "youtube-search"
   | "reference"
   | "post-view"
-  | "report";
+  | "report"
+  | "upload";
 
 interface TierBudget {
   /** Requests per window, for a visitor with no session. */
@@ -94,6 +95,23 @@ const BUDGETS: Record<RateLimitTier, TierBudget> = {
    * 019 already refuses the same target twice.
    */
   report: { anonymous: 5, authenticated: 10, windowSeconds: 60 },
+
+  /*
+   * Uploading a picture. The most expensive request this app serves — up to
+   * 2 MB read into memory, sniffed byte by byte, then two counting queries and
+   * a write to Storage.
+   *
+   * `issue_upload_grant` already caps a person at fifty granted uploads a day,
+   * but that counts what succeeds. A request refused earlier — wrong format,
+   * rights box unticked, oversized — never reaches the grant and so never
+   * counted against anything, which left the expensive half of this route
+   * unbounded for anyone with an account. This is the ceiling on attempts
+   * rather than on results.
+   *
+   * Fifteen a minute is far above deliberate use (a person picks files one at
+   * a time) and far below what a script needs to be a nuisance.
+   */
+  upload: { anonymous: 5, authenticated: 15, windowSeconds: 60 },
 };
 
 /**

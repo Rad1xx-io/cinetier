@@ -82,6 +82,36 @@ describe("budgets are priced by what a request costs upstream", () => {
   });
 });
 
+describe("every tier that spends something is priced", () => {
+  /*
+   * `/api/custom-uploads` was the one route with no limiter at all. The daily
+   * cap inside `issue_upload_grant` counts uploads that succeed, so a request
+   * refused for a bad magic number cost a 2 MB body read and two counting
+   * queries and was charged against nothing.
+   */
+  it("gives uploads a stricter budget than ordinary reads", async () => {
+    rpc.mockClear();
+    await checkRateLimit(request({ "x-forwarded-for": "1.1.1.1" }), "upload");
+    const upload = rpc.mock.calls[0][1] as { p_limit: number };
+
+    rpc.mockClear();
+    await checkRateLimit(request({ "x-forwarded-for": "1.1.1.1" }), "details");
+    const details = rpc.mock.calls[0][1] as { p_limit: number };
+
+    expect(upload.p_limit).toBeLessThan(details.p_limit);
+  });
+
+  it("separates the upload budget from every other tier", async () => {
+    rpc.mockClear();
+    const headers = { "x-forwarded-for": "1.1.1.1" };
+    await checkRateLimit(request(headers), "upload");
+    await checkRateLimit(request(headers), "report");
+    const a = (rpc.mock.calls[0][1] as { p_bucket: string }).p_bucket;
+    const b = (rpc.mock.calls[1][1] as { p_bucket: string }).p_bucket;
+    expect(a).not.toBe(b);
+  });
+});
+
 describe("the bucket is derived, never accepted", () => {
   function bucketOf(call: number) {
     return (rpc.mock.calls[call][1] as { p_bucket: string }).p_bucket;
