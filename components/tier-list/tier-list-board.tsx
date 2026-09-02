@@ -42,7 +42,6 @@ import { Toast } from "@/components/ui/toast";
 import { useToast } from "@/lib/hooks/use-toast";
 import { Poster } from "@/components/movie-card/poster";
 import { ChannelThumbnail } from "@/components/channel-card/channel-thumbnail";
-import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { trackItemRanked, trackListCreationStarted, trackListSaved } from "@/lib/analytics/events";
 import { takeForkInteraction, takeForkToast } from "@/lib/storage/fork-handoff";
@@ -361,19 +360,23 @@ export function TierListBoard() {
     ? TIER_ORDER.flatMap((t) => containers[t]).find((i) => boardItemKey(i) === activeId)
     : undefined;
 
-  if (!hydrated) {
-    return (
-      <div className="space-y-3 px-4 py-4 md:px-0">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-32" />
-        ))}
-      </div>
-    );
-  }
-
-  // Channels count too now that the board holds both, otherwise someone whose
-  // list is only YouTube channels would be told it is empty.
-  if (titles.length === 0 && channels.length === 0) {
+  /*
+   * Before hydration and "genuinely empty" render the exact same thing, on
+   * purpose: EmptyState reads no data and needs none, so it renders
+   * identically on the server (where localStorage does not exist —
+   * getServerSnapshot() always answers "loading") and in the split second
+   * before the client has read it — the same "real landing page" listed in
+   * SITEMAP_ROUTES (lib/seo/site.ts) is what search engines are promised,
+   * not a bare Skeleton that only ever showed up in the raw HTML nobody's
+   * JavaScript ran yet. It used to be a Skeleton here specifically, which
+   * meant every crawled render of /tier-list carried zero words.
+   *
+   * A visitor who actually has titles never sees this at all — hydration
+   * lands in the same tick localStorage becomes readable, so the swap to
+   * the real board happens before the first paint a human eye would catch,
+   * exactly as it already did when this was a Skeleton.
+   */
+  if (!hydrated || (titles.length === 0 && channels.length === 0)) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 md:px-6">
         <EmptyState />

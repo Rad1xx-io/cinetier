@@ -30,7 +30,6 @@ import { applyDrop, flattenBuckets, tierCollisionDetection } from "@/lib/utils/t
 import { ChannelTierRow } from "@/components/youtube-tier-list/channel-tier-row";
 import { ChannelToolbar } from "@/components/youtube-tier-list/channel-toolbar";
 import { ChannelThumbnail } from "@/components/channel-card/channel-thumbnail";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ChannelEmptyState } from "@/components/youtube-tier-list/channel-empty-state";
 
 export function ChannelTierListBoard() {
@@ -160,17 +159,13 @@ export function ChannelTierListBoard() {
     ? TIER_ORDER.flatMap((t) => containers[t]).find((c) => channelItemKey(c) === activeId)
     : undefined;
 
-  if (!hydrated) {
-    return (
-      <div className="space-y-3 px-4 py-4 md:px-0">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-32" />
-        ))}
-      </div>
-    );
-  }
-
-  if (channels.length === 0) {
+  // Before hydration and "genuinely empty" render the exact same thing, on
+  // purpose — see the movies/TV board's own writeup for why (ChannelEmptyState
+  // is just as data-free, so the same "real landing page" SITEMAP_ROUTES
+  // promises search engines now actually reaches the raw HTML instead of a
+  // wordless Skeleton). A visitor with channels never sees this: hydration
+  // and the swap to the real board land before the first human-visible paint.
+  if (!hydrated || channels.length === 0) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 md:px-6">
         <ChannelEmptyState />
