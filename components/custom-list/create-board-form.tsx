@@ -42,6 +42,18 @@ export function CreateBoardForm() {
       setError(outcome.error);
       return;
     }
+    /*
+     * Without this, the browser's own Back button showed this page exactly as
+     * it looked before the board existed. `router.push` below leaves for the
+     * new board's own page, and Next reuses this page's Client Cache entry —
+     * the RSC payload fetched when this page first loaded — for back/forward
+     * navigation regardless of staleTimes, precisely to avoid a layout shift
+     * on the way back. `router.refresh()` is the documented way to invalidate
+     * that entry for the current route before leaving it, so Back re-fetches
+     * instead of replaying the stale snapshot. Same fix custom-board.tsx
+     * already relies on after an upload, applied one page earlier.
+     */
+    router.refresh();
     router.push(`/custom/${outcome.id}`);
   }
 

@@ -1,160 +1,94 @@
-# Custom-board publishing — three bugs
+# Custom boards — stale list after creating, and a real way back
 
-Three independent reports, all around publishing Custom boards.
+## 1 — The list didn't know a board had just been created
 
-## 1 — Publishing an empty board was never blocked
+Confirmed exactly as reported. `CreateBoardForm` writes the board, then calls
+`router.push('/custom/${id}')` to land on it — a client-side navigation. Next
+reuses the `/custom` page's **Client Cache** entry — the RSC payload it
+fetched the one time this page was first loaded — for browser back/forward
+navigation, regardless of any `staleTimes` setting. That reuse is
+unconditional: the vendored docs (`node_modules/next/dist/docs/01-app/
+04-glossary.md`, under "Client Cache") say plainly that "Pages are not
+cached by default but **are reused during browser back/forward
+navigation**," and the `staleTimes` reference doc adds explicitly that
+configuring it "doesn't change back/forward caching behavior." So pressing
+Back replayed the exact snapshot from before the board existed — not a
+missing revalidation on the server, a client-side cache the browser's own
+Back button is specifically built to serve from instead of asking again.
 
-Neither `publishCustomBoard` nor `publishPost` ever checked how many cards
-were on the board — only title and description. An empty Custom board, or a
-regular tier list whose *selected category* was empty, published exactly as
-described: a post with a default title, an author, the "Photos" badge, zero
-likes/comments/views, and no picture behind any of it.
+**Fix:** `router.refresh()`, called right after the board is created and
+right before the `router.push` that leaves the page
+(`components/custom-list/create-board-form.tsx`). The same glossary entry
+lists `router.refresh()` as one of the documented ways to invalidate the
+Client Cache, and this codebase already leans on it for exactly this
+purpose — `custom-board.tsx`'s own `refresh` callback exists because
+uploading a picture needed the same kind of invalidation for the page you're
+*on*; this is the same fix one page earlier, for the page you're about to
+leave.
 
-**Fix, two layers, matching the request:**
+**Looking further, since the report invited it** ("либо пересмотреть откуда
+список берёт данные"): the same defect exists for four more actions on
+`/custom/[id]` that never left the page but still change something
+`/custom`'s list shows — deleting a card and hiding a card (both change the
+cover picture and the item count), toggling public/private (changes the
+badge), clearing the whole board, and publishing (changes whether the delete
+confirmation warns about a live post). None of these called `refresh()`
+either; all five now do. This is the same root cause reaching the same
+symptom through five doors instead of one — worth closing all of them while
+already here, not just the one that got reported.
 
-- **In the publish functions themselves** (`lib/supabase/custom-lists.ts`,
-  `lib/supabase/feed.ts`) — checked after the title/description validation, so
-  the two errors are never shown for the same click. This is the layer that
-  makes the rule true regardless of how it's reached.
-- **In the UI, before the dialog opens** — an explicit message, not a silent
-  disabled button. Custom board: the Publish button refuses via the existing
-  `notice` paragraph. Regular tier list: the button refuses via `onNotify`,
-  the same channel already used for "sign in to publish."
+**Tests:** `__tests__/create-board-form.test.tsx` (new) — `refresh()` is
+called, and called before the `push`, on success; neither is called on a
+refused write. `__tests__/custom-board-list-refresh.test.tsx` (new) —
+`refresh()` fires for delete-item, hide-item, toggle-visibility,
+clear-board, and a successful publish; does not fire for a refused publish.
+Verified as a negative control, not just as a pass: removing the call from
+`handleDeleteItem` makes its own test fail with the expected assertion
+message.
 
-**The regular tier list had a second, narrower case.** The whole board can be
-non-empty while the *category chosen inside `PublishPostDialog`* filters down
-to zero — the snapshot is scoped to the picked category, not the whole board.
-Caught inside the dialog itself: `hasContent` is computed once at render time
-and reused for both the live message and the submit gate, rather than
-recomputed separately in each place — this is the exact shape of bug Clear
-List had (two places filtering the same thing, only one kept in sync), so it's
-computed once this time.
+**Not end-to-end browser-verified live**, for the same reason as earlier
+tasks this session: no signed-in test session is available here. The `href`
+half of task 2 (see below) *was* verified live against the `/e2e/custom-board`
+fixture, and the `router.refresh()` mechanism itself is the one already
+proven working in this exact file for uploads — this is the same call, one
+step earlier, backed by the vendored Next.js docs rather than by guessing.
 
-**Tests:** `__tests__/publish-board-title.test.tsx` (function-level empty
-check), `__tests__/custom-board-empty-publish.test.tsx` (button-level, new),
-`__tests__/tier-list-actions-empty-publish.test.tsx` (button-level, new),
-`__tests__/publish-post-dialog.test.tsx` (new describe block for the
-empty-category case). Existing tests that happened to publish an empty board
-as their baseline (`activation-funnel.test.ts`, `feed-snapshots.test.ts`,
-`publish-post-first-event.test.ts`) were given real content — they were
-testing something else and were incidentally exercising a state that is no
-longer valid.
+## 2 — A real "back" link, not the browser's own
 
-## 2 — No way to delete the board itself
+Added to `/custom/[id]` — "← Your boards", pointing at `/custom` — matching
+the pattern already established for `/title/[id]`, `/anime/[id]`,
+`/games/[id]` and `/youtube/channel/[id]`, all four of which already carry a
+real link back to the one catalogue page they are ever drilled into from
+(`/discover`, `/anime`, `/games`, `/youtube` respectively), rather than
+leaning on browser history. `/custom/[id]` had the identical shape — one
+canonical parent list — and was the one page in that family without it.
 
-Confirmed exactly as reported: a `deleteCustomBoard` function already existed
-in `lib/supabase/custom-lists.ts`, with its own test
-(`custom-storage-cleanup.test.ts`) — but **no UI component ever called it**.
-The RLS policy that allows an owner to delete their own board has existed
-since migration 012; the gap was purely the missing button.
+Shown only to the board's owner (`canEdit`). A shared board is reached by a
+link from anywhere — Discord, a DM, a forum post — with no "boards list of
+your own" to send that viewer back to; a fixed link would be wrong for most
+of them. Browser Back is already the correct tool there, which is why it is
+left alone.
 
-**The real problem was deeper than a missing button.** The old implementation
-deleted `custom_tier_lists` directly through the ordinary client. Tiers and
-cards cascade away with it, and so does `custom_list_publications` (its
-`list_id` FK is `on delete cascade`) — but `posts` carries no foreign key back
-to the board at all. A plain delete would have left a published post orphaned
-in the feed with nothing left to render: the same hole as bug #1, reached
-through a different door. Verified concretely: `getPublishedBoards` would
-return an empty map for that post, and `post-card.tsx` falls back to "This
-author has not published their list" — the wrong message for a board that
-*was* published and got deleted out from under its post.
+**Considered and deliberately not added**, using the same test the existing
+pattern already applies — does this page have exactly one canonical parent
+it's drilled into from:
 
-**Fix:** new migration **024**, `delete_custom_board(p_list_id uuid)` —
-SECURITY DEFINER, same shape as `clear_tier_row_image`. It looks up the
-post via `custom_list_publications` by reading the table directly (bypassing
-its read-facing RLS policy on purpose — that policy governs what a *reader*
-may see, including a `hidden_at` pause nothing in the app sets today but might
-later; this function re-derives ownership from `auth.uid()` itself, so going
-around it here is safe), deletes the post first if one exists, then the board.
-Ownership and the moderation block (`is_blocked('custom_list', id)`) are both
-re-checked inside the function — the same defense-in-depth every definer
-function here uses. **A board under a moderation block cannot be deleted by
-its own owner**, matching the existing RLS DELETE policy exactly: a block its
-subject can delete their way out of is not a block.
+- `/u/[username]` — reached from a feed post's byline, search, or a link
+  shared outside the app entirely. No single correct "back to."
+- `/battle/[id]` (the voter's view) — same shape as a shared board: reached
+  by a link from anywhere. `battle-owner-view.tsx` already has "Back to my
+  list" for the battle's *owner* specifically, which is the one case with an
+  actual canonical destination.
+- `/feed`, `/tier-list`, `/discover`, `/anime`, `/games`, `/youtube` — these
+  are primary-nav destinations themselves, not pages drilled into from one
+  particular list; nothing to point "back" to.
 
-`deleteCustomBoard` now calls this RPC instead of deleting the row directly,
-still collecting and sweeping orphaned files afterward. `BoardGrid` (`/custom`)
-is now a client component with local state; each board card gets an
-`OverflowMenu` (reused, not reinvented) with a destructive "Delete board" item
-and a `window.confirm` whose wording depends on `isPublished` — a new field on
-`CustomBoardSummary`, computed with one extra batched query.
+**Verified visually** against `/e2e/custom-board`: the link renders above the
+title, unobtrusive, and clicking it lands on `/custom`.
 
-**Tests:** `supabase/testing/21_custom_board_deletion_checks.sql` — deleting
-an unpublished board (removes tiers, reports no post removed), deleting a
-published board (removes the post, the publication row, the board itself —
-this is the hole the migration closes), refused for a different account,
-refused for a blocked board even by its owner, `anon` cannot execute it.
-`__tests__/custom-storage-cleanup.test.ts` extended: goes through the RPC
-rather than a direct delete, reports `removedPost` correctly, surfaces a
-refusal instead of touching storage.
-
-**Verified visually** in the browser against a fixture route (created and
-removed for this check, not part of the deliverable): the overflow menu opens
-correctly at the leftmost card without clipping, and the confirm text differs
-correctly — "It also removes its post from the feed…" for a published board,
-"This board was never published…" for an unpublished one.
-
-## 3 — Was there ever a content-confirmation step at publish time?
-
-Investigated in git history before touching anything, per the instruction.
-**Conclusion: no, there never was one — nothing to restore.**
-
-Checked: full pickaxe search across all history for `confirm`, `guideline`,
-`rules`, `rightsConfirmed`, and any `window.confirm` near a publish action;
-the complete commit history of both publish dialogs from their very first
-commit (`c0f275d` for the feed, `8c8786a`/`12b94d1` for the custom board).
-
-What actually exists, and has existed unchanged since it was introduced
-(`8c8786a`, never modified since): the checkbox **"I confirm I have the right
-to use this image and that it does not break the site's rules"** in
-`UploadDialog` — but that's a per-**picture** confirmation at **upload** time,
-enforced both client-side and server-side (`issue_upload_grant` raises if
-`p_rights_confirmed` is not true). It has never been a publish-time step for
-the whole board.
-
-If anything, the trend went the other way: before `12b94d1` ("Ask what the
-post should be called"), publishing a Custom board was a single click with
-*no* dialog at all — no title, no description, nothing. That commit added
-friction, it didn't remove any.
-
-**Denis's call, asked directly: add it now, in this PR.** New checkbox — "I
-confirm this post follows the site's content rules." — in both dialogs,
-`PublishBoardDialog` and `PublishPostDialog`. Deliberately different wording
-from the upload-time checkbox: that one is about one picture, at upload; this
-one is about the post as a whole, at publish, and applies to a regular tier
-list too (no uploaded pictures at all). The shared text lives in one place —
-`RULES_CONFIRMATION_LABEL` in `lib/feed/post-preview.ts` — so both dialogs say
-exactly the same sentence.
-
-**Enforcement mirrors the upload flow's `rightsConfirmed`, and bug #1's own
-fix:** the checkbox disables Publish in the UI, and the boolean is also
-threaded through as an explicit parameter to `publishCustomBoard`/`publishPost`,
-checked again inside the function — not because the UI can be tricked, but
-because a check that only lives in a disabled-button is not a check, it's a
-suggestion; the function is what makes it true regardless of how it's reached.
-
-**Honestly scoped limit, stated rather than hidden:** unlike the upload and
-delete-board flows, `publishCustomBoard`/`publishPost` still write to
-`posts`/`custom_list_publications`/`ranked_title_publications` through plain
-client inserts, not a `SECURITY DEFINER` RPC — so a caller with a valid JWT
-could in principle reach the PostgREST API directly and skip both this check
-and bug #1's empty-board check. This is not a new hole from this change — bug
-#1's fix already had the same characteristic, at the same layer, and nobody
-asked for the publish pipeline to be rearchitected into an RPC. Worth flagging
-as a real candidate for a future security pass, not something to fix quietly
-as a side effect of adding a checkbox.
-
-**Tests:** new "content-rules confirmation" describe block in
-`publish-post-dialog.test.tsx` (starts unticked, blocks submit, resets on
-reopen), a matching new test in `publish-board-title.test.tsx`. Every existing
-test that filled in a publish form and expected success now also ticks the
-box — the same kind of fixture update bug #1's empty-board check needed,
-same reason: a state the tests used to treat as valid no longer is.
-
-**Verified visually** against the same `/e2e/custom-board` fixture used for
-bug #1: the checkbox renders with the exact label text, Publish stays
-disabled with a valid title until it's ticked, and ticking it enables the
-button immediately.
+**Test:** two new cases in `custom-board-list-refresh.test.tsx` — the link is
+offered to the owner and points at `/custom`; it is not offered to a
+non-owner viewer.
 
 ## Verification
 
@@ -162,12 +96,9 @@ button immediately.
 |---|---|
 | `npm run lint` | 0 errors (1 pre-existing warning) |
 | `npm run typecheck` | clean |
-| `npm test` | 1200 passed, 89 files (was 1182 / 87) |
+| `npm test` | 1210 passed, 91 files (was 1200 / 89) |
 | `npx playwright test` | 15 passed |
 | `npm run build` | clean |
-| `supabase/testing/run.sh` | all checks pass, including the two new ones |
-| `run.sh --negative` | both exploits still demonstrated |
-| `run.sh --fresh` | migrations 002–024 apply to an empty database |
 
-No negative control was weakened. No migration was edited in place — 024 is
-new, append-only.
+No migration in this task — both fixes are client-side. No negative control
+was weakened.
