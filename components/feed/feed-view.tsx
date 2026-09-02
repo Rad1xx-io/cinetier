@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MessagesSquare, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,9 +53,25 @@ const CATEGORY_TABS: { value: PostCategory | "all"; label: string }[] = [
 
 type LoadState = "loading" | "ready" | "unavailable";
 
-export function FeedView() {
-  const [state, setState] = useState<LoadState>("loading");
-  const [posts, setPosts] = useState<FeedPost[]>([]);
+interface FeedViewProps {
+  /**
+   * The server's own read of the "All" tab's first page (`getInitialFeed`),
+   * so the very first paint — the one a crawler reading raw HTML sees —
+   * already has real posts on it instead of only the Skeleton below.
+   * Undefined (no page passed one, or the server read failed) falls
+   * straight back to the plain client fetch this component always did.
+   */
+  initialPosts?: FeedPost[];
+}
+
+export function FeedView({ initialPosts }: FeedViewProps) {
+  const [state, setState] = useState<LoadState>(initialPosts ? "ready" : "loading");
+  const [posts, setPosts] = useState<FeedPost[]>(initialPosts ?? []);
+  // Guards against reusing the server's snapshot a second time — once the
+  // visitor has navigated away from "All" and back, or the tab list has
+  // simply been up a while, a fresh client read is more honest than the
+  // frozen page-load one.
+  const usedInitialPosts = useRef(false);
   const [authorTitles, setAuthorTitles] = useState<Map<string, RankedTitle[]>>(new Map());
   const [authorChannels, setAuthorChannels] = useState<Map<string, RankedChannel[]>>(new Map());
   const [likes, setLikes] = useState<Set<string>>(new Set());
@@ -76,9 +92,11 @@ export function FeedView() {
 
   useEffect(() => {
     let cancelled = false;
+    const useInitial = category === "all" && !!initialPosts && !usedInitialPosts.current;
+    usedInitialPosts.current = true;
 
     (async () => {
-      const rows = await getFeed(category === "all" ? {} : { category });
+      const rows = useInitial ? initialPosts! : await getFeed(category === "all" ? {} : { category });
       if (cancelled) return;
 
       setPosts(rows);
@@ -129,7 +147,7 @@ export function FeedView() {
     return () => {
       cancelled = true;
     };
-  }, [category]);
+  }, [category, initialPosts]);
 
   const handleToggleLike = useCallback(async (post: FeedPost) => {
     const wasLiked = likes.has(post.id);

@@ -32,11 +32,35 @@ type LoadState =
   | { status: "missing" }
   | { status: "ready"; data: PublicTierList };
 
-export function PublicTierListView({ username }: { username: string }) {
-  const [state, setState] = useState<LoadState>({ status: "loading" });
+interface PublicTierListViewProps {
+  username: string;
+  /**
+   * What the server already found via `getPublicTierListServer`, so the
+   * first paint — the one a search crawler actually reads — carries the real
+   * board rather than a Skeleton. `null` covers everything the server side
+   * treats the same way the client always has: no such user, their list
+   * isn't public, or the read simply failed; the effect below re-runs the
+   * client fetch in that case exactly as it did before this prop existed, so
+   * a transient server-side hiccup is not the last word.
+   */
+  initialData: PublicTierList | null;
+}
+
+export function PublicTierListView({ username, initialData }: PublicTierListViewProps) {
+  const [state, setState] = useState<LoadState>(
+    initialData ? { status: "ready", data: initialData } : { status: "loading" }
+  );
   const [category, setCategory] = useState<CategoryFilter>("all");
 
   useEffect(() => {
+    // The server already resolved this one — nothing left to fetch, just the
+    // "viewed shared content" event the success path below would otherwise
+    // have fired.
+    if (initialData) {
+      trackSharedContentViewed("tier_list", initialData.profile.username, initialData.profile.id);
+      return;
+    }
+
     let cancelled = false;
     getPublicTierList(username)
       .then((data) => {
@@ -52,7 +76,7 @@ export function PublicTierListView({ username }: { username: string }) {
     return () => {
       cancelled = true;
     };
-  }, [username]);
+  }, [username, initialData]);
 
   if (state.status === "loading") {
     return (
