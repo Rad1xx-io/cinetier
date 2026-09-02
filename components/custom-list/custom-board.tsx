@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -13,7 +14,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { Download, Eraser, Globe, Lock, Plus, Send } from "lucide-react";
+import { ArrowLeft, Download, Eraser, Globe, Lock, Plus, Send } from "lucide-react";
 import type { CustomBoard as Board, CustomItem } from "@/lib/types/custom-list";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -40,6 +41,7 @@ import { describeExportFailure } from "@/lib/utils/export-error";
 import { SITE_HOST } from "@/lib/seo/site";
 import { trackImageExported, trackPostSharedLink } from "@/lib/analytics/events";
 import { tierCollisionDetection } from "@/lib/utils/tier-dnd";
+import { cn } from "@/lib/utils/cn";
 
 /** The pool of cards not yet given a tier. Its own droppable, like any row. */
 const POOL_ID = "pool";
@@ -163,7 +165,14 @@ export function CustomBoard({ board }: CustomBoardProps) {
       rulesConfirmed
     );
     setPublishing(false);
-    if (!("error" in outcome)) setAskingToPublish(false);
+    if (!("error" in outcome)) {
+      setAskingToPublish(false);
+      // /custom's own list reads whether a board is published to word its
+      // delete confirmation — without this, going back there right after
+      // publishing shows the pre-publish warning for a board that now has a
+      // post attached to it.
+      refresh();
+    }
     setNotice(
       "error" in outcome
         ? outcome.error
@@ -285,6 +294,9 @@ export function CustomBoard({ board }: CustomBoardProps) {
       )
     );
     await setItemHidden(supabase, item.id, hidden);
+    // /custom's cover picture is the first visible card — hiding or restoring
+    // one can change which picture that is.
+    refresh();
   }
 
   async function handleDeleteItem(item: CustomItem) {
@@ -297,6 +309,9 @@ export function CustomBoard({ board }: CustomBoardProps) {
     if (!confirmed) return;
     setItems((current) => current.filter((i) => i.id !== item.id));
     await deleteItem(supabase, item.id);
+    // Same reasoning as creating a board: /custom's list shows this board's
+    // cover and card count, and this changes both.
+    refresh();
   }
 
   async function handleVisibility() {
@@ -307,6 +322,9 @@ export function CustomBoard({ board }: CustomBoardProps) {
     // "Only me" is the opposite of that and should not count as one.
     if (next) trackPostSharedLink("custom_board");
     await setBoardVisibility(supabase, board.list.id, next);
+    // /custom's list shows this board's own "Anyone with the link"/"Only me"
+    // badge.
+    refresh();
   }
 
   async function handleClearBoard() {
@@ -319,13 +337,37 @@ export function CustomBoard({ board }: CustomBoardProps) {
     if (!confirmed) return;
     setItems([]);
     await clearCustomBoard(supabase, board.list.id);
+    refresh();
   }
 
   const pool = buckets.get(POOL_ID) ?? [];
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 pb-10 md:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-3 pt-4 md:pt-6">
+      {/*
+       * Not the browser's own Back button — that one is correct here, since
+       * this page has exactly one place it is ever drilled into from, the
+       * same way /discover, /anime, /games and /youtube already earn a real
+       * link back rather than relying on history. Only shown to the owner:
+       * anyone else reached this by a shared link, with no boards list of
+       * their own to return to — the same reason /u/[username] and a shared
+       * battle do not get one either.
+       */}
+      {canEdit && (
+        <Button asChild variant="ghost" size="sm" className="-ml-2 mt-4 md:mt-6">
+          <Link href="/custom">
+            <ArrowLeft className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            Your boards
+          </Link>
+        </Button>
+      )}
+
+      <div
+        className={cn(
+          "flex flex-wrap items-end justify-between gap-3",
+          canEdit ? "pt-2 md:pt-3" : "pt-4 md:pt-6"
+        )}
+      >
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{board.list.title}</h1>
           <p className="mt-1 text-sm text-muted">
