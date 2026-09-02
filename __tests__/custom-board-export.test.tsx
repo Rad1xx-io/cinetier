@@ -4,6 +4,9 @@ import type { CustomBoard as Board } from "@/lib/types/custom-list";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({}) }));
+vi.mock("@/lib/hooks/use-supabase-session", () => ({
+  useSupabaseSession: () => ({ user: null, loading: false }),
+}));
 
 import { CustomBoard } from "@/components/custom-list/custom-board";
 
@@ -23,6 +26,7 @@ function board(canEdit: boolean): Board {
       },
     ],
     canEdit,
+    allowFork: false,
   };
 }
 

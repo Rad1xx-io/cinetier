@@ -31,6 +31,7 @@ function board(captions: string[]): Board {
       hiddenAt: null,
     })),
     canEdit: false,
+    allowFork: false,
   };
 }
 

@@ -6,6 +6,9 @@ const clearCustomBoard = vi.fn(async () => {});
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({}) }));
+vi.mock("@/lib/hooks/use-supabase-session", () => ({
+  useSupabaseSession: () => ({ user: null, loading: false }),
+}));
 vi.mock("@/lib/supabase/custom-lists", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/supabase/custom-lists")>()),
   clearCustomBoard: (...a: unknown[]) => clearCustomBoard(...(a as [])),
@@ -22,6 +25,7 @@ function board(itemCount: number): Board {
       caption: `card ${i}`, imagePath: `p${i}.jpg`, imageUrl: `https://example.test/${i}.jpg`, hiddenAt: null,
     })),
     canEdit: true,
+    allowFork: false,
   };
 }
 

@@ -38,7 +38,12 @@ export interface FeedPost {
   viewsCount: number;
   likesCount: number;
   commentsCount: number;
-  /** Whether the author's board is visible and copyable — drives the fork button. */
+  /**
+   * Whether the author's *profile* is visible — gates the fork link for a
+   * regular post, whose target is `/u/[username]`. Meaningless for a "custom"
+   * post: that fork link goes to the board's own page instead, which is
+   * gated by the board's own `is_public`, a different and independent flag.
+   */
   isPublic: boolean;
   allowFork: boolean;
   /** The author's support link, already vetted. Null when they set none. */

@@ -91,6 +91,7 @@ describe("post_shared_link — a custom board turning shareable", () => {
       rows: [{ id: "r1", listId: "l1", position: 0, label: "S", color: "#ef4444", imagePath: null, imageUrl: null }],
       items: [],
       canEdit: true,
+      allowFork: false,
     };
   }
 

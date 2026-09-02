@@ -96,6 +96,7 @@ describe("first_post_published — a custom board as the first publish", () => {
         { id: "i1", listId: "l1", rowId: "r1", position: 0, caption: "", imagePath: "l1/i1.jpg", imageUrl: null, hiddenAt: null },
       ],
       canEdit: true,
+      allowFork: false,
     };
   }
 

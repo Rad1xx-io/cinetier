@@ -105,8 +105,9 @@ export async function getCustomBoard(
   if (error || !listData) return null;
 
   const list = toList(listData as ListRow);
+  const canEdit = viewerId === list.userId;
 
-  const [rowsResult, itemsResult] = await Promise.all([
+  const [rowsResult, itemsResult, ownerResult] = await Promise.all([
     supabase
       .from("custom_tier_rows")
       .select("id, list_id, position, label, color, image_path")
@@ -117,6 +118,11 @@ export async function getCustomBoard(
       .select("id, list_id, row_id, position, caption, image_path, hidden_at")
       .eq("list_id", listId)
       .order("position", { ascending: true }),
+    // Meaningless for the owner's own view, and skipped for it: nobody needs
+    // to ask themselves whether they allow their own boards to be forked.
+    canEdit
+      ? Promise.resolve({ data: null })
+      : supabase.from("profiles").select("allow_fork").eq("id", list.userId).maybeSingle(),
   ]);
 
   const rowRows = (rowsResult.data ?? []) as TierRowRow[];
@@ -148,7 +154,21 @@ export async function getCustomBoard(
     hiddenAt: i.hidden_at,
   }));
 
-  return { list, rows, items, canEdit: viewerId === list.userId };
+  /*
+   * Three states, not two: the query can return a row (`allow_fork` is a real
+   * boolean or, for a pre-migration account, null), or return no row at all.
+   * "No row" is not "unset" — it means the profiles RLS policy
+   * (`is_public or own or has posted`, migration 021) hid it, which for a
+   * public *board* whose owner has a private profile and has never posted is
+   * a real, reachable case, not a hypothetical. An owner's preference this
+   * function cannot verify is not a preference it can honour, so that case
+   * defaults to false — the opposite of the `?? true` default used where a
+   * profile row is always guaranteed visible (the feed, a profile page).
+   */
+  const ownerProfile = ownerResult.data as { allow_fork: boolean | null } | null;
+  const allowFork = canEdit ? false : (ownerProfile?.allow_fork ?? (ownerProfile ? true : false));
+
+  return { list, rows, items, canEdit, allowFork };
 }
 
 /** A board as the index page shows it: what it is called, and a look at it. */
@@ -309,6 +329,62 @@ export async function createCustomBoard(
     // The board exists but has no tiers to drop anything into, which is worse
     // than no board at all: it looks finished and is not.
     console.error("TierListOnline: a board was created without its tiers —", rowsError);
+    return { error: describeWriteFailure(rowsError) };
+  }
+
+  return { id: listId };
+}
+
+/** How much of somebody's board a fork actually copies: the shape, not the pictures. */
+export type ForkableRow = { label: string; color: string };
+
+export type ForkBoardOutcome = { id: string } | { error: string };
+
+/**
+ * A new, empty board with somebody else's tier structure.
+ *
+ * Deliberately not the same thing forking a regular tier list does — that
+ * copies the author's ranked_titles, which are pointers into a shared
+ * catalogue the app can re-fetch for anyone. A picture in a custom board
+ * belongs to no catalogue; it is the one thing here that is actually somebody
+ * else's, uploaded by them, moderatable on a report against them. Forking
+ * copies the tiers — how many there are, what they are called, what colour
+ * they are — into a board the forker owns outright and starts filling with
+ * their own pictures. Nothing about the source board's cards, or a tier's own
+ * picture, crosses over; `sourceRows` only ever carries label and colour.
+ *
+ * Falls back to the app's own starter tiers if the source board somehow has
+ * none — the same "never briefly a board with no tiers" reasoning
+ * `createCustomBoard` documents for the same reason.
+ */
+export async function forkCustomBoard(
+  supabase: SupabaseClient,
+  userId: string,
+  title: string,
+  sourceRows: ForkableRow[]
+): Promise<ForkBoardOutcome> {
+  const { data, error } = await supabase
+    .from("custom_tier_lists")
+    .insert({ user_id: userId, title })
+    .select("id")
+    .single();
+  if (error || !data) {
+    console.error("TierListOnline: forking a board failed —", error);
+    return { error: describeWriteFailure(error) };
+  }
+
+  const listId = data.id as string;
+  const rows = sourceRows.length > 0 ? sourceRows : STARTER_ROWS;
+  const { error: rowsError } = await supabase.from("custom_tier_rows").insert(
+    rows.map((row, index) => ({
+      list_id: listId,
+      position: index,
+      label: row.label,
+      color: row.color,
+    }))
+  );
+  if (rowsError) {
+    console.error("TierListOnline: a forked board was created without its tiers —", rowsError);
     return { error: describeWriteFailure(rowsError) };
   }
 
