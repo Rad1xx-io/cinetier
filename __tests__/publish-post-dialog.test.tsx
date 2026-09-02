@@ -22,8 +22,25 @@ const { POST_TITLE_MAX } = await import("@/lib/feed/post-preview");
 
 const onClose = vi.fn();
 
+// A board of nothing cannot be published (see the "cannot be published empty"
+// suite below), so most of these tests need at least one title on the board —
+// otherwise the submit button would refuse for a reason unrelated to what
+// each test actually checks. A plain movie, since none of these tests care
+// which catalogue it is in.
+const anyTitle = {
+  tmdbId: 1,
+  mediaType: "movie" as const,
+  title: "Something ranked",
+  posterPath: null,
+  releaseDate: null,
+  tier: "S" as const,
+  order: 0,
+  addedAt: 0,
+  updatedAt: 0,
+};
+
 function open(props: Partial<Parameters<typeof PublishPostDialog>[0]> = {}) {
-  return render(<PublishPostDialog open onClose={onClose} titles={[]} {...props} />);
+  return render(<PublishPostDialog open onClose={onClose} titles={[anyTitle]} {...props} />);
 }
 
 function submitButton(): HTMLButtonElement {
@@ -33,6 +50,11 @@ function submitButton(): HTMLButtonElement {
 function categoryButton(name: RegExp): HTMLButtonElement {
   const group = screen.getByRole("group", { name: /Category/ });
   return within(group).getByRole("button", { name }) as HTMLButtonElement;
+}
+
+/** The one checkbox in the dialog — ticking it is required before Publish can be pressed. */
+function tickRules() {
+  fireEvent.click(screen.getByRole("checkbox"));
 }
 
 beforeEach(() => {
@@ -69,7 +91,18 @@ describe("PublishPostDialog — the form", () => {
     open();
 
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+    tickRules();
 
+    expect(submitButton().disabled).toBe(false);
+  });
+
+  it("stays disabled until the content-rules box is ticked, title aside", () => {
+    open();
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+    expect(submitButton().disabled).toBe(true);
+
+    tickRules();
     expect(submitButton().disabled).toBe(false);
   });
 
@@ -106,10 +139,12 @@ describe("PublishPostDialog — publishing", () => {
   function fill(title = "Мой топ сай-фая", description = "Почему именно так") {
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: title } });
     fireEvent.change(screen.getByLabelText(/Description/), { target: { value: description } });
+    tickRules();
   }
 
   it("sends the title, description and category", async () => {
-    open({ suggestedCategory: "anime" });
+    const anime = { ...anyTitle, tmdbId: 2, mediaType: "anime" as const };
+    open({ suggestedCategory: "anime", titles: [anime] });
     fill();
 
     fireEvent.click(submitButton());
@@ -119,8 +154,9 @@ describe("PublishPostDialog — publishing", () => {
       title: "Мой топ сай-фая",
       description: "Почему именно так",
       category: "anime",
-      titles: [],
+      titles: [anime],
       channels: [],
+      rulesConfirmed: true,
     });
   });
 
@@ -266,5 +302,95 @@ describe("PublishPostDialog — publishing", () => {
 
     await waitFor(() => expect(publishPost).toHaveBeenCalled());
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * A board can be non-empty overall and still be empty for the category on
+ * screen — the whole-board case (nothing ranked at all) is refused one layer
+ * up, at the button that opens this dialog, before it ever exists; see
+ * tier-list-actions-empty-publish.test.tsx. This is the narrower case: the
+ * category picker inside the dialog can filter a real board down to nothing.
+ */
+describe("PublishPostDialog — a category with nothing ranked in it", () => {
+  const movie = { ...anyTitle, tmdbId: 1, mediaType: "movie" as const };
+
+  it("disables Publish and says why, without touching the title check", () => {
+    open({ suggestedCategory: "movie", titles: [movie] });
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+
+    fireEvent.click(categoryButton(/Anime/));
+
+    expect(submitButton().disabled).toBe(true);
+    expect(screen.getByText(/nothing is ranked in tiers for/i)).toBeTruthy();
+  });
+
+  it("does not call publishPost even if Publish is clicked while disabled", () => {
+    open({ suggestedCategory: "movie", titles: [movie] });
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+    fireEvent.click(categoryButton(/Anime/));
+
+    fireEvent.click(submitButton());
+
+    expect(publishPost).not.toHaveBeenCalled();
+  });
+
+  it("re-enables once a category with content is picked again", () => {
+    open({ suggestedCategory: "movie", titles: [movie] });
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+    tickRules();
+    fireEvent.click(categoryButton(/Anime/));
+    expect(submitButton().disabled).toBe(true);
+
+    fireEvent.click(categoryButton(/Films/));
+
+    expect(submitButton().disabled).toBe(false);
+    expect(screen.queryByText(/nothing is ranked in tiers for/i)).toBeNull();
+  });
+
+  it("never disables Everything, since it always means the whole board", () => {
+    open({ suggestedCategory: "movie", titles: [movie] });
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+    tickRules();
+
+    fireEvent.click(categoryButton(/Everything/));
+
+    expect(submitButton().disabled).toBe(false);
+  });
+});
+
+/*
+ * Whether the whole post follows the site's rules — a separate confirmation
+ * from the upload dialog's per-picture "I confirm I have the right to use
+ * this image", and the only one a regular tier-list post (no uploads at all)
+ * ever shows.
+ */
+describe("PublishPostDialog — the content-rules confirmation", () => {
+  it("starts unticked, and Publish stays disabled with everything else filled in", () => {
+    open();
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
+    expect(submitButton().disabled).toBe(true);
+  });
+
+  it("does not call publishPost if Publish is somehow triggered while unticked", () => {
+    open();
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Мой топ" } });
+
+    fireEvent.click(submitButton());
+
+    expect(publishPost).not.toHaveBeenCalled();
+  });
+
+  it("resets to unticked when the dialog is reopened, rather than carrying a stale yes", () => {
+    const { rerender } = open();
+    tickRules();
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
+
+    rerender(<PublishPostDialog open={false} onClose={onClose} titles={[anyTitle]} />);
+    rerender(<PublishPostDialog open onClose={onClose} titles={[anyTitle]} />);
+
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
   });
 });

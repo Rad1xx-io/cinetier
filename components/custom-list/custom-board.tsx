@@ -129,6 +129,21 @@ export function CustomBoard({ board }: CustomBoardProps) {
   const [askingToPublish, setAskingToPublish] = useState(false);
 
   /*
+   * Refused before the dialog even opens, rather than after a title has been
+   * typed into it: a board with no cards has nothing for a post to show, and
+   * there is no wording of the dialog itself that fixes that — the only fix is
+   * a picture, on this screen. `publishCustomBoard` refuses the same thing
+   * again, for whatever reaches it a different way.
+   */
+  function handlePublishClick() {
+    if (items.length === 0) {
+      setNotice("Add at least one picture before publishing — an empty board has nothing for a post to show.");
+      return;
+    }
+    setAskingToPublish(true);
+  }
+
+  /*
    * Publishing takes a copy of the board's shape and nothing else.
    *
    * The post keeps the tiers, the order and the captions as they are now, and
@@ -136,11 +151,17 @@ export function CustomBoard({ board }: CustomBoardProps) {
    * board afterwards leaves the post alone, while hiding a card, or having one
    * taken down, empties it out of the post immediately.
    */
-  async function handlePublish(title: string, description: string) {
+  async function handlePublish(title: string, description: string, rulesConfirmed: boolean) {
     if (!supabase || publishing) return;
     setPublishing(true);
     setNotice("");
-    const outcome = await publishCustomBoard(supabase, { ...board, rows, items }, title, description);
+    const outcome = await publishCustomBoard(
+      supabase,
+      { ...board, rows, items },
+      title,
+      description,
+      rulesConfirmed
+    );
     setPublishing(false);
     if (!("error" in outcome)) setAskingToPublish(false);
     setNotice(
@@ -323,7 +344,7 @@ export function CustomBoard({ board }: CustomBoardProps) {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setAskingToPublish(true)}
+                onClick={handlePublishClick}
                 disabled={publishing}
               >
                 <Send className="mr-1.5 h-4 w-4" aria-hidden />
@@ -385,7 +406,9 @@ export function CustomBoard({ board }: CustomBoardProps) {
           boardTitle={board.list.title}
           busy={publishing}
           onCancel={() => setAskingToPublish(false)}
-          onPublish={(title, description) => void handlePublish(title, description)}
+          onPublish={(title, description, rulesConfirmed) =>
+            void handlePublish(title, description, rulesConfirmed)
+          }
         />
       )}
 

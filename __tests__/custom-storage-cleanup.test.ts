@@ -18,6 +18,8 @@ interface Row {
 interface World {
   custom_items: Row[];
   custom_tier_rows: Row[];
+  /** list_ids that have a live post — what the fake delete_custom_board reads. */
+  published?: string[];
   /** Set to make the write fail, as a dropped connection would. */
   writeFails?: boolean;
   /** Set to make the bucket refuse, as an outage would. */
@@ -127,15 +129,33 @@ function fakeClient(world: World) {
      */
     async rpc(name: string, args: Record<string, unknown>) {
       order.push(`rpc ${name}`);
-      if (name !== "clear_tier_row_image") return { data: null, error: null };
-      if (world.writeFails) return { data: null, error: { message: "no connection" } };
 
-      const row = table("custom_tier_rows").find((r) => r.id === args.p_row_id);
-      if (!row) return { data: null, error: null };
+      if (name === "clear_tier_row_image") {
+        if (world.writeFails) return { data: null, error: { message: "no connection" } };
 
-      const previous = row.image_path ?? null;
-      row.image_path = null;
-      return { data: previous, error: null };
+        const row = table("custom_tier_rows").find((r) => r.id === args.p_row_id);
+        if (!row) return { data: null, error: null };
+
+        const previous = row.image_path ?? null;
+        row.image_path = null;
+        return { data: previous, error: null };
+      }
+
+      if (name === "delete_custom_board") {
+        if (world.writeFails) return { data: null, error: { message: "no connection" } };
+
+        const listId = args.p_list_id as string;
+        // What the foreign keys do: the board takes its tiers and its cards
+        // with it. Without this the fake would report every file as still
+        // referenced and never delete anything.
+        world.custom_tier_rows = world.custom_tier_rows.filter((r) => r.list_id !== listId);
+        world.custom_items = world.custom_items.filter((r) => r.list_id !== listId);
+        const hadPost = (world.published ?? []).includes(listId);
+        world.published = (world.published ?? []).filter((id) => id !== listId);
+        return { data: hadPost, error: null };
+      }
+
+      return { data: null, error: null };
     },
     storage: {
       from() {
@@ -289,9 +309,52 @@ describe("deleting a whole board", () => {
       custom_items: [{ id: "i1", list_id: "l1", image_path: "u/l/card.jpg" }],
     });
 
-    await deleteCustomBoard(client, "l1");
+    const outcome = await deleteCustomBoard(client, "l1");
 
+    expect(outcome).toEqual({ removedPost: false });
     expect(removed).toHaveLength(1);
     expect([...removed[0]].sort()).toEqual(["u/l/card.jpg", "u/l/tier.jpg"]);
+  });
+
+  it("goes through the RPC rather than deleting the row directly", async () => {
+    // Not a style preference: a plain `delete from custom_tier_lists` cascades
+    // away the publication row but not the post itself (posts has no foreign
+    // key back to the board), which would leave a published post behind with
+    // nothing left to render. Only the RPC knows to take the post with it.
+    const { client, order } = fakeClient({ custom_tier_rows: [], custom_items: [] });
+
+    await deleteCustomBoard(client, "l1");
+
+    expect(order).toContain("rpc delete_custom_board");
+    expect(order).not.toContain("delete custom_tier_lists");
+  });
+
+  it("reports that a published board's post was removed too", async () => {
+    const { client, removed } = fakeClient({
+      custom_tier_rows: [],
+      custom_items: [{ id: "i1", list_id: "l1", image_path: "u/l/card.jpg" }],
+      published: ["l1"],
+    });
+
+    const outcome = await deleteCustomBoard(client, "l1");
+
+    expect(outcome).toEqual({ removedPost: true });
+    expect(removed).toHaveLength(1);
+  });
+
+  it("surfaces a refusal instead of touching storage", async () => {
+    // A blocked board, or one that belongs to someone else: the RPC itself
+    // decides, and its message is a sentence someone can act on.
+    const { client, removed } = fakeClient({
+      custom_tier_rows: [],
+      custom_items: [{ id: "i1", list_id: "l1", image_path: "u/l/card.jpg" }],
+      writeFails: true,
+    });
+
+    const outcome = await deleteCustomBoard(client, "l1");
+
+    expect(outcome).toEqual({ error: "no connection" });
+    // Nothing was actually removed, so nothing should be swept as an orphan.
+    expect(removed).toEqual([]);
   });
 });

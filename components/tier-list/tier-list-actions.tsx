@@ -182,8 +182,16 @@ export function TierListActions({
       onNotify("Sign in to publish a post");
       return;
     }
+    // The whole-board check. The dialog that opens next also filters by
+    // category, which can empty out a board that is not actually empty — that
+    // narrower case is caught inside the dialog itself, where the category
+    // picker lives.
+    if (titles.length + channels.length === 0) {
+      onNotify("Rank at least one title before publishing");
+      return;
+    }
     setPublishOpen(true);
-  }, [user, onNotify]);
+  }, [user, onNotify, titles.length, channels.length]);
 
   /*
    * "This list" reported production behaviour and this behaviour disagreed:

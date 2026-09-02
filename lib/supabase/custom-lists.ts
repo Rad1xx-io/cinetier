@@ -156,6 +156,21 @@ export interface CustomBoardSummary extends CustomTierList {
   /** The first picture on the board, signed like any other cover. */
   coverUrl: string | null;
   itemCount: number;
+  /**
+   * Whether this board currently has a post in the feed.
+   *
+   * Read for the delete confirmation only — what it should warn about, not
+   * whether deleting is allowed. `delete_custom_board` (migration 024) makes
+   * its own complete check when the button is actually pressed and does not
+   * rely on this: this read goes through the ordinary client and the same
+   * visibility rules a reader gets, which hide a board its owner has quietly
+   * paused (`hidden_at`) from everyone, themselves included. Nothing in the
+   * app sets that column today, so the two cannot disagree yet — but if that
+   * changes, the worst this causes is a confirmation that undersells what is
+   * about to happen, never a deletion that misses a post it should have
+   * caught.
+   */
+  isPublished: boolean;
 }
 
 /**
@@ -177,13 +192,18 @@ export async function listMyCustomBoardSummaries(
   if (lists.length === 0) return [];
 
   const listIds = lists.map((list) => list.id);
-  const [rowsResult, itemsResult] = await Promise.all([
+  const [rowsResult, itemsResult, publicationsResult] = await Promise.all([
     supabase.from("custom_tier_rows").select("id, list_id, position").in("list_id", listIds),
     supabase
       .from("custom_items")
       .select("list_id, row_id, image_path, position")
       .in("list_id", listIds),
+    supabase.from("custom_list_publications").select("list_id").in("list_id", listIds),
   ]);
+
+  const publishedListIds = new Set(
+    ((publicationsResult.data ?? []) as { list_id: string }[]).map((p) => p.list_id)
+  );
 
   // Where each tier sits, so cards can be read in the order they are seen.
   const rowOrder = new Map<string, number>();
@@ -234,6 +254,7 @@ export async function listMyCustomBoardSummaries(
     // picture taken down or otherwise gone, and the next card stands in for it.
     coverUrl: (wanted.get(list.id) ?? []).map((path) => covers.get(path)).find(Boolean) ?? null,
     itemCount: counts.get(list.id) ?? 0,
+    isPublished: publishedListIds.has(list.id),
   }));
 }
 
@@ -383,9 +404,28 @@ export async function clearCustomBoard(supabase: SupabaseClient, listId: string)
   await removeUnreferencedFiles(supabase, paths);
 }
 
-export async function deleteCustomBoard(supabase: SupabaseClient, listId: string): Promise<void> {
-  // Collected first: the delete cascades, and afterwards there is nothing left
-  // to ask which files the board was using.
+export type DeleteBoardOutcome = { removedPost: boolean } | { error: string };
+
+/**
+ * Removes a board, and its post if it has been published.
+ *
+ * Goes through delete_custom_board (migration 024) rather than deleting the
+ * row directly. A board's tiers and cards cascade away with it, and so does
+ * its publication row if it has one — but `posts` carries no foreign key back
+ * to the board it came from, so a plain `delete from custom_tier_lists` would
+ * leave a published post behind in the feed with nothing left to render: the
+ * same hole an empty publish leaves, reached through a different door. The
+ * RPC also re-checks ownership and the moderation block itself, so a board
+ * under review cannot be deleted by its own owner — the same rule the
+ * existing RLS delete policy already enforces, restated here because this
+ * path runs as the function's owner and RLS alone would not apply to it.
+ */
+export async function deleteCustomBoard(
+  supabase: SupabaseClient,
+  listId: string
+): Promise<DeleteBoardOutcome> {
+  // Collected first: the RPC's own cascade removes the rows, and afterwards
+  // there is nothing left to ask which files the board was using.
   const [rows, items] = await Promise.all([
     supabase.from("custom_tier_rows").select("image_path").eq("list_id", listId),
     supabase.from("custom_items").select("image_path").eq("list_id", listId),
@@ -394,10 +434,14 @@ export async function deleteCustomBoard(supabase: SupabaseClient, listId: string
     (row) => (row as { image_path: string | null }).image_path
   );
 
-  const { error } = await supabase.from("custom_tier_lists").delete().eq("id", listId);
-  if (error) return;
+  const { data, error } = await supabase.rpc("delete_custom_board", { p_list_id: listId });
+  if (error) {
+    console.error("TierListOnline: deleting a board failed —", error);
+    return { error: error.message };
+  }
 
   await removeUnreferencedFiles(supabase, paths);
+  return { removedPost: data === true };
 }
 
 /**
@@ -588,7 +632,8 @@ export async function publishCustomBoard(
   supabase: SupabaseClient,
   board: CustomBoard,
   title: string,
-  description: string
+  description: string,
+  rulesConfirmed: boolean
 ): Promise<PublishOutcome> {
   /*
    * The post's title is asked for rather than taken from the board.
@@ -607,6 +652,24 @@ export async function publishCustomBoard(
   const postTitle = title.trim();
   const validation = validatePost(postTitle, description);
   if (!validation.ok) return { error: validation.error };
+
+  // The dialog's own checkbox already keeps this true by the time Publish can
+  // be clicked — checked again here, the same way issue_upload_grant checks
+  // rightsConfirmed again rather than trusting the box was really ticked, for
+  // whatever reaches this function by a path other than that button.
+  if (!rulesConfirmed) {
+    return { error: "Confirm the post follows the site's content rules before publishing." };
+  }
+
+  // Checked here as well as at the button that opens this dialog: the button
+  // check is what a person actually sees, this one is what makes it true
+  // regardless of how it was reached. A board with nothing on it would still
+  // publish — nothing enforced "at least one card" anywhere — and land in the
+  // feed as a post with a title, an author, a badge, and no picture to show
+  // for any of it.
+  if (board.items.length === 0) {
+    return { error: "Add at least one picture before publishing." };
+  }
 
   const isFirstPost = await isFirstPostForUser(supabase, board.list.userId);
 

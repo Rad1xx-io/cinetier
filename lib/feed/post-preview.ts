@@ -18,6 +18,17 @@ export const POST_TITLE_MIN = 3;
 export const POST_TITLE_MAX = 120;
 export const POST_DESCRIPTION_MAX = 2000;
 
+/**
+ * The one line both publish dialogs show, worded identically on purpose.
+ *
+ * A separate thing from the upload dialog's "I confirm I have the right to use
+ * this image" — that one is about a single picture, answered once per upload.
+ * This is about the post as a whole, answered once per publish, and applies
+ * just as much to a regular tier list (no uploaded pictures at all) as to a
+ * Custom board.
+ */
+export const RULES_CONFIRMATION_LABEL = "I confirm this post follows the site's content rules.";
+
 const TIER_RANK = new Map(TIERS.map((tier, index) => [tier, index]));
 
 export interface MiniTierRow {
