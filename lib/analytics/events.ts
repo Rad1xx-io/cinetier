@@ -381,3 +381,37 @@ export function trackPostDownloaded(postId: string, category: string): void {
 export function trackPostSharedLink(surface: "tier_list" | "custom_board"): void {
   trackEvent("post_shared_link", { surface });
 }
+
+/**
+ * A ratings file accepted and about to be matched against TMDB.
+ *
+ * `source` is a string rather than a union of one literal on purpose —
+ * Letterboxd is the only import this app has today, but it will not stay
+ * the only one, and the event should not need a second definition the day
+ * a second source ships.
+ */
+export function trackImportStarted(source: string, rowCount: number): void {
+  trackEvent("import_started", { source, row_count: rowCount });
+}
+
+/**
+ * An import actually written to the account's tier list — after the
+ * preview, after confirmation, never before. `added` is what changed;
+ * `skippedDuplicates` and `unmatched` are both worth knowing on their own
+ * (a high duplicate count says re-imports are common, a high unmatched
+ * count says the matcher needs work) rather than folded into one "other"
+ * number.
+ */
+export function trackImportCompleted(
+  source: string,
+  added: number,
+  skippedDuplicates: number,
+  unmatched: number
+): void {
+  trackEvent("import_completed", {
+    source,
+    added,
+    skipped_duplicates: skippedDuplicates,
+    unmatched,
+  });
+}
