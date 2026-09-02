@@ -1,5 +1,8 @@
+import Link from "next/link";
+import { Import } from "lucide-react";
 import { ImportExportPanel } from "@/components/settings/import-export-panel";
 import { AccountPanel } from "@/components/auth/account-panel";
+import { Button } from "@/components/ui/button";
 
 export const metadata = {
   title: "Settings — TierListOnline",
@@ -16,6 +19,30 @@ export default function SettingsPage() {
       </div>
 
       <AccountPanel />
+
+      {/*
+       * A different kind of import from the panel below: that one restores a
+       * TierListOnline backup, a trusted round-trip with nothing to review.
+       * This one brings in somebody else's rating scale from outside the
+       * app entirely, which is why it gets its own page rather than another
+       * button here — matching titles against TMDB and previewing what was
+       * found needs room a Settings panel does not have. Letterboxd is the
+       * only source today; a second one would add a second link beside this
+       * rather than replacing it.
+       */}
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <h2 className="font-semibold">Import ratings from elsewhere</h2>
+        <p className="mt-1 text-sm text-muted">
+          Bring ratings in from another site — matched against TMDB, previewed before anything is
+          added to your tier list.
+        </p>
+        <Button asChild variant="secondary" className="mt-3">
+          <Link href="/import/letterboxd">
+            <Import className="h-4 w-4" aria-hidden />
+            Import from Letterboxd
+          </Link>
+        </Button>
+      </div>
 
       <div id="export">
         <ImportExportPanel />
