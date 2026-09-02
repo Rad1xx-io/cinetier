@@ -1,6 +1,12 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/env";
+import { safeDonationUrl } from "@/lib/utils/donation-url";
+import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
+import type { RankedChannel } from "@/lib/types/youtube";
+import type { CriterionScore } from "@/lib/types/criteria";
+import type { PublicTierList } from "@/lib/supabase/profiles";
+import type { FeedPost, PostCategory } from "@/lib/supabase/feed";
 
 /**
  * An anonymous, session-less Supabase client for things the server renders the
@@ -238,5 +244,248 @@ export async function listRankedChannels(limit = RANKED_ENTRY_LIMIT): Promise<Ra
     return newestPerSlug(rows.map((r) => ({ slug: r.channel_id, updated: r.updated_at })));
   } catch {
     return [];
+  }
+}
+
+// ---------------------------------------------------------- public pages --
+
+interface PublicProfileRow {
+  id: string;
+  username: string;
+  display_name: string | null;
+  is_public: boolean;
+  allow_fork: boolean | null;
+  donation_url: string | null;
+}
+
+interface PublicCriterionRow {
+  rating_id: string;
+  criterion_id: string;
+  name: string;
+  score: number;
+}
+
+interface PublicTitleRow {
+  id: string;
+  tmdb_id: number;
+  media_type: MediaType;
+  title: string;
+  poster_path: string | null;
+  release_date: string | null;
+  tier: TierOrUnrated;
+  order: number;
+  vote_average: number | null;
+  added_at: number;
+  updated_at: number;
+}
+
+interface PublicChannelRow {
+  channel_id: string;
+  title: string;
+  thumbnail_url: string | null;
+  country: string | null;
+  tier: TierOrUnrated;
+  order: number;
+  subscriber_count: number | null;
+  added_at: number;
+  updated_at: number;
+}
+
+/**
+ * `getPublicTierList`'s server-rendered twin — same query, same row mapping,
+ * same output shape, so `<PublicTierListView>` never had to change its types
+ * to accept it.
+ *
+ * Not a call to that function itself: `lib/supabase/profiles.ts` carries a
+ * `"use client"` directive, and Next replaces a client module's exports with
+ * opaque client references the moment a Server Component imports them —
+ * calling one directly from here would fail at runtime. Only the *types* it
+ * exports (`PublicTierList`) cross that boundary safely, since types are
+ * erased before either bundle exists; the query itself has to be
+ * reimplemented against the session-less client every other function in this
+ * file already uses, which is also why a person's own board still renders
+ * without a session.
+ *
+ * Same short-circuit as the client version, for the same reason: RLS
+ * (migration 021) lets an unpublished profile's row through when its owner
+ * has ever posted (so the feed can still show a byline for them) — the
+ * `!isPublic` check below, not the database, is what actually keeps a
+ * private board off this page.
+ */
+export async function getPublicTierListServer(username: string): Promise<PublicTierList | null> {
+  const supabase = getPublicClient();
+  if (!supabase) return null;
+
+  try {
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("id,username,display_name,is_public,allow_fork,donation_url")
+      .eq("username", username.toLowerCase())
+      .maybeSingle();
+
+    if (!profileRow) return null;
+    const row = profileRow as PublicProfileRow;
+    const profile: PublicTierList["profile"] = {
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      isPublic: row.is_public,
+      allowFork: row.allow_fork ?? true,
+      donationUrl: safeDonationUrl(row.donation_url),
+    };
+    if (!profile.isPublic) return null;
+
+    const [titlesRes, channelsRes, criteriaRes] = await Promise.all([
+      supabase
+        .from("ranked_titles")
+        .select(
+          "id,tmdb_id,media_type,title,poster_path,release_date,tier,order,vote_average,added_at,updated_at"
+        )
+        .eq("user_id", profile.id),
+      supabase
+        .from("ranked_channels")
+        .select("channel_id,title,thumbnail_url,country,tier,order,subscriber_count,added_at,updated_at")
+        .eq("user_id", profile.id),
+      supabase.from("criteria_scores").select("rating_id,criterion_id,name,score").eq("user_id", profile.id),
+    ]);
+
+    const criteriaByRating = new Map<string, CriterionScore[]>();
+    for (const criterionRow of (criteriaRes.data ?? []) as PublicCriterionRow[]) {
+      const list = criteriaByRating.get(criterionRow.rating_id) ?? [];
+      list.push({
+        criterionId: criterionRow.criterion_id,
+        name: criterionRow.name,
+        score: criterionRow.score,
+      });
+      criteriaByRating.set(criterionRow.rating_id, list);
+    }
+
+    const titles: RankedTitle[] = ((titlesRes.data ?? []) as PublicTitleRow[]).map((r) => ({
+      ...(criteriaByRating.has(r.id) ? { criteriaScores: criteriaByRating.get(r.id) } : {}),
+      tmdbId: r.tmdb_id,
+      mediaType: r.media_type,
+      title: r.title,
+      posterPath: r.poster_path,
+      releaseDate: r.release_date,
+      tier: r.tier,
+      order: r.order,
+      voteAverage: r.vote_average ?? undefined,
+      addedAt: r.added_at,
+      updatedAt: r.updated_at,
+    }));
+
+    const channels: RankedChannel[] = ((channelsRes.data ?? []) as PublicChannelRow[]).map((r) => ({
+      channelId: r.channel_id,
+      title: r.title,
+      thumbnailUrl: r.thumbnail_url,
+      country: r.country,
+      tier: r.tier,
+      order: r.order,
+      subscriberCount: r.subscriber_count ?? undefined,
+      addedAt: r.added_at,
+      updatedAt: r.updated_at,
+    }));
+
+    return { profile, titles, channels };
+  } catch {
+    // A page rendering as "not found" beats a 500 — the exact tradeoff the
+    // client version already made by treating a thrown fetch the same as a
+    // missing profile (see its own try/catch in PublicTierListView).
+    return null;
+  }
+}
+
+interface FeedRow {
+  id: string;
+  user_id: string;
+  username: string;
+  display_name: string | null;
+  title: string;
+  description: string;
+  category: string;
+  views_count: number;
+  likes_count: number;
+  comments_count: number;
+  is_public: boolean;
+  allow_fork: boolean | null;
+  donation_url: string | null;
+  created_at: string;
+}
+
+/**
+ * `lib/supabase/feed.ts`'s own category list, duplicated rather than
+ * imported for the same reason `PublicTitleRow` above is not `getFeed`'s row
+ * type: that module is `"use client"`, and only its *types* — `FeedPost`,
+ * `PostCategory` — cross into server code safely.
+ */
+const FEED_CATEGORIES: readonly PostCategory[] = [
+  "movie",
+  "tv",
+  "anime",
+  "game",
+  "youtube",
+  "mixed",
+  "custom",
+];
+
+function toFeedCategory(value: string): PostCategory {
+  return (FEED_CATEGORIES as readonly string[]).includes(value) ? (value as PostCategory) : "mixed";
+}
+
+/** Mirrors `FEED_PAGE_SIZE` in `lib/supabase/feed.ts` — its own literal for the same client-boundary reason as `FEED_CATEGORIES` above. */
+const INITIAL_FEED_LIMIT = 24;
+
+/**
+ * The feed's first page — "All" category, newest first — for the very first
+ * paint of `/feed`.
+ *
+ * Deliberately narrow: this is `getFeed()`'s server twin for exactly one
+ * call shape, not a general-purpose feed reader. Every other tab, and the
+ * enrichment a visible post still needs (author titles/channels so its
+ * board preview has something in it, the viewer's own likes, published
+ * Custom boards, snapshots), stays on `getFeed`/`getAuthorTitles`/etc. on the
+ * client, unchanged — none of that has to exist before the first paint, only
+ * the posts' own titles and authors do, since that is the text a crawler
+ * reading raw HTML would otherwise never see at all (`FeedView` was 100%
+ * `"use client"`, fetching everything from inside `useEffect`).
+ *
+ * Returns `null`, not `[]`, when nothing was actually read — misconfigured
+ * client or a failed query — so the caller can tell "confirmed empty feed"
+ * from "could not check" and fall back to the client's own fetch instead of
+ * flashing an incorrect "nothing here yet".
+ */
+export async function getInitialFeed(limit = INITIAL_FEED_LIMIT): Promise<FeedPost[] | null> {
+  const supabase = getPublicClient();
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from("post_feed")
+      .select(
+        "id,user_id,username,display_name,title,description,category,views_count,likes_count,comments_count,is_public,allow_fork,donation_url,created_at"
+      )
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return null;
+
+    return (data as FeedRow[]).map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      title: row.title,
+      description: row.description ?? "",
+      category: toFeedCategory(row.category),
+      viewsCount: row.views_count ?? 0,
+      likesCount: Number(row.likes_count ?? 0),
+      commentsCount: Number(row.comments_count ?? 0),
+      isPublic: row.is_public,
+      allowFork: row.allow_fork ?? true,
+      donationUrl: safeDonationUrl(row.donation_url),
+      createdAt: row.created_at,
+    }));
+  } catch {
+    return null;
   }
 }

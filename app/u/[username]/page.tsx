@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PublicTierListView } from "@/components/public-tier-list/public-tier-list-view";
+import { getPublicTierListServer } from "@/lib/supabase/public-read";
 import { defaultOgImage } from "@/lib/seo/og-image";
 
 export async function generateMetadata(props: PageProps<"/u/[username]">): Promise<Metadata> {
@@ -46,5 +47,6 @@ export async function generateMetadata(props: PageProps<"/u/[username]">): Promi
 
 export default async function PublicProfilePage(props: PageProps<"/u/[username]">) {
   const { username } = await props.params;
-  return <PublicTierListView username={username} />;
+  const initialData = await getPublicTierListServer(username);
+  return <PublicTierListView username={username} initialData={initialData} />;
 }

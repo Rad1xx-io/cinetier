@@ -1,224 +1,175 @@
-# Import Letterboxd ratings into the tier list
+# Server-render /feed and /u/[username]
 
-## What this adds
+## The bug, confirmed by reading code, not guessed
 
-A new page, [`/import/letterboxd`](../../app/import/letterboxd/page.tsx), linked from
-Settings, that reads a Letterboxd ratings export, matches each film against TMDB, maps
-its star rating onto the app's own S–F tiers, and — only after the account reviews and
-confirms — writes the result into `ranked_titles` as one batch. Nothing is written on
-upload; the whole point of this flow is that a fuzzy, TMDB-matched import is shown before
-it touches anyone's list, not after.
+Google Search Console listed 21 pages outside the index, and not only
+`/title/movie-…` cards — `/feed`, `/tier-list`, and `/u/<username>` were on
+it too. For the first two, the cause was in the code: `app/feed/page.tsx`
+rendered `<FeedView/>` and `app/u/[username]/page.tsx` rendered
+`<PublicTierListView/>`, both 100% `"use client"`, both fetching everything
+inside a `useEffect` through `getSupabaseBrowserClient()`. The server's own
+HTML never contained a real post or a real board — only the header, the
+tabs, and an empty `Skeleton`. Not an RLS problem: `posts`/`post_likes`/
+`post_comments` (migration 009) and public `profiles`/`ranked_titles`
+(migration 004/021) already read fine through the anonymous key — the fetch
+was simply happening in the wrong place, one render too late for a crawler
+that does not run JavaScript.
 
-Works signed out. A Custom board needs an account because every write there goes
-straight to Supabase, but a ranked title is local-first the same way typing one in by
-hand already is — an import is not different enough from that to suddenly require
-signing in.
+`/tier-list` is deliberately untouched — it is a signed-in visitor's own
+board editor, not public content shared with strangers, and whether it
+should stay as-is, get an explicit `robots: {index:false}` the way
+`/custom/[id]` already does, or grow a separate marketing landing for
+signed-out visitors at that URL is a product call, not mine to make.
 
-## Accepting the whole zip, not just `ratings.csv`
+## The pattern already existed in this codebase — reused, not invented
 
-Letterboxd's export button gives a zip holding half a dozen CSVs (watched, diary,
-watchlist, reviews, ratings…), because that zip — not any one file plucked out of it — is
-what a person actually has after clicking Export. Requiring them to open an archive
-manager and extract `ratings.csv` by hand first would be friction this app can absorb
-instead, so the upload accepts either: a `.zip` is unpacked in the browser (`jszip`,
-loaded lazily so the far more common "I already have the CSV" path never pays to parse
-zip-reading code it doesn't use) to find `ratings.csv` wherever it sits inside; a bare
-`.csv` is read directly. One control, both inputs work — not two buttons for the account
-to have to choose between.
+`app/custom/[id]/page.tsx` and `app/title/[id]/page.tsx` already do this
+correctly: an `async` Server Component fetches before render and hands the
+result to a client component as a prop. Both `/feed` and `/u/[username]`
+now follow the same shape:
 
-## Matching against TMDB — the existing endpoint, paced and scored
+- **`lib/supabase/public-read.ts`** — already the app's one existing
+  session-less, server-only Supabase module (built for the sitemap) — grew
+  two new exports: `getPublicTierListServer(username)` and
+  `getInitialFeed(limit)`.
+- **`app/u/[username]/page.tsx`** and **`app/feed/page.tsx`** became `async`
+  Server Components, calling those and passing the result down as
+  `initialData` / `initialPosts`.
+- **`PublicTierListView`** and **`FeedView`** render that prop immediately —
+  no "loading" on the first frame — and keep their existing `useEffect`
+  fetch as an unchanged fallback for whatever the server didn't have (client
+  not configured, profile missing/private, a transient failure). When the
+  server *did* have data, the effect's only remaining job is firing the
+  "viewed shared content" analytics event once — the fetch itself is
+  skipped entirely.
 
-`/api/tmdb/search` is the same endpoint the catalogue's own search box already calls; a
-second server route for the same lookup was never on the table. What the import *does*
-add is everything a thousand-row bulk client-driven use of a per-minute-metered endpoint
-needs that a single search box click never did:
+## A "use client" module's exports don't cross into server code — only its types do
 
-- **Pacing.** Requests go out one at a time, 1.5s apart signed out / 800ms signed in —
-  comfortably under half the `search` tier's real budget (40/min anon, 90/min
-  authenticated), so an account still browsing the site mid-import is not the thing that
-  trips its own rate limit.
-- **429 handling.** A `Retry-After`-aware backoff, one retry per row; a row that fails
-  twice in a row is left unmatched rather than retried forever — two refusals in a row
-  reads as "the endpoint is down", not "this one row is unlucky".
-- **Cancellable.** An `AbortController` lets a Cancel button during matching actually stop
-  outstanding waits, not just hide the UI.
-- **Confidence scoring**, via `fastest-levenshtein`'s `distance()` — already a project
-  dependency, already used for the exact same kind of fuzzy title comparison in
-  [`lib/search/normalize-query.ts`](../../lib/search/normalize-query.ts) — combined with
-  release-year agreement into four levels: `exact`, `likely` (year off by one),
-  `uncertain` (title or year didn't line up), `not-found`. This is what lets the preview
-  pre-check confident rows and leave ambiguous ones for a human to look at, rather than
-  trusting every fuzzy match equally.
+`lib/supabase/profiles.ts` and `lib/supabase/feed.ts` both carry a
+`"use client"` directive. Next replaces a client module's *runtime* exports
+with client references the moment server code imports them, so calling
+`getPublicTierList()` or `getFeed()` directly from a Server Component fails
+at runtime — that was never on the table. Types are erased before either
+bundle exists, so importing `PublicTierList`, `FeedPost`, and `PostCategory`
+as types is safe and is exactly what lets the new server functions return
+data shaped identically to what the client components already expected —
+neither component needed its prop types rewritten. The actual queries and
+row-mapping, though, are honestly duplicated against the same session-less
+client every other function in `public-read.ts` already uses, not imported
+— matching a pattern already established in that same file (its own
+`ProfileRow`/mapping for the sitemap, independent of `profiles.ts`'s).
+Small module-level constants (`FEED_CATEGORIES`, the feed page size) are
+duplicated the same way and for the same reason.
 
-One real bug caught by my own test before it ever reached a person: the year-agreement
-check originally required `yearDelta === 0`, which is never true when the *source* row
-has no year (Letterboxd's CSV can be missing it) — `yearDelta` is `null` then, not `0`,
-so a perfect title match with no year data was being downgraded to `uncertain` for no
-reason. Fixed by treating `null` — no evidence either way — as agreeing rather than as
-the worst case; a source row with no year data at all can still be an `exact` match on
-title alone.
+## `/feed` would have baked its content into the build forever, without one more line
 
-## Star rating → tier, checked against what the tiers actually mean
+`next build` prerenders any route with no dynamic API in sight and no
+`[parameter]` segment. `/feed` is exactly that: no `cookies()`, no
+`headers()`, a session-less client — the identical combination that already
+makes the sitemap safely static. For a live community feed that is the
+wrong default: without an explicit opt-out, the page's HTML would have been
+generated once at `npm run build` and never updated again short of a new
+deploy, no matter how many posts got published afterward. Caught by reading
+the build output itself: `/feed` printed as `○` (static) right after the
+first version of this change, before anyone noticed anything was wrong in a
+browser. Fixed with `export const dynamic = "force-dynamic";` — the same
+opt-out `app/discover/page.tsx` and `app/games/page.tsx` already use, for a
+related reason (`useSearchParams` there instead). `/u/[username]` never had
+this problem: its `[username]` segment, with no `generateStaticParams`,
+already makes Next render it on demand — confirmed `ƒ` in the build output
+both before and after this task.
 
-Letterboxd rates in half-stars, 0.5 to 5.0 — ten values across the app's six tiers
-(`lib/tier-meta.ts`'s S=Masterpiece … F=Bad/failure), so two tiers necessarily take a pair
-of star values each. The split:
+## Enrichment queries stay client-side, on purpose, even for server-provided posts
 
-| Stars | Tier |
-|---|---|
-| 5.0, 4.5 | S |
-| 4.0, 3.5 | A |
-| 3.0 | B |
-| 2.5 | C |
-| 2.0, 1.5 | D |
-| 1.0, 0.5 | F |
+`getAuthorTitles`, `getAuthorChannels`, `getMyLikes`, `getPublishedBoards`,
+and `getPostSnapshots` were left exactly where they were — client-side,
+after mount — even for the posts the server now provides. None of them are
+what a crawler needed: the post's own title and author are already in the
+server HTML the moment `getInitialFeed` runs; likes counts and board
+previews are decoration on a card that's already there, not the reason
+Search Console flagged this page. Doing a second server round trip for
+that would have been complexity this bug didn't ask for.
 
-S and F get the paired extremes (4.5 and 5.0 both read as "loved it" the same way 0.5 and
-1.0 both read as "actively disliked it"), while 3.0–4.0 — where a half star is doing the
-most work distinguishing "good" from "great" — gets one tier per half-step. Checked
-against `TIER_META`'s actual descriptions rather than picked by feel.
+`FeedView` tracks whether it has already consumed the server's snapshot
+with a `useRef`, not a prop comparison: switching to another tab and back
+to "All" fetches a fresh page through the ordinary client `getFeed({})`
+rather than re-showing the frozen build-time (well, now request-time) copy
+forever.
 
-This mapping lives in a small generic module
-([`lib/import/tier-mapping.ts`](../../lib/import/tier-mapping.ts)) — `ScaleTierMap` is
-just "this scale's values, each naming a tier", and `mapRatingToTier` walks it for any
-scale. Letterboxd's own map is one instance of it, not something the function knows about
-by name; a future 10-point or 100-point source reuses the same function with its own
-table.
+## Duplicate handling for a profile that can be *readable* without being *public*
 
-## Duplicates: skipped, not overwritten — and why
-
-A row whose TMDB match is already in the account's `ranked_titles` is left exactly as it
-is; the import does not move its tier. This isn't new dedup logic — it's
-[`forkTitles`](../../lib/storage/fork.ts)'s existing `"merge"` strategy, whose "the
-account's own entry always wins a collision" rule is already exactly the behavior wanted
-here, reused unchanged rather than reinvented.
-
-The reasoning: a title already on someone's list means they already made a decision about
-it some other way — by hand, possibly moved since — and an import silently overwriting
-that on their behalf is the one outcome nobody asked for by clicking "import my ratings".
-Re-tiering an existing title afterward is one click on the tier list itself; that's a
-smaller ask than adding a second "update existing too?" toggle on top of an
-already-multi-step review flow. The preview still tells the account which rows were
-skipped this way ("Already in your list — skipped"), so the decision is visible, not
-silent.
-
-## The `first_title_ranked` / `first_post_published`-style funnel, replicated for a batch
-
-`.ai/DECISIONS.md`'s 2026-08-27 entry established that "is this the first X" must be read
-from state *before* the write, never after — a duplicate write returns the existing row
-unchanged, so a post-write check misfires. `addTitle()` in
-[`lib/storage/index.ts`](../../lib/storage/index.ts) already does this for
-`trackFirstTitleRanked`; `useRankedTitles()`'s `add()` wrapper does it a second time for
-`trackListCreationStarted(mediaType)`, the "first title of this media type" event.
-
-A naive bulk import — looping `addTitle()` once per matched row — would have gotten both
-of these right by accident (the first call in the loop would still see the pre-import
-state) but at real cost: every mutating `RankingRepository` method does a full
-read-parse-write-stringify pass over the entire localStorage blob
-([`lib/storage/local-storage-repository.ts`](../../lib/storage/local-storage-repository.ts)),
-so a thousand-row loop is a thousand full-list rewrites — O(n²) — for what should be one
-write. `reorderAll` already exists as a genuine bulk-write path and doesn't call
-`addTitle()` at all, so looping it would have silently dropped both analytics events for
-every import, not just made them slow.
-
-The fix: [`buildImportPlan`](../../lib/import/merge.ts) reads `currentTitles.length === 0`
-and "does any current title have `mediaType: "movie"`" *before* calling `forkTitles`,
-returning both facts on the plan. The panel fires `trackFirstTitleRanked` /
-`trackListCreationStarted("movie")` at most once each, right before the single
-`reorderAll` call — same rule as the per-title path, applied once for the whole batch
-instead of once per row it doesn't loop over.
-
-## Generalizing where it's easy, not further
-
-This is explicitly the first of several planned import sources, so the split between
-"generic" and "Letterboxd-specific" was made deliberately, but only as far as today's one
-source actually justifies:
-
-- **Generic, reusable as-is:** [`lib/import/csv.ts`](../../lib/import/csv.ts) (RFC
-  4180-ish parsing — quoted fields, embedded commas and newlines, doubled-quote escaping —
-  nothing Letterboxd-specific in it), [`lib/import/tier-mapping.ts`](../../lib/import/tier-mapping.ts)
-  (`ScaleTierMap` takes any source's scale), [`lib/import/merge.ts`](../../lib/import/merge.ts)
-  (dedup/plan-building takes a `MatchedRow[]`, not a Letterboxd type), and
-  [`lib/import/match.ts`](../../lib/import/match.ts) (TMDB matching takes an `ImportRow[]`
-  — title/year/rating/sourceUrl — that any source can produce).
-- **Source-specific, kept separate on purpose:** only
-  [`lib/import/letterboxd.ts`](../../lib/import/letterboxd.ts) — column names, the zip
-  layout, the "Name"-column sniff used to reject a non-ratings file. A second source adds
-  one sibling file shaped like this one and its own `ScaleTierMap`, not changes to the
-  four generic modules above.
-
-What this deliberately does *not* do: no source registry, no plugin interface, no
-generic "pick your source" step in the UI. There is one source today; building a
-selection mechanism for sources that don't exist yet would be solving a problem this task
-doesn't have.
+Not a new fact this task discovered — already on record from the same day's
+earlier Fork entry — but directly load-bearing here: `profiles`' RLS
+(migration 021) is `is_public OR own OR exists posts`, so the anonymous
+client can get a profile row back even when `is_public = false`, if that
+account has ever posted (so the feed can still show a byline). Both the
+client `getPublicTierList` and the new `getPublicTierListServer` explicitly
+re-check `profile.isPublic` in application code after the row comes back —
+that check, not the database, is what keeps a private board off
+`/u/[username]` through this same anonymous client. Replicated exactly,
+not reinvented.
 
 ## What's new
 
-- **`lib/import/csv.ts`** — `parseCsv`, `parseCsvWithHeader`.
-- **`lib/import/types.ts`** — `ImportRow`, `MatchConfidence`, `TmdbMatch` (matching-only
-  fields), `MatchedRow extends TmdbMatch` (+ `tier`, `alreadyRanked` — split out after
-  self-review flagged the original single-type version as carrying unexplained
-  placeholder values before the preview filled them in).
-- **`lib/import/tier-mapping.ts`** — `ScaleTierMap`, `mapRatingToTier`,
-  `LETTERBOXD_TIER_MAP`, `letterboxdRatingToTier`.
-- **`lib/import/letterboxd.ts`** — `parseLetterboxdRatings`, `extractRatingsCsv`,
-  `readLetterboxdRatingsFile`, `LetterboxdImportError`.
-- **`lib/import/match.ts`** — `matchAgainstTmdb`.
-- **`lib/import/merge.ts`** — `buildPreviewRows`, `buildImportPlan`.
-- **`components/import/import-preview-table.tsx`** — the review table: thumbnail, matched
-  vs. Letterboxd title, star rating, confidence label/hint, per-row tier override via the
-  existing `QuickTierMenu`, checkbox (absent entirely for a `not-found` row — there's
-  nothing to include).
-- **`components/import/letterboxd-import-panel.tsx`** — the orchestrating flow:
-  idle → reading → matching (progress bar, Cancel) → preview (review checkbox gates the
-  Import button) → writing → done/error.
-- **`app/import/letterboxd/page.tsx`** — `robots: noindex` (an account's own import tool,
-  not a page to rank in search).
-- **`app/settings/page.tsx`** — a new panel section linking to it, kept separate from the
-  existing JSON backup import (`ImportExportPanel`) since that one is a trusted,
-  no-review round-trip and this one fundamentally isn't.
-- **`lib/analytics/events.ts`** — `trackImportStarted(source, rowCount)`,
-  `trackImportCompleted(source, added, skippedDuplicates, unmatched)`. `source` is a
-  plain string, not a one-member union, so a second import source doesn't need a second
-  event definition.
-- **`jszip`** — new dependency, client-side zip reading. 0 vulnerabilities, ships its own
-  types.
+- **`lib/supabase/public-read.ts`** — `getPublicTierListServer(username)`,
+  `getInitialFeed(limit?)`, plus the row interfaces and mapping each needs.
+- **`app/u/[username]/page.tsx`** — fetches server-side, passes
+  `initialData` to `<PublicTierListView>`. `generateMetadata` untouched.
+- **`components/public-tier-list/public-tier-list-view.tsx`** — takes
+  `initialData: PublicTierList | null`; renders it immediately when
+  present, falls back to the original client fetch when not.
+- **`app/feed/page.tsx`** — fetches server-side via `getInitialFeed()`,
+  passes `initialPosts` to `<FeedView>`; `export const dynamic =
+  "force-dynamic"`.
+- **`components/feed/feed-view.tsx`** — takes `initialPosts?: FeedPost[]`;
+  renders it immediately for the "All" tab's first mount only, tracked by a
+  `useRef` so a later return to "All" re-fetches instead of reusing it.
 
 ## Tests
 
-- **`import-csv.test.ts`** (10) — quoted fields, embedded commas/newlines, doubled-quote
-  escaping, header mapping.
-- **`import-letterboxd.test.ts`** (19) — column-order tolerance, missing/blank
-  year/rating handling, the "Name"-column rejection for a non-ratings file (`watched.csv`
-  shape), zip vs. plain-CSV dispatch by extension.
-- **`import-letterboxd-zip.test.ts`** (5) — extracting `ratings.csv` from a real zip
-  structure, at depth, and the "no ratings.csv in this zip" error.
-- **`import-match.test.ts`** (11) — confidence levels, year-tiebreaking against a
-  same-titled remake, the year-null fix above (failed before the fix:
-  `expected 'uncertain' to be 'exact'`), 429/`Retry-After` backoff, abort mid-loop.
-- **`import-merge.test.ts`** (13) — dedup keeps the existing tier untouched, `added` vs.
-  `skippedDuplicates` counts, `isFirstTitleEver`/`startsMovieCatalog` computed before the
-  write. Verified with a negative control: reintroducing the pre-existing-entry-loses bug
-  in `forkTitles` (`lib/storage/fork.ts`) made the targeted test fail as expected, then
-  reverted (`git diff --stat` empty afterward).
-- **`import-letterboxd-panel.test.tsx`** (13) — file selection (zip and plain CSV), a
-  non-ratings file surfaces its error without reaching the preview, an empty-but-valid
-  file reports nothing to import, a confident match starts checked, a not-found row gets
-  no checkbox, the Import button stays disabled until the review checkbox is ticked,
-  unchecking a row before confirming keeps it out of the write, the done screen's counts
-  and the `import_completed` event both reflect what actually happened, `authenticated`
-  is passed through correctly to `matchAgainstTmdb`, both first-title analytics events
-  fire exactly once for an empty account and not at all for one with existing titles,
-  Cancel during matching returns to the file picker.
+- **`__tests__/public-profiles.test.ts`** (extended) — 10 new cases across
+  `getPublicTierListServer` (profile + titles + channels + criteria scores
+  in one read, username lower-cased before the lookup, `null` and zero
+  extra queries for a non-public profile even when RLS hands back its row,
+  `null` for no match, `null` when Supabase isn't configured) and
+  `getInitialFeed` (shape matches `FeedPost` exactly, category
+  normalisation to `"mixed"`, a smaller page size, `null` — not `[]` — on a
+  failed read so the caller can fall back rather than show a false "empty",
+  `null` when not configured).
+- **`__tests__/public-tier-list-view.test.tsx`** (new, 5 tests) — renders
+  server data immediately with no client fetch; fires the viewed-content
+  event exactly once; falls back to the client fetch and its existing
+  success/failure states when the server had nothing.
+- **`__tests__/feed-initial-posts.test.tsx`** (new, 6 tests) — renders
+  server posts immediately with no `getFeed` call; still runs every
+  enrichment query against them; shows the real empty state (not a
+  skeleton) for a confirmed-empty server feed; switching tabs and back to
+  "All" still hits `getFeed` fresh; the no-`initialPosts` case is
+  unchanged from before this task.
+- Both new component test files were verified with a negative control:
+  removing the `if (initialData)`/`useInitial` short-circuit in each
+  component made the tests that depend on it fail (2 of 5, and 5 of 6,
+  respectively) before the fix was restored.
+- `__tests__/feed-custom-tab.test.tsx` (pre-existing, unmodified) still
+  passes unchanged — it renders `<FeedView />` with no `initialPosts`,
+  exactly the fallback path this task had to leave alone.
 
-Not covered by Playwright: no existing "signed-out-safe" fixture route wraps this panel
-the way `/e2e/custom-board` does for the board editor, and this session's sandbox could
-not create the `C:\.claude\launch.json` the Browser pane preview tool needs (`EPERM` at
-the drive root, not a project-directory restriction) to drive it manually either. The 13
-component tests above do exercise the real DOM path — actual file `change` events,
-actual checkbox clicks, the actual gated Import button — which is most of what a browser
-click-through would additionally confirm; what it would *not* additionally confirm is
-pure layout/visual correctness, which is genuinely unverified here.
+## Verified in raw HTML, not just in tests
+
+Built (`npm run build`) and served the production output on a spare port,
+then read the response with `curl` — no JavaScript executed:
+
+- **`/feed`**: 2 real `<article>` post cards in the raw response, real
+  author links (`/u/creator`, `/u/owner`), real titles ("Best Anime 2026",
+  "Best movies of 2026"), zero occurrences of the loading-skeleton markup.
+- **`/u/owner`**: the real display name ("Rad1xx") and real ranked titles
+  ("Elden Ring", "Frieren: Beyond Journey's End Season 2", "God of War", …)
+  in the raw HTML; no "Tier list not found" text.
+- **`/u/<a genuinely nonexistent username>`**: still 200, still the correct
+  per-username `<title>` from `generateMetadata`, still falls through to the
+  pre-existing client-resolved "not found" state — unchanged from before
+  this task, confirming the fallback path works for a real nonexistent user
+  and not only in a mocked test.
 
 ## Verification
 
@@ -226,9 +177,12 @@ pure layout/visual correctness, which is genuinely unverified here.
 |---|---|
 | `npm run lint` | 0 errors (1 pre-existing, unrelated warning) |
 | `npm run typecheck` | clean |
-| `npm test` | 1301 passed, 100 files — 0 uncaught exceptions, full suite green |
-| `npm run build` | clean — `/import/letterboxd` prerenders as static (○) |
-| `npx playwright test` | 15 passed (pre-existing suite; unchanged by this task) |
+| `npm test` | 1322 passed, 102 files (was 1301/100 before this task) |
+| `npm run build` | clean — `/feed` now `ƒ` (was `○` before the `force-dynamic` fix), `/u/[username]` `ƒ` (unchanged) |
+| `npx playwright test` | 15 passed — feed specs now take ~8s each instead of ~2-3s, expected once `/feed` does a real per-request Supabase round trip instead of a static/client render |
+| Raw HTML via `curl` against a production build | `/feed` and `/u/owner` both carry real content; a nonexistent username still degrades correctly |
 
-No migration in this task — `ranked_titles` already exists and takes writes through the
-same `RankingRepository`/`reorderAll` path every other bulk write already uses.
+No migration in this task — every table read here (`posts`, `profiles`,
+`ranked_titles`, `ranked_channels`, `criteria_scores`) and its RLS already
+existed and already allowed anonymous reads; only where the read happened
+changed.
