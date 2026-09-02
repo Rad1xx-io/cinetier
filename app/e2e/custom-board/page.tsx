@@ -68,6 +68,7 @@ const board: Board = {
     },
   ],
   canEdit: true,
+  allowFork: false,
 };
 
 export default function CustomBoardFixturePage() {

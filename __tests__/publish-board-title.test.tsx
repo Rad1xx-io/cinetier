@@ -17,6 +17,7 @@ function board(title: string): CustomBoard {
       { id: "i1", listId: "l1", rowId: "r1", position: 0, caption: "", imagePath: "l1/i1.jpg", imageUrl: null, hiddenAt: null },
     ],
     canEdit: true,
+    allowFork: false,
   };
 }
 

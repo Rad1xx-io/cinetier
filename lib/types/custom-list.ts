@@ -49,6 +49,14 @@ export interface CustomBoard {
   items: CustomItem[];
   /** Whether the viewer may rearrange any of it. */
   canEdit: boolean;
+  /**
+   * Whether the owner allows their boards to be forked — the same
+   * account-wide `profiles.allow_fork` a regular tier-list fork already
+   * respects, reused rather than given a second, custom-board-only toggle.
+   * Meaningless when `canEdit` is true; the owner never needs to ask
+   * themselves this.
+   */
+  allowFork: boolean;
 }
 
 /** The tiers a new board starts with — recognisable, and all renameable. */

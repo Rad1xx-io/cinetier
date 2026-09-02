@@ -14,7 +14,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { ArrowLeft, Download, Eraser, Globe, Lock, Plus, Send } from "lucide-react";
+import { ArrowLeft, Download, Eraser, GitFork, Globe, Lock, Plus, Send } from "lucide-react";
 import type { CustomBoard as Board, CustomItem } from "@/lib/types/custom-list";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -22,6 +22,7 @@ import {
   clearCustomBoard,
   deleteItem,
   clearTierRowImage,
+  forkCustomBoard,
   publishCustomBoard,
   deleteTierRow,
   moveItem,
@@ -29,6 +30,7 @@ import {
   setItemHidden,
   updateTierRow,
 } from "@/lib/supabase/custom-lists";
+import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
 import { CustomCard } from "@/components/custom-list/custom-card";
 import { CustomTierRow } from "@/components/custom-list/custom-tier-row";
 import { UploadDialog } from "@/components/custom-list/upload-dialog";
@@ -39,7 +41,7 @@ import { Button } from "@/components/ui/button";
 import { downloadPng, renderBoardPng } from "@/lib/utils/board-export";
 import { describeExportFailure } from "@/lib/utils/export-error";
 import { SITE_HOST } from "@/lib/seo/site";
-import { trackImageExported, trackPostSharedLink } from "@/lib/analytics/events";
+import { trackForkClicked, trackForkCreated, trackImageExported, trackPostSharedLink } from "@/lib/analytics/events";
 import { tierCollisionDetection } from "@/lib/utils/tier-dnd";
 import { cn } from "@/lib/utils/cn";
 
@@ -61,6 +63,7 @@ interface CustomBoardProps {
  */
 export function CustomBoard({ board }: CustomBoardProps) {
   const router = useRouter();
+  const { user } = useSupabaseSession();
   const [items, setItems] = useState<CustomItem[]>(board.items);
   const [isPublic, setIsPublic] = useState(board.list.isPublic);
   const [rows, setRows] = useState(board.rows);
@@ -178,6 +181,55 @@ export function CustomBoard({ board }: CustomBoardProps) {
         ? outcome.error
         : "Published to the feed. Editing this board from now on will not change the post."
     );
+  }
+
+  const [forking, setForking] = useState(false);
+
+  /*
+   * Copies the shape of somebody else's board, not the board.
+   *
+   * A regular tier-list fork copies ranked_titles — pointers into a shared
+   * catalogue, fetchable again for anyone. Nothing here is like that: every
+   * picture on a Custom board was uploaded by its owner, is reportable
+   * against them, and is exactly the kind of thing a stranger clicking one
+   * button should not be able to duplicate onto their own account without
+   * being asked. What genuinely is the app's own, reusable shape — how many
+   * tiers there are, what they're called, what colour they are — is what
+   * gets copied, into a board that starts with no cards at all.
+   *
+   * Guests cannot do this, unlike a regular fork: a Custom board has no
+   * localStorage form to write into first, it is Supabase or nothing, so
+   * signing in is asked for here rather than skipped.
+   */
+  async function handleFork() {
+    if (!supabase || forking) return;
+    trackForkClicked(board.list.id, board.list.userId);
+
+    if (!user) {
+      setNotice("Sign in to fork this board.");
+      return;
+    }
+
+    setForking(true);
+    setNotice("");
+    const outcome = await forkCustomBoard(
+      supabase,
+      user.id,
+      `Fork of ${board.list.title}`.slice(0, 120),
+      rows.map((r) => ({ label: r.label, color: r.color }))
+    );
+    setForking(false);
+
+    if ("error" in outcome) {
+      setNotice(outcome.error);
+      return;
+    }
+
+    trackForkCreated(board.list.id, outcome.id);
+    // Same reasoning as creating a board from /custom: without this, going
+    // back to /custom right after landing on the new board would not show it.
+    router.refresh();
+    router.push(`/custom/${outcome.id}`);
   }
 
   async function handleExport() {
@@ -430,6 +482,13 @@ export function CustomBoard({ board }: CustomBoardProps) {
                 : []),
             ]}
           />
+
+          {!canEdit && board.allowFork && (
+            <Button variant="secondary" size="sm" onClick={() => void handleFork()} disabled={forking}>
+              <GitFork className="mr-1.5 h-4 w-4" aria-hidden />
+              {forking ? "Forking…" : "Fork"}
+            </Button>
+          )}
 
           {!canEdit && (
             <ReportButton

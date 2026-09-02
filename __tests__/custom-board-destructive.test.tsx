@@ -8,6 +8,9 @@ const clearTierRowImage = vi.fn(async () => {});
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({}) }));
+vi.mock("@/lib/hooks/use-supabase-session", () => ({
+  useSupabaseSession: () => ({ user: null, loading: false }),
+}));
 vi.mock("@/lib/supabase/custom-lists", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/supabase/custom-lists")>()),
   deleteTierRow: (...a: unknown[]) => deleteTierRow(...(a as [])),
@@ -39,6 +42,7 @@ function board({ rowHasPicture = false } = {}): Board {
       },
     ],
     canEdit: true,
+    allowFork: false,
   };
 }
 

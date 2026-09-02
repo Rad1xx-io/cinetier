@@ -154,22 +154,50 @@ export function PostCard({
           className="ml-auto"
         />
 
-        {/* Not offered on a board of photographs: it links to the author's
-            ranked titles, which is a different board entirely, and nothing
-            about somebody's own pictures can be forked into a list. */}
-        {post.category !== "custom" && post.isPublic && post.allowFork && (
-          <Link
-            href={`/u/${post.username}`}
-            className={cn(
-              "flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:text-accent",
-              !post.donationUrl && "ml-auto"
+        {/*
+         * Two different destinations behind one label. A regular post links
+         * to the author's live ranked_titles on their profile — the board a
+         * viewer actually copies is not frozen in the post at all. A Custom
+         * board post links to the board's own page instead, because that is
+         * where copying it is even possible: only the board's tiers ever get
+         * forked, never its pictures (someone else's, uploaded by them), and
+         * the fork control lives there rather than here for the same reason
+         * the post-preview title bar does not carry an upload button.
+         *
+         * `post.isPublic` is the AUTHOR'S profile visibility, which is not
+         * the same flag as the BOARD's — a board can be public with a
+         * private profile behind it, or the reverse — so it is only checked
+         * for the regular case it was written for. `published` already
+         * implies there is somewhere to send a Custom fork to; the board's
+         * own page is the one place that still knows whether it is public.
+         */}
+        {post.category === "custom"
+          ? published && post.allowFork && (
+              <Link
+                href={`/custom/${published.listId}`}
+                className={cn(
+                  "flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:text-accent",
+                  !post.donationUrl && "ml-auto"
+                )}
+                title="Open this board and fork its tiers"
+              >
+                <GitFork className="h-3.5 w-3.5" aria-hidden />
+                Fork
+              </Link>
+            )
+          : post.isPublic && post.allowFork && (
+              <Link
+                href={`/u/${post.username}`}
+                className={cn(
+                  "flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:text-accent",
+                  !post.donationUrl && "ml-auto"
+                )}
+                title="Open the author’s list and fork it"
+              >
+                <GitFork className="h-3.5 w-3.5" aria-hidden />
+                Fork
+              </Link>
             )}
-            title="Open the author’s list and fork it"
-          >
-            <GitFork className="h-3.5 w-3.5" aria-hidden />
-            Fork
-          </Link>
-        )}
       </div>
     </article>
   );

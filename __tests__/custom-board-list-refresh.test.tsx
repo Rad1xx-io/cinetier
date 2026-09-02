@@ -12,6 +12,9 @@ const publishCustomBoard = vi.fn<() => Promise<PublishOutcome>>(async () => ({ p
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({}) }));
+vi.mock("@/lib/hooks/use-supabase-session", () => ({
+  useSupabaseSession: () => ({ user: null, loading: false }),
+}));
 vi.mock("@/lib/supabase/custom-lists", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/supabase/custom-lists")>()),
   deleteItem: (...a: unknown[]) => deleteItem(...(a as [])),
@@ -35,6 +38,7 @@ function board({ canEdit = true } = {}): Board {
       },
     ],
     canEdit,
+    allowFork: false,
   };
 }
 
