@@ -31,9 +31,11 @@ create schema if not exists auth;
 create schema if not exists storage;
 
 -- Supabase's own shape, trimmed to the columns anything here reads.
+-- encrypted_password added for migration 026's account_has_password() self-check.
 create table if not exists auth.users (
   id uuid primary key,
   email text unique,
+  encrypted_password text,
   created_at timestamptz not null default now()
 );
 
