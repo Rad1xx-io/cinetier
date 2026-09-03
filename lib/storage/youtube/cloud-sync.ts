@@ -4,6 +4,9 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { PullOutcome } from "@/lib/storage/sync-decision";
 import type { RankedChannel } from "@/lib/types/youtube";
 
+/** Same ceiling, and the same reason, as the titles push's own chunk size. */
+const DELETE_CHUNK_SIZE = 100;
+
 interface RankedChannelRow {
   channel_id: string;
   title: string;
@@ -90,7 +93,19 @@ export async function pushCloudChannels(userId: string, channels: RankedChannel[
     (row) => !localKeys.has(row.channel_id)
   );
 
-  for (const row of staleRows) {
-    await supabase.from("ranked_channels").delete().eq("user_id", userId).eq("channel_id", row.channel_id);
+  // Batched for the same reason as the titles push — see its comment. The key
+  // here is a single column, so there is nothing to group by first.
+  const staleIds = staleRows.map((row) => row.channel_id);
+  for (let from = 0; from < staleIds.length; from += DELETE_CHUNK_SIZE) {
+    const { error: deleteError } = await supabase
+      .from("ranked_channels")
+      .delete()
+      .eq("user_id", userId)
+      .in("channel_id", staleIds.slice(from, from + DELETE_CHUNK_SIZE));
+
+    if (deleteError) {
+      console.error("TierListOnline: failed to remove stale cloud channel rankings", deleteError);
+      return;
+    }
   }
 }

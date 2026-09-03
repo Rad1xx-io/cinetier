@@ -4,6 +4,14 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { PullOutcome } from "@/lib/storage/sync-decision";
 
+/**
+ * How many ids travel in one `in (…)` filter. PostgREST carries them in the
+ * query string, so this is a ceiling on URL length rather than on the server's
+ * appetite — large enough that an ordinary board is one request, small enough
+ * that an extraordinary one is still a handful.
+ */
+const DELETE_CHUNK_SIZE = 100;
+
 interface RankedTitleRow {
   tmdb_id: number;
   media_type: MediaType;
@@ -104,12 +112,39 @@ export async function pushCloudTitles(userId: string, titles: RankedTitle[]): Pr
     (row) => !localKeys.has(`${row.media_type}:${row.tmdb_id}`)
   );
 
+  /*
+   * Removed in batches, not one request per row.
+   *
+   * This used to `await` a separate DELETE for every stale row, which is
+   * invisible on the boards these paths were written against and linear on a
+   * real one: a board of two hundred titles replaced by another meant two
+   * hundred sequential round trips, each waiting for the last, with the sync
+   * held open for all of them. The rows are grouped by media type so the
+   * composite key still matches exactly what the row-at-a-time version
+   * matched — the same rows, in at most a handful of requests instead of one
+   * each — and chunked so the `in` list cannot grow into a URL no server will
+   * accept.
+   */
+  const byMediaType = new Map<MediaType, number[]>();
   for (const row of staleRows) {
-    await supabase
-      .from("ranked_titles")
-      .delete()
-      .eq("user_id", userId)
-      .eq("tmdb_id", row.tmdb_id)
-      .eq("media_type", row.media_type);
+    const ids = byMediaType.get(row.media_type) ?? [];
+    ids.push(row.tmdb_id);
+    byMediaType.set(row.media_type, ids);
+  }
+
+  for (const [mediaType, ids] of byMediaType) {
+    for (let from = 0; from < ids.length; from += DELETE_CHUNK_SIZE) {
+      const { error: deleteError } = await supabase
+        .from("ranked_titles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("media_type", mediaType)
+        .in("tmdb_id", ids.slice(from, from + DELETE_CHUNK_SIZE));
+
+      if (deleteError) {
+        console.error("TierListOnline: failed to remove stale cloud rankings", deleteError);
+        return;
+      }
+    }
   }
 }
