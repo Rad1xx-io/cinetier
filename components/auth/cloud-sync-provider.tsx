@@ -51,6 +51,10 @@ export function CloudSyncProvider() {
   const titlesPushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const channelsPushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncingDownRef = useRef(false);
+  /** The account the board has already been reconciled against — see the auth listener. */
+  const syncedUserRef = useRef<string | null>(null);
+  /** The run in progress, so a second one queues behind it instead of interleaving. */
+  const syncChainRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -187,6 +191,34 @@ export function CloudSyncProvider() {
     }
 
     /**
+     * Runs syncs one at a time, never side by side.
+     *
+     * `syncingDownRef` is a single boolean shared by every run, and it is what
+     * stops a sync's own `reorderAll` from being mistaken for something the
+     * person did and pushed back up. Two overlapping runs break it: the first
+     * to reach its `finally` clears the flag while the second is still
+     * writing, so that second write escapes the guard and schedules a push of
+     * whatever the board holds at that moment. On a fresh sign-in that board
+     * is empty — and `pushCloudTitles` deletes the cloud rows that are not in
+     * what it was handed, so the leaked push is not a redundant write but a
+     * wipe of the account's saved rankings. Queueing removes the overlap
+     * rather than trying to make the flag survive it.
+     */
+    function queueSync(userId: string, authEvent?: string): Promise<void> {
+      const run = (syncChainRef.current ?? Promise.resolve()).then(() =>
+        authEvent === undefined ? syncDown(userId) : syncDown(userId, authEvent)
+      );
+      const settled = run.catch((error) => {
+        console.error("TierListOnline: sign-in sync failed —", error);
+      });
+      syncChainRef.current = settled;
+      void settled.finally(() => {
+        if (syncChainRef.current === settled) syncChainRef.current = null;
+      });
+      return settled;
+    }
+
+    /**
      * Ends the session's claim on this browser.
      *
      * Called for a real sign-out and for arriving with no session at all,
@@ -204,6 +236,10 @@ export function CloudSyncProvider() {
       // "somebody else's, still here" different lines in the trace.
       const releasing = userIdRef.current;
       userIdRef.current = null;
+      // Signing back in — even as the same account — has to reconcile again:
+      // the board was cleared on the way out, so there is nothing left that a
+      // repeat of that account's id could stand for.
+      syncedUserRef.current = null;
       cancelPendingPushes();
       setSyncStatus({ state: "idle" });
 
@@ -258,21 +294,50 @@ export function CloudSyncProvider() {
       return owner?.kind === "user" && owner.userId === userId;
     }
 
+    /*
+     * A full sync runs when the account changes, not every time the SDK
+     * mentions the account it already told us about.
+     *
+     * `onAuthStateChange` is not a sign-in notification. `@supabase/auth-js`
+     * re-emits `SIGNED_IN` from `_recoverAndRefresh()` for any valid stored
+     * session, with no comparison against what it last reported — and that
+     * runs from `_onVisibilityChanged`, so every return to the tab repeats
+     * it. `TOKEN_REFRESHED` and `USER_UPDATED` arrive the same way. Syncing on
+     * each of them was not merely wasteful, it closed a loop: every PostgREST
+     * request calls `auth.getSession()` for its token (supabase-js's
+     * `_getAccessToken`), `getSession()` calls `_callRefreshToken()` when the
+     * token is inside its expiry margin, and that emits `TOKEN_REFRESHED` to
+     * every subscriber — which started another sync, whose six reads could
+     * each emit again. Each pass also rewrites both boards, and every write
+     * synchronously re-renders every mounted hook reading them, which is what
+     * turned the feedback into a frozen tab rather than just noisy traffic.
+     *
+     * Keying on the identity cuts the loop at its root: an event about an
+     * account already reconciled here is nothing to act on. A different
+     * account still syncs immediately — that is the case the ownership marker
+     * exists for, and it must not be deduplicated away.
+     */
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-      if (session?.user) {
-        userIdRef.current = session.user.id;
-        void syncDown(session.user.id, event);
-      } else {
+      const user = session?.user;
+      if (!user) {
         releaseSession(event);
+        return;
       }
+
+      userIdRef.current = user.id;
+      if (syncedUserRef.current === user.id) return;
+      syncedUserRef.current = user.id;
+      void queueSync(user.id, event);
     });
 
-    // "Try again" needs the session, which only this component has.
+    // "Try again" needs the session, which only this component has. Asked for
+    // by hand, so it re-runs regardless of what has already been reconciled —
+    // the gate above is about repeated notifications, not repeated intent.
     registerSyncRetry(() => {
       const userId = userIdRef.current;
-      if (userId) void syncDown(userId);
+      if (userId) void queueSync(userId);
     });
 
     window.addEventListener(RANKINGS_CHANGED_EVENT, scheduleTitlesPush);
