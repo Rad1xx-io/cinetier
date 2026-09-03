@@ -226,17 +226,46 @@ Google (`signInWithOAuth`), magic link (`signInWithOtp`), email/username
 `resolve_username_email(p_username) returns text` (миграция 025) —
 единственный способ узнать email по username до появления сессии,
 `anon`+`authenticated` в грантах, `search_path=''`. У неё два
-независимых слоя rate limiting: `/api/auth/resolve-identifier`
-(`lib/rate-limit/limiter.ts`, тир `"auth"`) снаружи, и
-`consume_rate_limit` по ключу username изнутри самой функции — второй
-существует именно потому, что anon key публичный и RPC вызываема
-напрямую, минуя приложение.
+независимых слоя rate limiting: приложенческий (`lib/rate-limit/limiter.ts`,
+тир `"auth"`) снаружи, и `consume_rate_limit` по ключу username изнутри
+самой функции — второй существует именно потому, что anon key публичный
+и RPC вызываема напрямую, минуя приложение.
 
-Каждая попытка входа паролем — и по email, и по username — идёт через
-`/api/auth/resolve-identifier`, даже когда резолвить нечего: это
-единственное место, где считается rate limit на попытки, поэтому оно
-не может быть пропущено для "уже готового" email. Тот же роут
-переиспользован для "забыли пароль".
+**Резолвинг и сам вызов Supabase — оба целиком на сервере, в одном
+запросе; email никогда не появляется в теле ответа.** Раньше (до фикса
+2026-09-03) резолвинг жил в отдельном `/api/auth/resolve-identifier`,
+который отдавал email обратно клиенту — рабочая уязвимость: любой
+неаутентифицированный вызывающий мог узнать реальный email ЛЮБОГО
+аккаунта по его username, включая приватные профили (полная запись —
+`.ai/DECISIONS.md`, 2026-09-03). Теперь `POST /api/auth/sign-in`
+(`{identifier, password}`) и `POST /api/auth/forgot-password`
+(`{identifier}`) резолвят внутри себя (через `lib/supabase/resolve-identifier.ts`'s
+`resolveIdentifierEmail`, всё ещё вызывающую ту же
+`resolve_username_email`) и сразу выполняют `signInWithPassword`/
+`resetPasswordForEmail` через `getSupabaseServerClient()` (тот же
+cookie-записывающий клиент, что уже использует `/auth/callback` для
+magic link/Google) — email не пересекает границу ответа ни на одном
+пути. `forgot-password` всегда отвечает `{ok:true}`, независимо от
+того, резолвился ли identifier — та же неоднозначность, что раньше
+только рисовалась на фронте, теперь зашита в сам ответ сервера. Каждая
+попытка входа паролем — и по email, и по username — идёт через
+`/api/auth/sign-in`, даже когда резолвить нечего: это единственное
+место, где считается rate limit на попытки.
+
+**Server-side `signInWithPassword` не порождает `onAuthStateChange`
+сам по себе — клиенту нужен явный шаг, чтобы узнать о своей сессии.**
+`getSupabaseServerClient()` пишет cookies напрямую, минуя браузерный
+Supabase-клиент — значит `session-store.ts`'s подписчики не
+уведомляются автоматически (как это происходит после
+`signInWithOtp`/`signInWithOAuth`, вызванных ЭТИМ клиентом). Простого
+`getSession()` тоже недостаточно — по коду `@supabase/auth-js`
+(`__loadSession()`) он не уведомляет подписчиков, когда найденная
+сессия уже была валидна, только когда её пришлось обновлять.
+`refreshSessionFromCookies()` в `session-store.ts` закрывает это явно:
+читает `getSession()` (читает storage/cookies заново при каждом
+вызове — не кэш) и напрямую пишет результат в тот же `cached`/
+`listeners`, что использует `onAuthStateChange`. Вызывается из
+`SignInForm` после успешного `/api/auth/sign-in`.
 
 **`SignupMethod` не читается из `app_metadata` напрямую для различения
 magic-link/password.** Supabase помечает оба одинаковым `provider:

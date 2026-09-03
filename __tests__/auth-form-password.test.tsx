@@ -1,22 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 
-const signInWithPassword = vi.fn();
 const signUp = vi.fn();
-const resetPasswordForEmail = vi.fn();
 const saveProfile = vi.fn();
 const armPasswordSignup = vi.fn();
 const trackSignupStarted = vi.fn();
+const refreshSessionFromCookies = vi.fn();
 
 vi.mock("@/lib/supabase/client", () => ({
   getSupabaseBrowserClient: () => ({
     auth: {
+      // Password sign-in and forgot-password no longer call the browser
+      // client's own auth methods at all — both now go through a server
+      // route, precisely so the email an identifier resolves to never has
+      // to cross back into the browser. signInWithOtp (magic link) and
+      // signUp (registration) are untouched by this fix and still call
+      // through here directly.
       signInWithOtp: vi.fn(async () => ({ error: null })),
-      signInWithPassword: (...a: unknown[]) => signInWithPassword(...a),
       signUp: (...a: unknown[]) => signUp(...a),
-      resetPasswordForEmail: (...a: unknown[]) => resetPasswordForEmail(...a),
     },
   }),
+}));
+vi.mock("@/lib/supabase/session-store", () => ({
+  refreshSessionFromCookies: (...a: unknown[]) => refreshSessionFromCookies(...a),
 }));
 vi.mock("@/components/auth/google-sign-in-button", () => ({ GoogleSignInButton: () => null }));
 vi.mock("@/lib/supabase/profiles", async (importOriginal) => ({
@@ -33,7 +39,7 @@ vi.mock("@/lib/analytics/events", async (importOriginal) => ({
 
 import { AuthForm } from "@/components/auth/auth-form";
 
-function mockFetchResolve(response: { status: number; body: unknown }) {
+function mockFetch(response: { status: number; body: unknown }) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => ({
@@ -61,9 +67,8 @@ function registerEmailInput(): HTMLElement {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  signInWithPassword.mockResolvedValue({ error: null });
   saveProfile.mockResolvedValue({ ok: true, profile: {} });
-  mockFetchResolve({ status: 200, body: { email: "resolved@example.test" } });
+  mockFetch({ status: 200, body: { ok: true } });
 });
 afterEach(() => {
   cleanup();
@@ -81,7 +86,7 @@ describe("the password door", () => {
 });
 
 describe("sign-in with an email or username", () => {
-  it("resolves the identifier, then signs in with the resolved email", async () => {
+  it("sends the identifier and password to the server route in one request, and refreshes the session on success", async () => {
     render(<AuthForm />);
     openPasswordSection();
 
@@ -91,20 +96,19 @@ describe("sign-in with an email or username", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "hunter22" } });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
-    await waitFor(() => expect(signInWithPassword).toHaveBeenCalled());
+    await waitFor(() => expect(refreshSessionFromCookies).toHaveBeenCalled());
     expect(fetch).toHaveBeenCalledWith(
-      "/api/auth/resolve-identifier",
-      expect.objectContaining({ body: JSON.stringify({ identifier: "someuser" }) })
+      "/api/auth/sign-in",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ identifier: "someuser", password: "hunter22" }),
+      })
     );
-    expect(signInWithPassword).toHaveBeenCalledWith({
-      email: "resolved@example.test",
-      password: "hunter22",
-    });
     expect(trackSignupStarted).toHaveBeenCalledTimes(1);
   });
 
-  it("shows Supabase's own error when the password is wrong", async () => {
-    signInWithPassword.mockResolvedValue({ error: { message: "Invalid login credentials" } });
+  it("shows the server's error message when the sign-in is refused", async () => {
+    mockFetch({ status: 401, body: { error: "Invalid login credentials" } });
     render(<AuthForm />);
     openPasswordSection();
 
@@ -115,10 +119,11 @@ describe("sign-in with an email or username", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(await screen.findByText("Invalid login credentials")).toBeTruthy();
+    expect(refreshSessionFromCookies).not.toHaveBeenCalled();
   });
 
-  it("surfaces a rate-limit refusal without ever calling signInWithPassword", async () => {
-    mockFetchResolve({
+  it("surfaces a rate-limit refusal without ever refreshing the session", async () => {
+    mockFetch({
       status: 429,
       body: { error: "Too many requests. Please slow down and try again shortly." },
     });
@@ -132,7 +137,7 @@ describe("sign-in with an email or username", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(await screen.findByText(/too many requests/i)).toBeTruthy();
-    expect(signInWithPassword).not.toHaveBeenCalled();
+    expect(refreshSessionFromCookies).not.toHaveBeenCalled();
   });
 
   it("switches to registration and back", () => {
@@ -244,8 +249,7 @@ describe("forgot password", () => {
     fireEvent.click(screen.getByRole("button", { name: /forgot password/i }));
   }
 
-  it("resolves the identifier, then asks Supabase to send a reset link", async () => {
-    resetPasswordForEmail.mockResolvedValue({ error: null });
+  it("sends the identifier to the server route, unresolved — the server does the resolving now", async () => {
     openForgot();
 
     fireEvent.change(screen.getByLabelText("Email or username"), {
@@ -253,18 +257,15 @@ describe("forgot password", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /send reset link/i }));
 
-    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalled());
-    const [calledEmail, options] = resetPasswordForEmail.mock.calls[0] as [string, { redirectTo: string }];
-    expect(calledEmail).toBe("resolved@example.test");
-    // Through the existing /auth/callback, which already exchanges the code
-    // for a session — carrying /auth/reset-password as where to land after.
-    expect(options.redirectTo).toContain("/auth/callback");
-    expect(options.redirectTo).toContain(encodeURIComponent("/auth/reset-password"));
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/auth/forgot-password",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ identifier: "someuser" }) })
+    );
     expect(await screen.findByText(/a reset link is on its way/i)).toBeTruthy();
   });
 
-  it("shows the same generic confirmation regardless of whether the account exists — no enumeration signal", async () => {
-    resetPasswordForEmail.mockResolvedValue({ error: null });
+  it("shows the same generic confirmation regardless of whether the account exists — the server response carries the ambiguity now, not just this copy", async () => {
     openForgot();
 
     fireEvent.change(screen.getByLabelText("Email or username"), {
@@ -276,8 +277,8 @@ describe("forgot password", () => {
     expect(screen.queryByText(/no such|not found|does not exist/i)).toBeNull();
   });
 
-  it("shows a real error when Supabase itself refuses the request", async () => {
-    resetPasswordForEmail.mockResolvedValue({ error: { message: "Email rate limit exceeded" } });
+  it("shows a real error when the route itself refuses the request", async () => {
+    mockFetch({ status: 503, body: { error: "Cloud accounts are not configured." } });
     openForgot();
 
     fireEvent.change(screen.getByLabelText("Email or username"), {
@@ -285,6 +286,6 @@ describe("forgot password", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /send reset link/i }));
 
-    expect(await screen.findByText("Email rate limit exceeded")).toBeTruthy();
+    expect(await screen.findByText("Cloud accounts are not configured.")).toBeTruthy();
   });
 });
