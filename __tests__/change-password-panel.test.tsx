@@ -58,12 +58,13 @@ describe("cloud accounts not configured", () => {
 });
 
 describe("an account that already has a password", () => {
-  it("asks for the current password too", async () => {
+  it("asks for the current password too, and the heading matches the button", async () => {
     rpc.mockResolvedValue({ data: true, error: null });
     render(<ChangePasswordPanel />);
 
     expect(await screen.findByLabelText("Current password")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Change password" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Change your password" })).toBeTruthy();
   });
 
   it("submits current and new password together", async () => {
@@ -110,20 +111,30 @@ describe("an account with no password yet", () => {
     rpc.mockResolvedValue({ data: false, error: null });
     render(<ChangePasswordPanel />);
 
-    expect(await screen.findByRole("button", { name: "Set password" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Set a password" })).toBeTruthy();
     expect(screen.queryByLabelText("Current password")).toBeNull();
+  });
+
+  it("the heading reads the same as the button — not one of each word", async () => {
+    rpc.mockResolvedValue({ data: false, error: null });
+    render(<ChangePasswordPanel />);
+
+    expect(await screen.findByRole("heading", { name: "Set a password" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Set a password" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /change/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /change/i })).toBeNull();
   });
 
   it("submits without a currentPassword field at all", async () => {
     rpc.mockResolvedValue({ data: false, error: null });
     render(<ChangePasswordPanel />);
-    await screen.findByRole("button", { name: "Set password" });
+    await screen.findByRole("button", { name: "Set a password" });
 
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "new-hunter2222" } });
     fireEvent.change(screen.getByLabelText("Confirm new password"), {
       target: { value: "new-hunter2222" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Set password" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set a password" }));
 
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(fetch).toHaveBeenCalledWith(
@@ -131,21 +142,36 @@ describe("an account with no password yet", () => {
       expect.objectContaining({ body: JSON.stringify({ newPassword: "new-hunter2222" }) })
     );
   });
+
+  it("says 'Password set.', not 'updated', once it succeeds — nothing existed before this", async () => {
+    rpc.mockResolvedValue({ data: false, error: null });
+    render(<ChangePasswordPanel />);
+    await screen.findByRole("button", { name: "Set a password" });
+
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "new-hunter2222" } });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), {
+      target: { value: "new-hunter2222" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Set a password" }));
+
+    expect(await screen.findByText(/password set\./i)).toBeTruthy();
+    expect(screen.queryByText(/password updated/i)).toBeNull();
+  });
 });
 
 describe("mismatched new/confirm password — a client-side check before the round trip", () => {
   it("disables submit and shows a message, without ever calling fetch", async () => {
     rpc.mockResolvedValue({ data: false, error: null });
     render(<ChangePasswordPanel />);
-    await screen.findByRole("button", { name: "Set password" });
+    await screen.findByRole("button", { name: "Set a password" });
 
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "new-hunter2222" } });
     fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: "different" } });
 
     expect(screen.getByText(/don.t match/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Set password" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Set a password" })).toHaveProperty("disabled", true);
 
-    fireEvent.click(screen.getByRole("button", { name: "Set password" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set a password" }));
     expect(fetch).not.toHaveBeenCalled();
   });
 });

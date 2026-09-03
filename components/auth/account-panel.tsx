@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, KeyRound, LogOut, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuthForm } from "@/components/auth/auth-form";
@@ -18,6 +18,29 @@ export function AccountPanel() {
   const [changePasswordStatus, setChangePasswordStatus] = useState<ChangePasswordRequestStatus>({
     kind: "idle",
   });
+  // Defaults to "has a password" — the common case, and the safe assumption
+  // while account_has_password() (granted to authenticated only, same
+  // no-argument RPC ChangePasswordPanel itself calls) is still in flight.
+  // Flips to false only once it actually says so, so an account that has
+  // never had a password (arrived via Google or magic link) gets offered
+  // "Set a password" instead of "Change password" here too.
+  const [hasPassword, setHasPassword] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    supabase
+      .rpc("account_has_password")
+      .then(({ data, error }: { data: unknown; error: { message: string } | null }) => {
+        if (cancelled || error) return;
+        setHasPassword(data === true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Cloud accounts aren't set up on this deployment — the app is guest-only,
   // stay silent rather than showing a broken/half-configured account section.
@@ -85,7 +108,7 @@ export function AccountPanel() {
               disabled={changePasswordStatus.kind === "sending"}
             >
               <KeyRound className="h-3.5 w-3.5" aria-hidden />
-              Change password
+              {hasPassword ? "Change password" : "Set a password"}
             </Button>
           </div>
         )}
