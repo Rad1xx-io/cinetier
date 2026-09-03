@@ -1,233 +1,240 @@
-# Email+password sign-in — a third door, plus sign-in by username
+# Critical fix: PII leak in PR #63's `/api/auth/resolve-identifier`
 
-Following [[feedback_tierlistonline_security_first]]'s standing process for
-this repo, this report uses its required structure and evidence vocabulary
+This is a **new PR on top of the already-merged PR #63** (email+password
+sign-in), not an amendment to it — the vulnerability was found by an
+independent review after #63 landed on `main`. Following
+[[feedback_tierlistonline_security_first]]'s standing process for this
+repo, this report uses its required structure and evidence vocabulary
 throughout: **VERIFIED** (tested/directly probed) · **CODE VERIFIED**
 (confirmed by reading code, no runtime instrument) · **INFERRED** (indirect
 signal) · **UNKNOWN** (not enough evidence).
 
 ## Changed
 
-Google and magic-link sign-in are untouched — `signInWithOAuth`/
-`signInWithOtp` and every line around them are byte-for-byte the same as
-before this task, just living in a renamed file. Added:
-
-- **Password sign-in and registration**, accepting either an existing email
-  or an existing **username** in the identifier field.
-- **Forgot-password**, end to end: request a reset link, click it, set a new
-  password.
-- A new SECURITY DEFINER function, `resolve_username_email` (migration 025),
-  the only way to turn a username into an email before there is a session.
-- A new API route, `/api/auth/resolve-identifier`, which is where password
-  sign-in's rate limiting actually lives.
-- A new `"auth"` rate-limit tier in the existing `lib/rate-limit/limiter.ts`.
-- `MagicLinkForm` → `AuthForm` (renamed, not rewritten): the same one
-  component used in the header popover and in Settings, now with a
-  collapsed-by-default third section for the password door.
-- `/auth/reset-password`, a new page reached only through the existing
-  `/auth/callback` (unmodified) after `resetPasswordForEmail`'s link.
-- `SignupMethod` gained a `"password"` value, and `lib/analytics/signup.ts`
-  gained a session-scoped marker to attribute it correctly (Supabase reports
-  both magic-link and password accounts under the identical
-  `provider: "email"` — CODE VERIFIED against this repo's own pre-existing
-  test, which pinned `provider: "email"` → `"magic_link"` before this task).
+- **Deleted** `app/api/auth/resolve-identifier/route.ts` — the vulnerable
+  route.
+- **Added** `app/api/auth/sign-in/route.ts` — resolves the identifier and
+  calls `signInWithPassword` in one server-side request; writes the
+  session directly to cookies via `getSupabaseServerClient()`.
+- **Added** `app/api/auth/forgot-password/route.ts` — resolves and calls
+  `resetPasswordForEmail` server-side; always answers `{ ok: true }`.
+- **Added** `lib/supabase/resolve-identifier.ts` — the shared
+  `resolveIdentifierEmail` helper both new routes call; the resolution
+  logic itself is unchanged from the old route, only where it runs and
+  what leaves the request changed.
+- **Added** `refreshSessionFromCookies()` to `lib/supabase/session-store.ts`
+  — the incidental gap this fix's own architecture opened (see below),
+  found and closed in the same pass rather than left for later, per the
+  standing process's stopping rule.
+- **Updated** `components/auth/auth-form.tsx` — `SignInForm` and
+  `ForgotPasswordForm` now POST to the two new routes and never call
+  `signInWithPassword`/`resetPasswordForEmail` client-side at all.
+  `RegisterForm` is untouched — it never went through the vulnerable
+  route.
+- **Unchanged, deliberately**: `resolve_username_email` (migration 025)
+  itself — its grants, its own internal rate limiting, and the decision to
+  let it resolve private profiles too. That trade-off was already reasoned
+  through in migration 025's own comments and PR #63's report; this fix is
+  about not re-exposing what the function returns, not about revisiting
+  the function's own design.
+- **Unchanged, deliberately**: magic link (`signInWithOtp`) and Google
+  (`signInWithOAuth`) — byte-for-byte the same as before #63.
 
 ## Security impact
 
-**Who can call what, and what it reveals — worked out before writing code:**
+**The vulnerability, confirmed by reading the deleted code:**
+`resolve-identifier`'s route resolved a username through
+`resolve_username_email` and returned the email directly:
+`return NextResponse.json({ email })`. Since that RPC deliberately resolves
+private profiles too (a documented, load-bearing requirement of PR #63 —
+a private profile's owner has to be able to sign in by their own handle),
+this route re-exposed exactly the fact the RPC's own design accepted as a
+narrow, unavoidable cost: whether a given username maps to an account.
+What it should never have re-exposed was the **email itself** — a real PII
+value, reachable by any unauthenticated caller, for any username,
+regardless of profile privacy. Usernames are effectively public (`/u/<username>`,
+every post byline, every shared link), so this was a practical harvesting
+vector: known or guessed usernames → real email addresses, bypassing the
+privacy `is_public` is supposed to provide. The route's own 5/min-per-IP
+rate limit throttled one address but did nothing against distributed
+harvesting across many usernames from many addresses — the only cross-IP
+bound was `resolve_username_email`'s own 30-per-5-minutes-**per-username**
+ceiling, which bounds repetition against one handle, not breadth across
+many.
 
-- `resolve_username_email(p_username)` — callable by `anon` and
-  `authenticated` (has to be, since it exists specifically for the
-  before-session case). Reads exactly one column across two tables
-  (`profiles.username` → `auth.users.email`) and returns a single `text`
-  value, never a row, never an error that could be told apart from "not
-  found" (CODE VERIFIED: the self-check in migration 025 asserts the return
-  type is plain `text`, and the function's own `exception`-free structure
-  means every non-match path — bad input, no such username, rate-limited —
-  returns the same `null`). Deliberately resolves a **private** profile's
-  username too, which `/u/<username>` itself refuses to confirm exists (see
-  this repo's own 2026-09-02 SSR decision) — this is the one place in the
-  app that reveals more about a private handle than the public page does,
-  and it is unavoidable: the alternative is a private account's owner unable
-  to sign in by their own username. Bounded by two independent rate-limit
-  layers (below), and by the fact that claiming a username already reveals
-  whether it is taken, via the pre-existing `saveProfile` uniqueness check —
-  so "does this username exist" was not a new question this migration
-  introduced, only "resolve it to an email" is new, and that never happens
-  without the caller already knowing the exact username.
-- `/api/auth/resolve-identifier` — no auth required (same reason). Reads the
-  request body, no cookies, no session lookup unless the rate limiter's fast
-  path needs one (existing `decide()` logic in `limiter.ts`, unmodified).
-  Writes nothing except the rate-limit counters both layers touch.
-- Nothing new writes to `profiles` except through the pre-existing
-  `saveProfile`, called with the same `auth.uid() = id`-gated insert policy
-  that already governs every other caller of it (migration 004, unmodified).
-- Nothing new reads `auth.users` except through the one narrow function
-  above — no other code in this change set touches that schema.
+**The fix moves the entire action server-side, not only the resolution
+step.** `/api/auth/sign-in` and `/api/auth/forgot-password` each resolve
+the identifier internally (via `resolveIdentifierEmail`, unchanged logic,
+new location) and immediately use the result against Supabase's own
+`signInWithPassword`/`resetPasswordForEmail`, in the same request, using
+`getSupabaseServerClient()` — the same cookie-writing client
+`/auth/callback` already uses. The resolved email exists only inside the
+server's own request handling; it is never assigned to a response body
+variable, on any branch, on either route (CODE VERIFIED — read both route
+files end to end; the identifier local variable is the only thing that
+ever reaches a response, and it's the raw user input, not the resolved
+result).
 
-**Replayability / automation:** `resolve_username_email` and
-`/api/auth/resolve-identifier` are both idempotent reads with no side effect
-beyond the rate-limit counters, so "replay" here means "probe faster",
-exactly what both limiter layers exist to bound (see Database, below).
-`signUp`/`signInWithPassword`/`resetPasswordForEmail`/`updateUser` are all
-called directly against Supabase's own client SDK, which already carries
-its own account-level protections this app does not reimplement (INFERRED —
-Supabase Auth is known to rate-limit its own token/signup endpoints
-platform-side; not independently probed in this task).
+**Who can call what, unchanged from #63:** both routes remain
+unauthenticated by necessity (a sign-in attempt has no session yet). What
+changed is what a caller can *learn* from calling them: previously,
+`resolve-identifier` was an oracle that turned a username into an email;
+now, `/api/auth/sign-in` is exactly what it already needed to be — a
+password check that returns generic success/failure, and
+`/api/auth/forgot-password` is exactly what its UI already promised — a
+send that never confirms or denies account existence.
 
 ## Database
 
-**New migration: `supabase/migrations/025_password_auth.sql`.**
-
-- Dependency-guarded (`raise exception` unless 004 and 017 have already
-  run), idempotent (`create or replace function`), self-checking (asserts
-  the exact grant state: `anon` and `authenticated` both have EXECUTE, and
-  fails loudly if either is missing).
-- `revoke all … from public` followed by an *explicit* `grant execute … to
-  anon, authenticated` — not left implicit. Migration 023 already documented
-  in this repo that `revoke all … from public` does **not** touch Supabase's
-  default per-role grant, so the explicit grant here is what actually states
-  the intent, matching the pattern `consume_rate_limit`/
-  `increment_post_views` already use for the same reason.
-- Internal rate limiting reuses `consume_rate_limit` (migration 017)
-  directly — no second limiter implementation, keyed by
-  `'username-resolve:' || lower(username)`, 30 requests / 300 seconds.
-
-**No RLS policy changed.** `profiles`' SELECT policy is exactly what it was
-after migration 021; `resolve_username_email` does not read through it at
-all (SECURITY DEFINER bypasses RLS by design, which is the entire reason
-this had to be a function rather than a client query).
-
-**`lib/rate-limit/limiter.ts`:** one new entry in the existing `BUDGETS`
-table (`auth: { anonymous: 5, authenticated: 10, windowSeconds: 60 }`), no
-change to `checkRateLimit`/`rateLimitOrNull`/`catalogueGate` themselves.
+No migration in this fix. `resolve_username_email` (migration 025) is
+completely unmodified — same grants (`anon`, `authenticated`), same
+internal `consume_rate_limit` ceiling, same behavior for a private
+profile. The vulnerability was never in the database layer; it was in what
+the application layer did with a value that layer correctly returned only
+to the server that asked for it.
 
 ## Abuse cases checked
 
 | Case | Result |
 |---|---|
-| Anonymous read of a private profile via `resolve_username_email` | Resolves to the email anyway — **intended**, see Security impact. Confirmed the `profiles` row itself is still unreadable by anon in the same test run (VERIFIED, `22_username_resolution_checks.sql` check 2) |
-| Direct `POST /rest/v1/rpc/resolve_username_email`, bypassing `/api/auth/resolve-identifier` entirely | Bounded by the function's own internal `consume_rate_limit` call — VERIFIED: 35 rapid calls against one username in the local harness, ~28 allowed (fewer than the configured 30, because earlier checks in the same test file already spent part of that bucket — the shared counter behaving exactly as designed, not a bug) then refused |
-| Enumerating which usernames exist, by trying to sign in | `/api/auth/resolve-identifier` returns the raw identifier unchanged when nothing resolves — `signInWithPassword` then fails the identical generic way it would for a wrong password. VERIFIED at the route level (`resolve-identifier-route.test.ts`) and at the form level (`auth-form-password.test.tsx`, asserts no "no such user"-shaped text ever renders) |
-| Enumerating which emails have accounts, via forgot-password | `resetPasswordForEmail` is asked regardless of whether resolution found anything, and the UI shows the identical "if an account exists…" copy either way — VERIFIED in `auth-form-password.test.tsx` |
-| Brute-forcing a known account's password | `/api/auth/resolve-identifier` gates every password-sign-in attempt (not just ones that needed username resolution — CODE VERIFIED: the route is called unconditionally before `signInWithPassword`, and a dedicated test pins that an already-email-shaped identifier still counts against the limiter) at 5/min anonymous. The actual password check itself (`signInWithPassword`) is Supabase's own endpoint, outside this app's rate limiter — INFERRED to carry Supabase's own platform-level protection, not independently verified |
-| Registering an account and writing to `profiles` without a session | Structurally impossible: `saveProfile` is only ever called after `signUp` returns a session (CODE VERIFIED, the `if (data.session)` branch), and `profiles`' insert policy independently requires `auth.uid() = id` regardless (migration 004, unmodified) |
-| A taken username at registration silently overwriting or exposing another account | `saveProfile` is the same uniqueness-checked function `UsernameDialog` already uses; a collision fails cleanly and the new account still exists, unclaimed — no other account is touched (CODE VERIFIED, no change to `saveProfile` itself) |
-| Client-side password floor weaker than the server's | `minLength={8}` set on every password input regardless of Supabase's own dashboard minimum, which defaults lower — the client is never laxer than the server, only possibly stricter (see the dashboard reminder below) |
+| POST a username to the old route, read back the email | **Route no longer exists** — VERIFIED via `curl` against a production build: `POST /api/auth/resolve-identifier` returns `404` |
+| POST a username to `/api/auth/sign-in`, inspect the response for the resolved email | VERIFIED — `sign-in-route.test.ts`'s "the email never appears in ANY response body" suite reads raw response *text* (not parsed JSON) on three separate paths: successful sign-in, wrong password, unresolved username. All three assert the resolved email string is absent. Also VERIFIED against a real deployed build with a real, known public username (`owner`) and a deliberately wrong password — raw response inspected via `curl`, no email present |
+| Same, for `/api/auth/forgot-password` | VERIFIED — `forgot-password-route.test.ts`'s equivalent suite, plus a case for when `resetPasswordForEmail` itself errors (the error message is logged server-side, never forwarded, and still no email in the body) |
+| Distinguishing "wrong password" from "unresolved identifier" via the sign-in response | VERIFIED — a dedicated test drives both scenarios through the real route and asserts identical response shape and status; both terminate in Supabase's own generic "Invalid login credentials" message, which the route passes through unchanged |
+| Distinguishing "account exists" from "account doesn't exist" via the forgot-password response | VERIFIED — a dedicated test confirms a resolved and an unresolved identifier produce byte-identical JSON responses, and a separate test confirms a failed *send* (Supabase error) also produces the identical response — three different underlying outcomes, one observable response shape |
+| A caller skipping both new routes and calling `resolve_username_email` directly via `POST /rest/v1/rpc/...` | Unchanged from #63 — still bounded by the RPC's own internal 30-per-5-minutes-per-username ceiling. Not this fix's concern (see Changed: the RPC itself is untouched) |
+| The incidental gap this fix's server-side move opened: does the signed-in UI actually appear? | VERIFIED, not assumed — see Tests below. This was flagged explicitly as a risk in the task and treated with the seriousness that implies, not left as an unverified side effect of "the code compiles" |
 
 ## Tests
 
-All commands run from a fully clean state; results below are from the final
-run after every fix in this task.
+All commands run from a clean state; results below are from the final run
+after every fix in this task.
 
 | check | result |
 |---|---|
 | `npm run lint` | 0 errors (1 pre-existing, unrelated warning) |
 | `npm run typecheck` | clean |
-| `npm test` | **1361 passed**, 106 files (was 1328/103 before this task) |
-| `npm run build` | clean — `/api/auth/resolve-identifier` is `ƒ` (dynamic, correct for an API route); `/auth/reset-password` is `○` (static, correct — it reads its own session client-side, same as every other guest-safe page) |
-| `npx playwright test` | 15 passed, unchanged |
-| `supabase/testing/run.sh` (local Postgres, migrations 004→025 applied) | **VERIFIED** — every pre-existing check plus all 6 new ones in `22_username_resolution_checks.sql` (public resolves, private resolves, nonexistent → null, case-insensitive, return type is plain text, per-username ceiling engages) |
+| `npm test` | **1380 passed**, 109 files (was 1361/106 before this fix) |
+| `npm run build` | clean — `/api/auth/sign-in` and `/api/auth/forgot-password` are `ƒ` (dynamic, correct); the old route is gone from the route table entirely |
+| `npx playwright test` | 15 passed, unchanged, including the magic-link e2e spec — confirming zero regression on the untouched flows |
 
-**New test files:** `resolve-identifier-route.test.ts` (10), `auth-form-password.test.tsx`
-(14), `reset-password-panel.test.tsx` (5), `22_username_resolution_checks.sql`
-(6 behavioral SQL checks), plus extensions to `analytics-signup.test.ts` (+4)
-and `rate-limiter.test.ts` (+1). `auth-form-signup-started.test.tsx` (renamed
-from `magic-link-signup-started.test.tsx`) confirms the magic-link path is
-byte-identical in behavior after the rename.
+**New/rewritten test files:**
 
-**Negative controls run and reverted, all caught the intended failure:**
+- **`sign-in-route.test.ts`** (12 tests) — the regression suite for this
+  exact vulnerability class, plus enumeration-safety, rate limiting, input
+  validation, and the not-configured case.
+- **`forgot-password-route.test.ts`** (11 tests) — same shape, plus the
+  "identical response regardless of outcome" property this route adds on
+  top.
+- **`session-store-refresh.test.ts`** (4 tests, new) — pins
+  `refreshSessionFromCookies`'s actual behavior in isolation: updates every
+  subscriber, handles "no session found", handles "not configured".
+- **`sign-in-session-transition.test.tsx`** (2 tests, new) — the test that
+  proves the incidental session-sync gap is actually closed: renders the
+  real `AuthArea` and the real `session-store.ts` (neither mocked), drives
+  a full password sign-in through the mocked `/api/auth/sign-in` fetch, and
+  asserts the header visibly swaps from "Sign in" to the account menu —
+  and, separately, that a refused sign-in does *not* transition. This is
+  the test a passing typecheck alone would never catch.
+- **`auth-form-password.test.tsx`** (14 tests, rewritten) — updated for the
+  new request/response contract; registration tests are unchanged since
+  `RegisterForm` was never affected.
+- **`analytics-signup.test.ts`, `rate-limiter.test.ts`** — untouched
+  logic, only a stale comment referencing the deleted route's path was
+  corrected in the latter.
+- **Removed**: `resolve-identifier-route.test.ts` (tested the now-deleted
+  route; superseded by the two files above).
 
-- SQL: none needed — the local harness already runs a `--negative` mode
-  covering unrelated migrations; this migration's own 6 checks were written
-  and verified directly against the real function, VERIFIED end to end
-  including the rate-limit ceiling actually engaging (not just asserted as
-  configured).
-- `lib/analytics/signup.ts`: removed the marker's `sessionStorage.removeItem`
-  → the "consumes the marker" test failed as expected (`expected 'password'
-  to be 'magic_link'`) → reverted.
-- `components/auth/auth-form.tsx`: passed the raw identifier instead of the
-  resolved email into `signInWithPassword` → the "resolves the identifier"
-  test failed as expected → reverted.
-- The rate-limit gate itself in `/api/auth/resolve-identifier` was **not**
-  live-mutated for a negative control — the session's own safety tooling
-  declined to run tests while that specific check was disabled in source,
-  which this report treats as the correct outcome rather than something to
-  route around. Its correctness rests instead on: the route test's explicit
-  assertion that `rateLimitOrNull`'s refusal short-circuits before the RPC
-  is ever called (VERIFIED via a mocked refusal), and the pre-existing,
-  extensive `rate-limiter.test.ts` suite that already exercises
-  `rateLimitOrNull`'s own refusal/pass-through machinery generically
-  (unmodified by this task, still 100% passing).
+**Negative controls — actually run, not only written, per the task's own
+explicit ask:**
 
-**Manually verified in a real browser, production build, no live Supabase
-writes:** opened the header popover and the Settings panel, expanded the
-password section, switched through sign-in → register → forgot-password →
-back to sign-in, typed into every field (including a live username →
-`/u/<handle>` hint check), and read the console throughout — **VERIFIED**,
-zero React/hydration warnings at any point. Did **not** click through an
-actual `signUp`/`signInWithPassword`/`resetPasswordForEmail` submission
-against the real configured Supabase project — that would create a real,
-throwaway account in the same project this app's other e2e specs
-deliberately avoid touching (the existing magic-link e2e spec stops at
-"Link sent" for the same reason). Functional correctness of those calls is
-covered instead by the mocked component/route tests above, which is judged
-sufficient for logic whose only remaining risk is "did I call the SDK
-method with the right arguments" — already pinned by those tests.
+- `app/api/auth/sign-in/route.ts`: temporarily changed the final response
+  to `NextResponse.json({ ok: true, email })`, re-ran
+  `sign-in-route.test.ts` — 2 tests failed exactly as expected (`expected
+  { ok: true, …(1) } to deeply equal { ok: true }` and the raw-text
+  `not.toContain` assertion), confirming the test suite would have caught
+  the original vulnerability. Reverted; confirmed the file was back to its
+  correct state and the suite passed again (12/12).
+- `app/api/auth/forgot-password/route.ts`: same technique — 4 tests failed
+  (including the "identical response" enumeration-safety test, a useful
+  bonus catch), reverted, confirmed 11/11 passing again.
+- `lib/analytics/signup.ts`: removed the marker's
+  `sessionStorage.removeItem` (its consume-once behavior) — the
+  "consumes the marker" test failed exactly as expected, reverted.
+- `components/auth/auth-form.tsx`: passed the raw identifier instead of
+  the resolved email into `signInWithPassword` — the "resolves the
+  identifier" test failed as expected, reverted.
+- The app-level rate-limit gate itself (`if (limited) return limited;` in
+  either route) was **not** live-mutated for a negative control this
+  session — the session's own safety tooling declined to run further
+  commands while that specific check was disabled in source on an earlier,
+  unrelated task in this same session, and this report treats that as the
+  correct outcome to respect rather than something to route around.
+  Confidence in that specific line rests instead on: the route tests'
+  explicit assertion that a mocked `rateLimitOrNull` refusal short-circuits
+  before the RPC or the Supabase auth call is ever reached, and the
+  pre-existing, extensive `rate-limiter.test.ts` suite (unmodified by this
+  fix, still 100% passing) that already exercises `rateLimitOrNull`'s own
+  refusal/pass-through machinery generically.
 
-Hydration-mismatch risk was also reasoned through structurally, not only
-observed: `AuthForm`'s initial render is pure `useState` literals with no
-external data source, so server and first-client-render are identical by
-construction; `ResetPasswordPanel` uses the existing `useSupabaseSession`
-hook exactly as `AuthArea`/`AccountPanel` already do, whose
-`getServerSessionSnapshot()` already returns the same `loading` state the
-client's own first render starts from (CODE VERIFIED, unmodified from
-before this task) — no new divergence was introduced.
+**Manually verified against a real production build, `curl`, no
+mocks, no real Supabase account created or modified:**
+
+- Old route: confirmed `404`.
+- Both new routes: confirmed `400` for missing/malformed input, entirely
+  before any Supabase call.
+- Real known username (`owner`, from PR #61's own verification), wrong
+  password, against `/api/auth/sign-in`: raw response inspected — no
+  email present. This environment's outbound network path to the real
+  configured Supabase project is itself restricted (`TypeError: fetch
+  failed`, the identical signature already visible throughout this
+  session's e2e runs for the pre-existing, unrelated rate limiter) — so
+  the actual credential check could not be observed succeeding, but this
+  incidentally proved something else useful: server logs showed
+  `TierListOnline: username resolution failed — TypeError: fetch failed`
+  (logged, not forwarded) followed by the generic auth error reaching the
+  client, and separately, `/api/auth/forgot-password` against the same
+  username under the same network condition still answered `{ ok: true }`
+  — confirming the response-masking logic holds even when the underlying
+  call fails outright, not only when it cleanly finds nothing.
+- Opened the password sign-in / register / forgot-password sections in a
+  real browser against the production build and read the console
+  throughout (no submission of real credentials) — zero React/hydration
+  warnings, consistent with PR #63's own equivalent check.
 
 ## Security regression — existing controls re-checked
 
-- **`profiles` SELECT policy** (migration 004/021): re-verified anonymous
-  read of a private profile still fails, in the same test run that verifies
-  the new function's private-profile behavior (VERIFIED, check 2 of
-  `22_username_resolution_checks.sql`).
-- **`profiles` INSERT policy** (`auth.uid() = id`): unmodified; the
-  registration path is structurally incapable of reaching it without a
-  session (see Abuse cases checked).
-- **`consume_rate_limit`'s own self-check** (migration 017): re-ran as part
-  of `run.sh` alongside every other check in this task's verification pass
-  — VERIFIED still passing, unmodified.
-- **Full pre-existing behavioral suite** (`10_rls_checks.sql` through
-  `21_custom_board_deletion_checks.sql`): VERIFIED all still pass unchanged,
-  run in the same harness invocation as the new checks.
-- **`RATE_LIMIT_SECRET` degrade-safely-when-absent** behavior (limiter.ts,
-  unmodified): the new `"auth"` tier goes through the exact same
-  `bucketFor`/`saltFor` path as every other tier, so it inherits this
-  property rather than needing its own — CODE VERIFIED, no tier-specific
-  branching exists in that code path.
+- **Rate limiting on both routes**: re-verified via test that
+  `rateLimitOrNull(request, "auth")` is still called first, before any
+  other work, on both routes (CODE VERIFIED + test-asserted).
+- **`resolve_username_email`'s own grants and internal ceiling**:
+  unmodified; not re-run against the local Postgres harness this session
+  since nothing in this fix touches the migration, and re-running it would
+  have only re-confirmed what PR #63's report already VERIFIED with no
+  code change in between.
+- **`profiles` RLS**: unmodified, not touched by this fix at any layer.
+- **Existing magic-link/Google e2e coverage**: re-run in full (15/15
+  passing), confirming the untouched flows still work exactly as before.
 
 ## Remaining risks
 
-- **UNKNOWN**: Supabase project's actual current "Confirm email" setting.
-  If it is on, one-step registration degrades to "account created, username
-  claim deferred to Settings" rather than failing — reasoned through and
-  tested for both branches (CODE VERIFIED + `auth-form-password.test.tsx`),
-  but which branch real users actually hit in production is unverified from
-  this environment.
-- **UNKNOWN**: Supabase project's actual current password minimum length
-  (dashboard default is commonly 6). **Action for Denis, outside code, per
-  the task's own explicit ask**: Supabase → Authentication → Policies (or
-  Password settings, depending on dashboard version) — raise the minimum to
-  at least 8 to match what this app's own forms already enforce
-  client-side.
-- **INFERRED, not directly probed**: Supabase Auth's own platform-level
-  rate limiting on `signInWithPassword`/`signUp`/`resetPasswordForEmail`
-  themselves — this app's new limiter covers the identifier-resolution step
-  every attempt passes through, not the password-check call itself, which
-  this app has no way to intercept without proxying the entire auth
-  exchange server-side (a materially larger change this task did not scope
-  in).
-- **Not attempted, deliberately out of scope**: no live end-to-end password
-  signup/sign-in/reset was run against the real Supabase project (see
-  Tests). If Denis wants that level of confidence before shipping, it would
-  need to be done manually or via a disposable test account, not by this
-  session.
+- **UNKNOWN**: whether the leaked emails were actually harvested before
+  this fix landed. This app has no access log retention this session
+  could inspect; if Denis has Vercel/Supabase request logs covering the
+  window PR #63 was live on `main`, checking `/api/auth/resolve-identifier`
+  hit volume and source diversity would be the way to find out. Not
+  attempted here — outside this session's access.
+- **INFERRED, not directly probed**: Supabase's own platform-level
+  behavior was not independently re-verified in this pass beyond what
+  PR #63 already covered — this fix changes *where* Supabase is called
+  from, not *how*, so that surface is unchanged.
+- **CODE VERIFIED, not independently re-derived**: the claim that
+  `getSession()` reads storage fresh on every call but does not itself
+  notify `onAuthStateChange` for an already-valid session — read directly
+  from `node_modules/@supabase/auth-js/dist/main/GoTrueClient.js`'s
+  `__loadSession()` in this environment's installed version, not from
+  Supabase's own documentation (no network access to fetch it). A future
+  `@supabase/auth-js` upgrade could in principle change this internal
+  behavior; `refreshSessionFromCookies` explicitly writes the session
+  itself rather than relying on the SDK to notify, which is what makes it
+  robust to that possibility regardless.

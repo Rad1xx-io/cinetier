@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { refreshSessionFromCookies } from "@/lib/supabase/session-store";
 import { saveProfile, validateUsername } from "@/lib/supabase/profiles";
 import { armPasswordSignup } from "@/lib/analytics/signup";
 import { trackSignupStarted } from "@/lib/analytics/events";
@@ -130,20 +131,30 @@ function PasswordAuth({ redirectTo }: { redirectTo: string }) {
   return <SignInForm onSwitchMode={setMode} />;
 }
 
-/** Turns whatever was typed into the email `signInWithPassword` needs, counted against the "auth" rate-limit tier along the way. See app/api/auth/resolve-identifier/route.ts. */
-async function resolveIdentifier(identifier: string): Promise<{ email: string } | { error: string }> {
+/**
+ * POSTs to one of this app's own `/api/auth/*` routes. Both password
+ * sign-in and forgot-password resolve the identifier and perform the
+ * actual Supabase call entirely server-side now — see either route's own
+ * module doc for why: the email an identifier resolves to must never
+ * travel back into a response body, so this only ever reads `body.error`
+ * on failure or trusts a bare `{ ok: true }` on success, never anything
+ * else out of the response.
+ */
+async function postAuthAction(
+  path: string,
+  body: Record<string, string>
+): Promise<{ ok: true } | { error: string }> {
   try {
-    const res = await fetch("/api/auth/resolve-identifier", {
+    const res = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return { error: typeof body.error === "string" ? body.error : "Something went wrong." };
+      const parsed = await res.json().catch(() => ({}));
+      return { error: typeof parsed.error === "string" ? parsed.error : "Something went wrong." };
     }
-    const body = await res.json();
-    return { email: typeof body.email === "string" ? body.email : identifier };
+    return { ok: true };
   } catch {
     return { error: "Check your connection and try again." };
   }
@@ -161,22 +172,24 @@ function SignInForm({ onSwitchMode }: { onSwitchMode: (mode: PasswordMode) => vo
     setStatus({ kind: "loading" });
     trackSignupStarted(window.location.pathname);
 
-    const resolved = await resolveIdentifier(identifier);
-    if ("error" in resolved) {
-      setStatus({ kind: "error", message: resolved.error });
+    const result = await postAuthAction("/api/auth/sign-in", { identifier, password });
+    if ("error" in result) {
+      setStatus({ kind: "error", message: result.error });
       return;
     }
 
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-    const { error } = await supabase.auth.signInWithPassword({
-      email: resolved.email,
-      password,
-    });
-    // On success nothing more happens here: the session update is what
-    // makes AuthArea/AccountPanel swap this whole form out for the signed-in
-    // view, the same way it already does after Google or a magic link.
-    if (error) setStatus({ kind: "error", message: error.message });
+    /*
+     * The session now lives in cookies the server just wrote — nothing on
+     * this browser client's own side triggered it, so nothing would
+     * otherwise notice. This is what makes AuthArea/AccountPanel actually
+     * swap this whole form out for the signed-in view without a manual
+     * reload, the same as they already do after Google or a magic link
+     * (both of which DO run through this browser client directly, which is
+     * why they never needed this extra step). See
+     * refreshSessionFromCookies's own doc for why a plain getSession() call
+     * on its own would not be enough either.
+     */
+    await refreshSessionFromCookies();
   }
 
   return (
@@ -377,20 +390,15 @@ function ForgotPasswordForm({ onSwitchMode }: { onSwitchMode: (mode: PasswordMod
     e.preventDefault();
     setStatus({ kind: "loading" });
 
-    const resolved = await resolveIdentifier(identifier);
-    if ("error" in resolved) {
-      setStatus({ kind: "error", message: resolved.error });
-      return;
-    }
-
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-    const { error } = await supabase.auth.resetPasswordForEmail(resolved.email, {
-      redirectTo: `${window.location.origin}/auth/callback?redirect_to=${encodeURIComponent("/auth/reset-password")}`,
-    });
-
-    if (error) {
-      setStatus({ kind: "error", message: error.message });
+    // Resolution and the actual resetPasswordForEmail call both happen
+    // server-side now — see app/api/auth/forgot-password/route.ts's own
+    // doc. The route always answers { ok: true } once past validation and
+    // the rate limiter, whether or not the identifier resolved to a real
+    // account, so this "sent" state below is genuinely the only outcome a
+    // legitimate request reaches — there's nothing left to distinguish.
+    const result = await postAuthAction("/api/auth/forgot-password", { identifier });
+    if ("error" in result) {
+      setStatus({ kind: "error", message: result.error });
       return;
     }
     setStatus({ kind: "sent" });
@@ -401,7 +409,9 @@ function ForgotPasswordForm({ onSwitchMode }: { onSwitchMode: (mode: PasswordMod
       <div>
         {/* Deliberately vague about whether an account exists — the same
             thing signInWithOtp already does for every address, whether or
-            not it belongs to anyone. */}
+            not it belongs to anyone. Now enforced by the server response
+            itself (see the route this form calls), not only by this copy
+            always being what gets shown. */}
         <p className="flex items-center gap-1.5 text-sm text-accent">
           <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
           If an account exists for that email, a reset link is on its way. Check your inbox.

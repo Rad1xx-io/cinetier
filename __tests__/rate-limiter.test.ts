@@ -120,9 +120,9 @@ describe("every tier that spends something is priced", () => {
 
   /*
    * Password sign-in (migration 025's resolve_username_email, called from
-   * /api/auth/resolve-identifier) was the first password-checkable flow this
-   * app had — until it existed, there was nothing here for a brute-force
-   * attempt to spend against.
+   * /api/auth/sign-in and /api/auth/forgot-password) was the first
+   * password-checkable flow this app had — until it existed, there was
+   * nothing here for a brute-force attempt to spend against.
    */
   it("gives password sign-in a budget as tight as filing a report, not as loose as an ordinary read", async () => {
     rpc.mockClear();
