@@ -284,6 +284,62 @@ magic-link/password.** Supabase помечает оба одинаковым `pr
 сообщение о недействительной ссылке" через `useSupabaseSession()` —
 тот же хук, что и везде, никакой новой логики хранения сессии.
 
+**Смена пароля для уже вошедшего пользователя — два роута, новая
+SECURITY DEFINER функция без параметров.** `AccountPanel`'s signed-in
+ветка (`components/auth/account-panel.tsx`) добавляет кнопку "Change
+password" рядом с Sign out. Поток разбит на запрос и применение —
+намеренно, чтобы совместить защиту от угнанной сессии (нужен доступ к
+почте) и защиту от утёкшего пароля (нужна сессия) в одной фиче:
+
+- `POST /api/account/request-password-change` — только
+  аутентифицированный вызов (`getSupabaseServerClient()` + `getUser`,
+  401 без сессии). Тело не нужно — email берётся из `user.email`, а не
+  из поля ввода, значит identifier резолвить нечего и утечка по чужому
+  username (класс проблемы 2026-09-03, см. выше) здесь структурно не
+  воспроизводима. Вызывает тот же `resetPasswordForEmail`, что и
+  `forgot-password`, но `redirectTo` ведёт на
+  `/auth/callback?redirect_to=/auth/change-password`. В отличие от
+  `forgot-password`, реальный сбой самого `resetPasswordForEmail` не
+  маскируется — маскировка там существует только чтобы скрыть, резолвился
+  ли чужой identifier, а здесь вызывающий уже доказал личность сессией.
+- `/auth/change-password` (`components/auth/change-password-panel.tsx`)
+  — отдельный от `ResetPasswordPanel` компонент, хоть оба и читают ту же
+  recovery-сессию через `useSupabaseSession()`: "reset" не спрашивает
+  текущий пароль, "change" обязан его перепроверить, это разные формы
+  по сути, не повод для одной ветвящейся.
+- `POST /api/account/change-password` — `{currentPassword?,
+  newPassword}`. Есть ли у аккаунта пароль вообще, решает не
+  `user.app_metadata`/`identities` (уже установлено ненадёжным для этого
+  же вопроса, см. запись про `SignupMethod` выше), а новая
+  `account_has_password()` (миграция 026): без параметров, читает
+  `auth.uid()` изнутри, отвечает `encrypted_password is not null` в
+  `auth.users`. Отсутствие параметра — гарантия, а не стиль: функцию
+  физически нечем навести на чужой аккаунт, поэтому грант —
+  `authenticated` только, `anon` явно отозван (в отличие от
+  `resolve_username_email`, которой анонимный доступ нужен по сути
+  задачи — резолвинг identifier происходит ДО входа). Если сама RPC
+  падает, роут отвечает общим 500, не гадая true/false в любую сторону.
+  Пароль отсутствует — путь "задать первый пароль", проверка текущего
+  пропускается целиком.
+
+**Проверка текущего пароля — через второй, session-less клиент, не
+через `getSupabaseServerClient()`.** `signInWithPassword` — само по себе
+действие входа; вызов его на клиенте, который в этот момент держит
+активную recovery-сессию, рискует задеть её cookies как побочный
+эффект read-only проверки. `/api/account/change-password` создаёт
+отдельный клиент через `createClient` напрямую из `@supabase/supabase-js`
+(`persistSession: false`, без cookie-адаптера — тот же паттерн, что уже
+есть у `limiterClient()` в `lib/rate-limit/limiter.ts`) — ему физически
+некуда писать cookies, значит он не может задеть чужую сессию по
+конструкции, не только предположительно.
+
+**После смены пароля — `signOut({scope: "others"})`.** Поддерживается
+фактически установленной `@supabase/supabase-js@2.112.3`
+(`@supabase/auth-js`), и по документации самого метода не шлёт
+`SIGNED_OUT` для текущей сессии при `scope: "others"` — значит
+`refreshSessionFromCookies()` (см. выше) здесь не нужен, recovery-сессия,
+только что применившая смену, не затрагивается.
+
 ## Отчёты и скриншоты
 Финальный отчёт по каждой завершённой задаче пишется в
 `.ai/reports/latest.md` (перезаписывается каждый раз, не копится) и

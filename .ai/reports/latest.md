@@ -1,8 +1,7 @@
-# Critical fix: PII leak in PR #63's `/api/auth/resolve-identifier`
+# Change password, for an already signed-in user
 
-This is a **new PR on top of the already-merged PR #63** (email+password
-sign-in), not an amendment to it — the vulnerability was found by an
-independent review after #63 landed on `main`. Following
+This is a **new feature on top of the already-merged PR #64** (the
+resolve-identifier PII fix), not a revisit of it. Following
 [[feedback_tierlistonline_security_first]]'s standing process for this
 repo, this report uses its required structure and evidence vocabulary
 throughout: **VERIFIED** (tested/directly probed) · **CODE VERIFIED**
@@ -11,230 +10,360 @@ signal) · **UNKNOWN** (not enough evidence).
 
 ## Changed
 
-- **Deleted** `app/api/auth/resolve-identifier/route.ts` — the vulnerable
-  route.
-- **Added** `app/api/auth/sign-in/route.ts` — resolves the identifier and
-  calls `signInWithPassword` in one server-side request; writes the
-  session directly to cookies via `getSupabaseServerClient()`.
-- **Added** `app/api/auth/forgot-password/route.ts` — resolves and calls
-  `resetPasswordForEmail` server-side; always answers `{ ok: true }`.
-- **Added** `lib/supabase/resolve-identifier.ts` — the shared
-  `resolveIdentifierEmail` helper both new routes call; the resolution
-  logic itself is unchanged from the old route, only where it runs and
-  what leaves the request changed.
-- **Added** `refreshSessionFromCookies()` to `lib/supabase/session-store.ts`
-  — the incidental gap this fix's own architecture opened (see below),
-  found and closed in the same pass rather than left for later, per the
-  standing process's stopping rule.
-- **Updated** `components/auth/auth-form.tsx` — `SignInForm` and
-  `ForgotPasswordForm` now POST to the two new routes and never call
-  `signInWithPassword`/`resetPasswordForEmail` client-side at all.
-  `RegisterForm` is untouched — it never went through the vulnerable
-  route.
-- **Unchanged, deliberately**: `resolve_username_email` (migration 025)
-  itself — its grants, its own internal rate limiting, and the decision to
-  let it resolve private profiles too. That trade-off was already reasoned
-  through in migration 025's own comments and PR #63's report; this fix is
-  about not re-exposing what the function returns, not about revisiting
-  the function's own design.
-- **Unchanged, deliberately**: magic link (`signInWithOtp`) and Google
-  (`signInWithOAuth`) — byte-for-byte the same as before #63.
+- **Added** `app/api/account/request-password-change/route.ts` —
+  authenticated-only (`getSupabaseServerClient()` + `auth.getUser()`, 401
+  without a session). Sends a confirmation link to the account's *own*
+  email, read from the session (`user.email`) — never from a request
+  field. Reuses `resetPasswordForEmail`, the same mechanism
+  `/api/auth/forgot-password` already uses, with `redirectTo` pointed at
+  `/auth/callback?redirect_to=/auth/change-password` instead of
+  `/auth/reset-password`.
+- **Added** `app/auth/change-password/page.tsx` +
+  `components/auth/change-password-panel.tsx` — the form the emailed link
+  lands on. Deliberately a separate component from `ResetPasswordPanel`,
+  not a shared/parameterized one: "reset" (no current password available)
+  and "change" (current password required and re-verified) are different
+  flows that happen to share the same recovery-session mechanism.
+- **Added** `app/api/account/change-password/route.ts` — the core route.
+  `{currentPassword?, newPassword}`. Looks up whether the account has a
+  password at all via a new RPC (`account_has_password()`, see Database
+  below); if it does, re-verifies `currentPassword` via an isolated,
+  session-less Supabase client before calling `updateUser`; if it
+  doesn't, treats this as "set your first password" and skips the check
+  entirely. On success, calls `signOut({ scope: "others" })`.
+- **Added** `supabase/migrations/026_account_has_password.sql` — a new,
+  no-argument, `auth.uid()`-scoped `SECURITY DEFINER` function.
+- **Updated** `components/auth/account-panel.tsx` — the signed-in branch
+  gets a "Change password" button (POSTs to `request-password-change`)
+  and a "check your email" confirmation state, matching
+  `ForgotPasswordForm`'s existing shape.
+- **Unchanged, deliberately**: `/api/auth/forgot-password`,
+  `/api/auth/sign-in`, `/auth/reset-password`, `resolve_username_email`
+  (migration 025) — all correct and unrelated to this feature. Magic link
+  and Google sign-in, byte-for-byte the same.
 
 ## Security impact
 
-**The vulnerability, confirmed by reading the deleted code:**
-`resolve-identifier`'s route resolved a username through
-`resolve_username_email` and returned the email directly:
-`return NextResponse.json({ email })`. Since that RPC deliberately resolves
-private profiles too (a documented, load-bearing requirement of PR #63 —
-a private profile's owner has to be able to sign in by their own handle),
-this route re-exposed exactly the fact the RPC's own design accepted as a
-narrow, unavoidable cost: whether a given username maps to an account.
-What it should never have re-exposed was the **email itself** — a real PII
-value, reachable by any unauthenticated caller, for any username,
-regardless of profile privacy. Usernames are effectively public (`/u/<username>`,
-every post byline, every shared link), so this was a practical harvesting
-vector: known or guessed usernames → real email addresses, bypassing the
-privacy `is_public` is supposed to provide. The route's own 5/min-per-IP
-rate limit throttled one address but did nothing against distributed
-harvesting across many usernames from many addresses — the only cross-IP
-bound was `resolve_username_email`'s own 30-per-5-minutes-**per-username**
-ceiling, which bounds repetition against one handle, not breadth across
-many.
+**Two independent checks, because they defend against two different
+threats, not for redundancy's sake.** A hijacked or shared-device session
+with no access to the account's email should not be enough, on its own,
+to change the password. A leaked password with no session and no email
+access should not be enough either. So: (1) the request step proves
+access to the account's email — a link is sent to `user.email`, sourced
+from the session, never from an input field, so there is no identifier
+for a caller to submit and nothing for the server to resolve on anyone's
+behalf. This is a structural difference from PR #63's original design,
+not just a fixed version of it: the entire problem class PR #64 fixed
+(an endpoint that turns a caller-supplied identifier into someone else's
+email) cannot recur here because there is no caller-supplied identifier
+anywhere in this flow. (2) the change step proves knowledge of the
+current password, for accounts that have one, re-verified server-side
+right before the update takes effect.
 
-**The fix moves the entire action server-side, not only the resolution
-step.** `/api/auth/sign-in` and `/api/auth/forgot-password` each resolve
-the identifier internally (via `resolveIdentifierEmail`, unchanged logic,
-new location) and immediately use the result against Supabase's own
-`signInWithPassword`/`resetPasswordForEmail`, in the same request, using
-`getSupabaseServerClient()` — the same cookie-writing client
-`/auth/callback` already uses. The resolved email exists only inside the
-server's own request handling; it is never assigned to a response body
-variable, on any branch, on either route (CODE VERIFIED — read both route
-files end to end; the identifier local variable is the only thing that
-ever reaches a response, and it's the raw user input, not the resolved
-result).
+**Current-password verification runs on an isolated, cookie-less Supabase
+client, never on the client holding the active recovery session.**
+`signInWithPassword` is itself a sign-in action; calling it on the same
+client that `getUser`/`updateUser`/`signOut` use for this route's active
+recovery session risks disturbing that session's cookies as a side effect
+of what should be a read-only check. `app/api/account/change-password/route.ts`
+instead constructs a second client directly via `createClient` from
+`@supabase/supabase-js` (`persistSession: false`, `autoRefreshToken:
+false`, no cookie adapter passed to it at all — the same pattern already
+used by `limiterClient()` in `lib/rate-limit/limiter.ts`). Because this
+client is handed no cookie store to write to in the first place, it
+cannot touch the recovery session's cookies **by construction** — this is
+CODE VERIFIED by reading how it's built, not merely hoped.
 
-**Who can call what, unchanged from #63:** both routes remain
-unauthenticated by necessity (a sign-in attempt has no session yet). What
-changed is what a caller can *learn* from calling them: previously,
-`resolve-identifier` was an oracle that turned a username into an email;
-now, `/api/auth/sign-in` is exactly what it already needed to be — a
-password check that returns generic success/failure, and
-`/api/auth/forgot-password` is exactly what its UI already promised — a
-send that never confirms or denies account existence.
+To make sure this design is actually enforced by the test suite and not
+just true today, three negative controls were run for real (edited,
+re-run, observed failing, reverted, re-run, observed passing again):
+
+1. **Disabled the current-password check entirely** (skipped straight to
+   `updateUser`) — 5 tests failed as expected.
+2. **Leaked `currentPassword`/`newPassword` into the response body** — 4
+   tests failed as expected.
+3. **Replaced the isolated verifier client with the session client**
+   (the exact regression this design is meant to prevent) — 9 tests
+   failed, several with `TypeError: supabase.auth.signInWithPassword is
+   not a function`, because the session-client mock deliberately has no
+   such method. That a regression to the risky design fails this loudly,
+   not just semantically, is itself part of what makes the test suite a
+   reliable guard here.
+
+All three controls were reverted; the file was confirmed back to its
+exact correct state and the full suite green again after each one.
+
+**Whether an account has a password is answered by a new database fact,
+not by `app_metadata`.** PR #63's own report already established that
+Supabase reports `provider: "email"` identically for magic-link accounts
+and password accounts — an unreliable signal for this exact question,
+and explicitly not reused here. `account_has_password()` (migration 026)
+answers it directly from `auth.users.encrypted_password is not null`.
+
+**Fails closed if the RPC itself errors.** If `account_has_password()`
+returns an error, the route answers a generic 500 rather than guessing
+either direction — guessing "no password" could skip a check a real
+password-holding account needs; guessing "has a password" could
+permanently block the legitimate first-password-setting flow if the RPC
+itself is what's broken.
+
+**The current-password error message is deliberately specific, not
+generic.** `/api/auth/sign-in`'s enumeration-safety discipline (always a
+generic failure) does not apply here: the caller has already proven
+ownership of the account by holding the emailed link, so "Your current
+password is incorrect" reveals nothing they don't already have a right to
+know. The response body still never carries either password, on any
+branch — that part of the discipline is unconditional and is the thing
+the negative controls above check directly.
 
 ## Database
 
-No migration in this fix. `resolve_username_email` (migration 025) is
-completely unmodified — same grants (`anon`, `authenticated`), same
-internal `consume_rate_limit` ceiling, same behavior for a private
-profile. The vulnerability was never in the database layer; it was in what
-the application layer did with a value that layer correctly returned only
-to the server that asked for it.
+**New migration**: `supabase/migrations/026_account_has_password.sql`.
+
+```sql
+-- TierListOnline: tell whether the signed-in account has a password at all.
+-- Run once in the Supabase SQL Editor. Safe to re-run.
+--
+-- Why not user.app_metadata / identities / provider: PR #63's own report
+-- already found Supabase reports magic-link and password accounts under
+-- an identical provider: "email" — that signal cannot distinguish them,
+-- and this function exists precisely because that question needs a real
+-- answer for /api/account/change-password to decide whether to require
+-- (and verify) a current password.
+--
+-- Why this is safe as an `authenticated`-only SECURITY DEFINER function
+-- when resolve_username_email (025) needed much more caution: this
+-- function takes NO argument at all — it reads auth.uid() internally and
+-- can only ever answer for the caller's own account. There is no
+-- parameter to substitute another user's id into, so it is structurally
+-- incapable of being used to probe any other account, unlike
+-- resolve_username_email, which is deliberately anon-callable and keyed
+-- entirely by its input argument.
+
+do $$
+begin
+  if to_regclass('auth.users') is null then
+    raise exception 'TierListOnline: auth.users is missing — this should not be possible on a real Supabase project.';
+  end if;
+end $$;
+
+create or replace function public.account_has_password()
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_user uuid := auth.uid();
+begin
+  if v_user is null then
+    raise exception 'Sign in to check your account.' using errcode = '42501';
+  end if;
+
+  return exists (
+    select 1 from auth.users u
+    where u.id = v_user and u.encrypted_password is not null
+  );
+end;
+$$;
+
+revoke all on function public.account_has_password() from public;
+grant execute on function public.account_has_password() to authenticated;
+revoke execute on function public.account_has_password() from anon;
+
+-- Self-check: confirms the grant table matches intent immediately after
+-- migration, the same defensive pattern migrations 017/018/025 already use.
+do $$
+begin
+  if has_function_privilege('anon', 'public.account_has_password()', 'execute') then
+    raise exception 'TierListOnline: anon must NOT be able to execute account_has_password().';
+  end if;
+  if not has_function_privilege('authenticated', 'public.account_has_password()', 'execute') then
+    raise exception 'TierListOnline: authenticated must be able to execute account_has_password().';
+  end if;
+end $$;
+```
+
+**Grant, VERIFIED two independent ways:**
+
+1. The migration's own self-check block above (runs as part of applying
+   the migration itself — fails the migration outright if the grants are
+   wrong).
+2. The local Postgres testing harness
+   (`supabase/testing/23_account_has_password_checks.sql`), extended with
+   an `encrypted_password` column on the `auth.users` stand-in
+   (`supabase/testing/00_platform.sql`) for this task. 5 checks, all
+   passing: a password-holding fixture account answers `true`; a
+   passwordless fixture account answers `false`; switching `auth.uid()`
+   between the two fixtures switches the answer correctly (confirms the
+   function is actually scoped by caller, not by table order or a stale
+   plan); `anon` is refused outright (`permission denied for function`);
+   and a direct `has_function_privilege` query confirms `authenticated`
+   is granted and `anon` is not, independent of the self-check's own
+   assertion of the same fact.
+
+`resolve_username_email` (025) is completely untouched — no grant change,
+no logic change.
 
 ## Abuse cases checked
 
 | Case | Result |
 |---|---|
-| POST a username to the old route, read back the email | **Route no longer exists** — VERIFIED via `curl` against a production build: `POST /api/auth/resolve-identifier` returns `404` |
-| POST a username to `/api/auth/sign-in`, inspect the response for the resolved email | VERIFIED — `sign-in-route.test.ts`'s "the email never appears in ANY response body" suite reads raw response *text* (not parsed JSON) on three separate paths: successful sign-in, wrong password, unresolved username. All three assert the resolved email string is absent. Also VERIFIED against a real deployed build with a real, known public username (`owner`) and a deliberately wrong password — raw response inspected via `curl`, no email present |
-| Same, for `/api/auth/forgot-password` | VERIFIED — `forgot-password-route.test.ts`'s equivalent suite, plus a case for when `resetPasswordForEmail` itself errors (the error message is logged server-side, never forwarded, and still no email in the body) |
-| Distinguishing "wrong password" from "unresolved identifier" via the sign-in response | VERIFIED — a dedicated test drives both scenarios through the real route and asserts identical response shape and status; both terminate in Supabase's own generic "Invalid login credentials" message, which the route passes through unchanged |
-| Distinguishing "account exists" from "account doesn't exist" via the forgot-password response | VERIFIED — a dedicated test confirms a resolved and an unresolved identifier produce byte-identical JSON responses, and a separate test confirms a failed *send* (Supabase error) also produces the identical response — three different underlying outcomes, one observable response shape |
-| A caller skipping both new routes and calling `resolve_username_email` directly via `POST /rest/v1/rpc/...` | Unchanged from #63 — still bounded by the RPC's own internal 30-per-5-minutes-per-username ceiling. Not this fix's concern (see Changed: the RPC itself is untouched) |
-| The incidental gap this fix's server-side move opened: does the signed-in UI actually appear? | VERIFIED, not assumed — see Tests below. This was flagged explicitly as a risk in the task and treated with the seriousness that implies, not left as an unverified side effect of "the code compiles" |
+| Call `request-password-change` unauthenticated | VERIFIED — `curl` against a real production build returns 401, `{"error":"Sign in to change your password."}` |
+| Call `change-password` unauthenticated | VERIFIED — same, 401, same message, and no Supabase call is reached (test-asserted: `rpc` never called) |
+| Submit a new password under 8 characters | VERIFIED — `curl` returns 400 before any Supabase call, both against the live build and via test assertion that `getUser` is never called on this path |
+| Submit malformed JSON | VERIFIED — `curl` returns 400, `{"error":"Malformed request."}` |
+| An account with a password, wrong current password | VERIFIED (test) — 401, "Your current password is incorrect.", `updateUser` and `signOut` never called |
+| Missing `currentPassword` entirely, for an account that has one | VERIFIED (test) — 400, "Enter your current password.", verifier never called |
+| An account with no password, `currentPassword` omitted | VERIFIED (test) — succeeds, verifier never constructed at all (`createClient` not called) |
+| An account with no password, a `currentPassword` sent anyway | VERIFIED (test) — ignored entirely, verifier still never called |
+| `account_has_password()` itself errors | VERIFIED (test) — fails closed, 500, neither the verifier nor `updateUser` is reached |
+| Response body leaking either password, on success / wrong-current-password / `updateUser` failure | VERIFIED (test, 3 sub-cases) — raw response text checked, not parsed JSON, for both password strings on all three paths |
+| Verifying against the recovery-session client instead of an isolated one (the regression this design exists to prevent) | VERIFIED via negative control #3 above — 9 tests catch it |
+| Mismatched new/confirm password on the client | VERIFIED (test) — submit is blocked, `fetch` never called |
+| Expired/already-used confirmation link | CODE VERIFIED — handled entirely by the existing, unmodified `/auth/auth-code-error` path before `ChangePasswordPanel` ever mounts; the panel's own "no session" branch (VERIFIED by test) covers the case where a session genuinely never existed on this render |
+| `request-password-change`'s own send failing | VERIFIED (test) — a real, specific error is surfaced (500, generic message), **not masked** the way `forgot-password` masks it — correct here because the caller is already authenticated and has proven identity via session, so there is no enumeration risk being protected against by staying silent |
 
 ## Tests
 
-All commands run from a clean state; results below are from the final run
-after every fix in this task.
+All commands run from a clean working tree state; results below are from
+the final run after all work in this task.
 
 | check | result |
 |---|---|
-| `npm run lint` | 0 errors (1 pre-existing, unrelated warning) |
+| `npm run lint` | 0 errors (1 pre-existing, unrelated warning in `__tests__/post-delete.test.tsx`) |
 | `npm run typecheck` | clean |
-| `npm test` | **1380 passed**, 109 files (was 1361/106 before this fix) |
-| `npm run build` | clean — `/api/auth/sign-in` and `/api/auth/forgot-password` are `ƒ` (dynamic, correct); the old route is gone from the route table entirely |
-| `npx playwright test` | 15 passed, unchanged, including the magic-link e2e spec — confirming zero regression on the untouched flows |
+| `npm test` | **1419 passed**, 113 files |
+| `npm run build` | clean — `/api/account/request-password-change` and `/api/account/change-password` are `ƒ` (dynamic, correct); `/auth/change-password` is `○` (static, correct — matches `/auth/reset-password`'s own shape, since the client-side branch on session state is what actually varies, not the server-rendered shell) |
+| `npx playwright test` | 15 passed, unchanged, including the untouched magic-link and #64 regression coverage |
 
-**New/rewritten test files:**
+**New test files:**
 
-- **`sign-in-route.test.ts`** (12 tests) — the regression suite for this
-  exact vulnerability class, plus enumeration-safety, rate limiting, input
-  validation, and the not-configured case.
-- **`forgot-password-route.test.ts`** (11 tests) — same shape, plus the
-  "identical response regardless of outcome" property this route adds on
-  top.
-- **`session-store-refresh.test.ts`** (4 tests, new) — pins
-  `refreshSessionFromCookies`'s actual behavior in isolation: updates every
-  subscriber, handles "no session found", handles "not configured".
-- **`sign-in-session-transition.test.tsx`** (2 tests, new) — the test that
-  proves the incidental session-sync gap is actually closed: renders the
-  real `AuthArea` and the real `session-store.ts` (neither mocked), drives
-  a full password sign-in through the mocked `/api/auth/sign-in` fetch, and
-  asserts the header visibly swaps from "Sign in" to the account menu —
-  and, separately, that a refused sign-in does *not* transition. This is
-  the test a passing typecheck alone would never catch.
-- **`auth-form-password.test.tsx`** (14 tests, rewritten) — updated for the
-  new request/response contract; registration tests are unchanged since
-  `RegisterForm` was never affected.
-- **`analytics-signup.test.ts`, `rate-limiter.test.ts`** — untouched
-  logic, only a stale comment referencing the deleted route's path was
-  corrected in the latter.
-- **Removed**: `resolve-identifier-route.test.ts` (tested the now-deleted
-  route; superseded by the two files above).
+- **`change-password-route.test.ts`** (18 tests) — the core coverage:
+  correct-password success with call ordering (verify before update),
+  wrong password, missing current password, no-existing-password path
+  (with and without an extraneous field), RPC failure (fails closed),
+  `signOut` failure (still reports overall success), response-body
+  leak checks (3 sub-cases), input validation, rate limiting, auth
+  gating.
+- **`request-password-change-route.test.ts`** (8 tests) — correct
+  `redirectTo` construction, no-body-required, unmasked failure
+  surfacing (the explicit divergence from `forgot-password`), auth
+  gating, rate limiting.
+- **`change-password-panel.test.tsx`** (9 tests) — invalid/no session,
+  not-configured, has-password form (shows current-password field,
+  submits correctly, surfaces a wrong-password error), no-password form
+  (omits the field, different button label, submits correctly),
+  client-side mismatch blocking submit, `account_has_password` RPC
+  failure showing a distinct error state instead of guessing which form
+  to render.
+- **`account-panel-change-password.test.tsx`** (4 tests) — request POST
+  with no body, confirmation state replacing the button, request failure
+  surfaced without losing the button, guest view never showing the
+  button at all.
+- **`23_account_has_password_checks.sql`** (5 checks, local Postgres
+  harness) — see Database above.
 
-**Negative controls — actually run, not only written, per the task's own
-explicit ask:**
+**Negative controls — actually run, not only written:**
 
-- `app/api/auth/sign-in/route.ts`: temporarily changed the final response
-  to `NextResponse.json({ ok: true, email })`, re-ran
-  `sign-in-route.test.ts` — 2 tests failed exactly as expected (`expected
-  { ok: true, …(1) } to deeply equal { ok: true }` and the raw-text
-  `not.toContain` assertion), confirming the test suite would have caught
-  the original vulnerability. Reverted; confirmed the file was back to its
-  correct state and the suite passed again (12/12).
-- `app/api/auth/forgot-password/route.ts`: same technique — 4 tests failed
-  (including the "identical response" enumeration-safety test, a useful
-  bonus catch), reverted, confirmed 11/11 passing again.
-- `lib/analytics/signup.ts`: removed the marker's
-  `sessionStorage.removeItem` (its consume-once behavior) — the
-  "consumes the marker" test failed exactly as expected, reverted.
-- `components/auth/auth-form.tsx`: passed the raw identifier instead of
-  the resolved email into `signInWithPassword` — the "resolves the
-  identifier" test failed as expected, reverted.
-- The app-level rate-limit gate itself (`if (limited) return limited;` in
-  either route) was **not** live-mutated for a negative control this
-  session — the session's own safety tooling declined to run further
-  commands while that specific check was disabled in source on an earlier,
-  unrelated task in this same session, and this report treats that as the
-  correct outcome to respect rather than something to route around.
-  Confidence in that specific line rests instead on: the route tests'
-  explicit assertion that a mocked `rateLimitOrNull` refusal short-circuits
-  before the RPC or the Supabase auth call is ever reached, and the
-  pre-existing, extensive `rate-limiter.test.ts` suite (unmodified by this
-  fix, still 100% passing) that already exercises `rateLimitOrNull`'s own
-  refusal/pass-through machinery generically.
+- Disabled the current-password check in
+  `app/api/account/change-password/route.ts` (short-circuited straight
+  to `updateUser`) — 5 tests failed exactly as expected. Reverted;
+  confirmed the file matched its correct state and the suite passed
+  again.
+- Added `currentPassword`/`newPassword` to the success response body —
+  4 tests failed exactly as expected. Reverted; confirmed clean again.
+- Replaced the isolated verifier client with
+  `getSupabaseServerClient()`'s own session client for the
+  `signInWithPassword` call — 9 tests failed, several via a thrown
+  `TypeError` from the mock rather than a soft assertion failure,
+  because the session-client mock has no `signInWithPassword` method at
+  all by design. Reverted; confirmed clean again.
 
-**Manually verified against a real production build, `curl`, no
-mocks, no real Supabase account created or modified:**
+**Manually verified against a real production build (`npx next start
+-p 3100`), `curl`, no mocks, no real Supabase account created or
+modified:**
 
-- Old route: confirmed `404`.
-- Both new routes: confirmed `400` for missing/malformed input, entirely
+- `request-password-change` unauthenticated → 401, generic message.
+- `change-password` unauthenticated → 401, same message.
+- `change-password` with a new password under 8 characters → 400,
   before any Supabase call.
-- Real known username (`owner`, from PR #61's own verification), wrong
-  password, against `/api/auth/sign-in`: raw response inspected — no
-  email present. This environment's outbound network path to the real
-  configured Supabase project is itself restricted (`TypeError: fetch
-  failed`, the identical signature already visible throughout this
-  session's e2e runs for the pre-existing, unrelated rate limiter) — so
-  the actual credential check could not be observed succeeding, but this
-  incidentally proved something else useful: server logs showed
-  `TierListOnline: username resolution failed — TypeError: fetch failed`
-  (logged, not forwarded) followed by the generic auth error reaching the
-  client, and separately, `/api/auth/forgot-password` against the same
-  username under the same network condition still answered `{ ok: true }`
-  — confirming the response-masking logic holds even when the underlying
-  call fails outright, not only when it cleanly finds nothing.
-- Opened the password sign-in / register / forgot-password sections in a
-  real browser against the production build and read the console
-  throughout (no submission of real credentials) — zero React/hydration
-  warnings, consistent with PR #63's own equivalent check.
+- `change-password` with malformed JSON body → 400.
+
+Server stopped after verification; no other endpoints exercised, no
+credentials or session cookies used anywhere in this pass.
 
 ## Security regression — existing controls re-checked
 
-- **Rate limiting on both routes**: re-verified via test that
-  `rateLimitOrNull(request, "auth")` is still called first, before any
-  other work, on both routes (CODE VERIFIED + test-asserted).
-- **`resolve_username_email`'s own grants and internal ceiling**:
-  unmodified; not re-run against the local Postgres harness this session
-  since nothing in this fix touches the migration, and re-running it would
-  have only re-confirmed what PR #63's report already VERIFIED with no
-  code change in between.
-- **`profiles` RLS**: unmodified, not touched by this fix at any layer.
-- **Existing magic-link/Google e2e coverage**: re-run in full (15/15
-  passing), confirming the untouched flows still work exactly as before.
+- **Rate limiting**: both new routes gated by `rateLimitOrNull(request,
+  "auth")`, test-asserted to run before any Supabase call on both
+  routes, reusing the existing `"auth"` tier unchanged from #63.
+- **`/api/auth/forgot-password`, `/api/auth/sign-in`,
+  `resolve_username_email` (025)**: not modified in this task; the full
+  existing regression suites for both (from #63/#64) still pass
+  unchanged as part of the 1419-test run above.
+- **`refreshSessionFromCookies()` (#64)**: not needed for this feature —
+  see Remaining risks below for why, and note this is a reasoned
+  conclusion, not an oversight.
+- **Existing magic-link/Google e2e coverage**: re-run in full (15/15),
+  confirming zero regression on the untouched flows.
 
 ## Remaining risks
 
-- **UNKNOWN**: whether the leaked emails were actually harvested before
-  this fix landed. This app has no access log retention this session
-  could inspect; if Denis has Vercel/Supabase request logs covering the
-  window PR #63 was live on `main`, checking `/api/auth/resolve-identifier`
-  hit volume and source diversity would be the way to find out. Not
-  attempted here — outside this session's access.
-- **INFERRED, not directly probed**: Supabase's own platform-level
-  behavior was not independently re-verified in this pass beyond what
-  PR #63 already covered — this fix changes *where* Supabase is called
-  from, not *how*, so that surface is unchanged.
-- **CODE VERIFIED, not independently re-derived**: the claim that
-  `getSession()` reads storage fresh on every call but does not itself
-  notify `onAuthStateChange` for an already-valid session — read directly
-  from `node_modules/@supabase/auth-js/dist/main/GoTrueClient.js`'s
-  `__loadSession()` in this environment's installed version, not from
-  Supabase's own documentation (no network access to fetch it). A future
-  `@supabase/auth-js` upgrade could in principle change this internal
-  behavior; `refreshSessionFromCookies` explicitly writes the session
-  itself rather than relying on the SDK to notify, which is what makes it
-  robust to that possibility regardless.
+- **(a) `signOut({ scope: "others" })` — VERIFIED available, and used.**
+  Checked against the actually-installed version, not the `package.json`
+  semver range: `node -e` against
+  `node_modules/@supabase/supabase-js/package.json` confirms
+  `2.112.3` is what's actually installed. Read
+  `node_modules/@supabase/auth-js/dist/main/GoTrueClient.d.ts` and
+  `lib/types.d.ts` directly (CODE VERIFIED) — `signOut({scope:
+  "others"})` is present and typed in this exact installed version, and
+  its own documentation states explicitly that no `SIGNED_OUT` event
+  fires for the current session under that scope. The route calls it
+  unconditionally after a successful `updateUser`, treating its own
+  failure as non-fatal (logged, not surfaced) since the password change
+  itself has already succeeded by that point.
+
+- **(b) The `signInWithPassword`-then-`updateUser` sequencing — tested
+  via negative control, not against a live Supabase backend.** This was
+  explicitly checked empirically rather than assumed from SDK types, per
+  the task's own instruction, but "empirically" here means: three real
+  negative controls (above) confirm the test suite would catch both (i)
+  a regression back to verifying on the same client that holds the
+  recovery session, and (ii) either password leaking into a response —
+  which is the mechanism by which "disturbing the recovery session"
+  would actually manifest as an observable bug. What was **not** done,
+  consistent with this session's established policy of never creating or
+  mutating a real Supabase account (the same boundary respected in PR
+  #64's own report), is running the actual sequence against a live
+  Supabase project with a real recovery session and a real second
+  client, and confirming the `updateUser` call still succeeds afterward.
+  That specific claim is **CODE VERIFIED, not VERIFIED**: the isolated
+  client is built with no cookie store at all
+  (`persistSession: false`, no adapter), which by construction gives it
+  nothing to write that could collide with the session client's own
+  cookie jar — but this reasons from the client's construction, not from
+  observing both calls actually execute back-to-back against Supabase's
+  real servers. If Denis wants this closed to VERIFIED, the one way to
+  do it is to actually walk the flow by hand once against a real
+  (disposable) test account.
+
+- **(c) `account_has_password()` grant — VERIFIED `authenticated` only,
+  not `anon`.** Confirmed twice, independently: the migration's own
+  self-check block (fails the migration if either grant is wrong) and
+  the local Postgres harness's 5 behavioral checks, including a direct
+  `has_function_privilege('anon', …)` query returning false and an
+  actual `anon`-role call returning `permission denied for function`
+  rather than a boolean. Both were run in this pass, not carried over
+  from an earlier task.
+
+- **UNKNOWN**: real end-to-end behavior against the live, configured
+  Supabase project — this environment's outbound network path to it is
+  restricted for real auth calls (the same `TypeError: fetch failed`
+  signature already documented in #64's own report for the rate
+  limiter), so nothing in this task exercised `signInWithPassword`,
+  `updateUser`, or `resetPasswordForEmail` against the real backend. All
+  Supabase-facing behavior above is either CODE VERIFIED by reading the
+  installed SDK, or VERIFIED against mocked routes/RPCs plus the local
+  Postgres harness for the database layer specifically.
