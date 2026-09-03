@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   alreadyCounted,
+  armPasswordSignup,
   FIRST_SESSION_WINDOW_MS,
   isFirstSession,
   markCounted,
@@ -72,6 +73,8 @@ describe("isFirstSession", () => {
 });
 
 describe("signupMethod", () => {
+  afterEach(() => sessionStorage.clear());
+
   it("reads the provider Supabase recorded", () => {
     expect(signupMethod(user({ app_metadata: { provider: "google" } }))).toBe("google");
     expect(signupMethod(user({ app_metadata: { provider: "email" } }))).toBe("magic_link");
@@ -80,6 +83,28 @@ describe("signupMethod", () => {
   it("assumes the magic link when the provider is missing or unknown", () => {
     expect(signupMethod(user({ app_metadata: null }))).toBe("magic_link");
     expect(signupMethod(user({ app_metadata: { provider: "github" } }))).toBe("magic_link");
+  });
+
+  /*
+   * Supabase reports a password account under the identical
+   * `provider: "email"` a magic link uses — the assertion right above this
+   * one. armPasswordSignup's marker is the only thing that tells them apart.
+   */
+  it("reports password when the registration form armed the marker first", () => {
+    armPasswordSignup();
+    expect(signupMethod(user({ app_metadata: { provider: "email" } }))).toBe("password");
+  });
+
+  it("consumes the marker — a second account in the same tab is not also labelled password", () => {
+    armPasswordSignup();
+    signupMethod(user({ app_metadata: { provider: "email" } }));
+
+    expect(signupMethod(user({ id: "u2", app_metadata: { provider: "email" } }))).toBe("magic_link");
+  });
+
+  it("does not let an armed marker override an actual Google sign-in", () => {
+    armPasswordSignup();
+    expect(signupMethod(user({ app_metadata: { provider: "google" } }))).toBe("google");
   });
 });
 

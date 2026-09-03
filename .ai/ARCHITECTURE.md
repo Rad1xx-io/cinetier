@@ -212,6 +212,49 @@ dynamic = "force-dynamic"`, в отличие от `/feed` (см. секцию �
 случайный результат `next build`, и остаётся `○` после фикса тоже —
 поменялось только содержимое самой статики.
 
+## Аутентификация: три способа входа, один email резолвится тремя путями
+`components/auth/auth-form.tsx` (`AuthForm`, до 2026-09-03 —
+`MagicLinkForm`) — единственная точка входа, используемая и в шапке
+(`auth-area.tsx`), и в Settings (`account-panel.tsx`). Три способа:
+Google (`signInWithOAuth`), magic link (`signInWithOtp`), email/username
++ пароль (`signInWithPassword`). Пароль собран за третьей, свёрнутой по
+умолчанию секцией — не отдельная форма, тот же компонент.
+
+**Вход по username, не только по email, требует SECURITY DEFINER, а не
+клиентского select.** `profiles`' RLS не отдаёт анонимному читателю
+приватные профили, а `auth.users.email` вообще не в public-схеме.
+`resolve_username_email(p_username) returns text` (миграция 025) —
+единственный способ узнать email по username до появления сессии,
+`anon`+`authenticated` в грантах, `search_path=''`. У неё два
+независимых слоя rate limiting: `/api/auth/resolve-identifier`
+(`lib/rate-limit/limiter.ts`, тир `"auth"`) снаружи, и
+`consume_rate_limit` по ключу username изнутри самой функции — второй
+существует именно потому, что anon key публичный и RPC вызываема
+напрямую, минуя приложение.
+
+Каждая попытка входа паролем — и по email, и по username — идёт через
+`/api/auth/resolve-identifier`, даже когда резолвить нечего: это
+единственное место, где считается rate limit на попытки, поэтому оно
+не может быть пропущено для "уже готового" email. Тот же роут
+переиспользован для "забыли пароль".
+
+**`SignupMethod` не читается из `app_metadata` напрямую для различения
+magic-link/password.** Supabase помечает оба одинаковым `provider:
+"email"`. `lib/analytics/signup.ts`'s `armPasswordSignup()` — сессионный
+маркер (тот же паттерн, что `armForkInteraction` в
+`lib/storage/fork-handoff.ts`), выставляется формой регистрации прямо
+перед `signUp()`, читается и потребляется один раз внутри
+`signupMethod()`, который вызывает уже существующий, не тронутый
+`SignupTracker`.
+
+**Забытый пароль не заводит новый callback-роут.**
+`resetPasswordForEmail`'s `redirectTo` указывает на существующий
+`/auth/callback?redirect_to=/auth/reset-password` — тот же PKCE-обмен,
+что уже используют magic link и Google. `/auth/reset-password`
+(`components/auth/reset-password-panel.tsx`) решает "есть форма или
+сообщение о недействительной ссылке" через `useSupabaseSession()` —
+тот же хук, что и везде, никакой новой логики хранения сессии.
+
 ## Отчёты и скриншоты
 Финальный отчёт по каждой завершённой задаче пишется в
 `.ai/reports/latest.md` (перезаписывается каждый раз, не копится) и

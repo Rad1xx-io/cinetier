@@ -131,7 +131,7 @@ export function trackForkCreated(originalListId: string, newListId: string): voi
 }
 
 /** How the account was created, and which surface prompted it. */
-export type SignupMethod = "google" | "magic_link";
+export type SignupMethod = "google" | "magic_link" | "password";
 
 /**
  * A new account, counted once.
@@ -317,7 +317,9 @@ export function trackCustomItemUploaded(props: {
 /* --------------------------------------------------- activation funnel --- */
 
 /**
- * An email handed to `signInWithOtp`, before Supabase answers.
+ * The top of every sign-in/sign-up funnel this app offers, before Supabase
+ * answers — an email handed to `signInWithOtp`, or an identifier submitted to
+ * the password sign-in/registration form.
  *
  * Supabase never says whether the address belongs to an existing account, so
  * this cannot be split into "signup" versus "sign-in" the way the completed

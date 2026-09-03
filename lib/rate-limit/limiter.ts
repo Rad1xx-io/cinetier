@@ -41,7 +41,8 @@ export type RateLimitTier =
   | "reference"
   | "post-view"
   | "report"
-  | "upload";
+  | "upload"
+  | "auth";
 
 interface TierBudget {
   /** Requests per window, for a visitor with no session. */
@@ -113,6 +114,21 @@ const BUDGETS: Record<RateLimitTier, TierBudget> = {
    * a time) and far below what a script needs to be a nuisance.
    */
   upload: { anonymous: 5, authenticated: 15, windowSeconds: 60 },
+
+  /*
+   * Resolving a sign-in identifier — email or username — before
+   * `signInWithPassword` is called. This is the first password-checkable
+   * flow this app has had, so before now there was nothing here to
+   * brute-force. Deliberately tight, matching `report`: every request is one
+   * attempt at getting into an account that is not yours, and a real person
+   * mistyping a password a few times in a row stays well inside this, while
+   * a script trying many passwords against one address does not. The DB
+   * function this calls into (`resolve_username_email`, migration 025) has
+   * its own second ceiling keyed by username, for a caller that skips this
+   * app's route entirely and calls the RPC directly — this layer is what
+   * keeps that one from ever mattering in ordinary use.
+   */
+  auth: { anonymous: 5, authenticated: 10, windowSeconds: 60 },
 };
 
 /**

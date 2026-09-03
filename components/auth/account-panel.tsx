@@ -2,7 +2,7 @@
 
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MagicLinkForm } from "@/components/auth/magic-link-form";
+import { AuthForm } from "@/components/auth/auth-form";
 import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -50,7 +50,7 @@ export function AccountPanel() {
         across your devices.
       </p>
       <div className="mt-3">
-        <MagicLinkForm redirectTo="/settings" />
+        <AuthForm redirectTo="/settings" />
       </div>
     </div>
   );

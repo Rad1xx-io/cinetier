@@ -1,144 +1,233 @@
-# /tier-list and /youtube/tier-list: the promised landing page, before hydration too
+# Email+password sign-in — a third door, plus sign-in by username
 
-## This finishes a decision already made, not a new one
+Following [[feedback_tierlistonline_security_first]]'s standing process for
+this repo, this report uses its required structure and evidence vocabulary
+throughout: **VERIFIED** (tested/directly probed) · **CODE VERIFIED**
+(confirmed by reading code, no runtime instrument) · **INFERRED** (indirect
+signal) · **UNKNOWN** (not enough evidence).
 
-`lib/seo/site.ts`'s `SITEMAP_ROUTES` already lists both routes with an
-explicit comment: *"A visitor with no account sees an empty state and a way
-in, which is a real landing page rather than a dead one."* So whether these
-pages should be indexed was already decided — the remaining question, and
-the whole scope of this task, was why that promised landing page never
-actually reached the HTML a crawler reads. This is the continuation of the
-indexing work from [PR #61](https://github.com/Rad1xx-io/cinetier/pull/61)
-(`/feed`, `/u/[username]`) — `/tier-list` was the last of the same 21 URLs
-Search Console flagged that was still open.
+## Changed
 
-## The cause, confirmed by reading code
+Google and magic-link sign-in are untouched — `signInWithOAuth`/
+`signInWithOtp` and every line around them are byte-for-byte the same as
+before this task, just living in a renamed file. Added:
 
-`components/tier-list/tier-list-board.tsx` reads `hydrated` from
-`useRankedTitles()`, which is backed by `useSyncExternalStore` reading
-localStorage. `lib/storage/ranked-titles-store.ts`'s `getServerSnapshot()`
-correctly always returns `{ status: "loading" }` — localStorage doesn't
-exist on the server, and that's exactly right; the store itself needed no
-fix. But the `if (!hydrated)` branch rendered a bare `<Skeleton>` — four
-empty placeholder bars, not one word of text — instead of the
-already-built `<EmptyState/>` (`components/dashboard/empty-state.tsx`:
-"Your tier list is empty", with links to `/discover`, `/anime`, `/games`,
-`/youtube`) that already rendered one branch down, for "hydrated but
-genuinely empty". `EmptyState` carries no `"use client"` directive and
-reads no data at all — nothing about it needed hydration to exist safely.
-The result: every server render of `/tier-list`, for every visitor, sent
-back an empty Skeleton — the "real landing page" `site.ts` promises never
-made it into the raw HTML a crawler sees. The same `hydrated`/`Skeleton`
-pattern, confirmed the same way, existed in
-`components/youtube-tier-list/channel-tier-list-board.tsx` for
-`/youtube/tier-list` (`ChannelEmptyState`).
+- **Password sign-in and registration**, accepting either an existing email
+  or an existing **username** in the identifier field.
+- **Forgot-password**, end to end: request a reset link, click it, set a new
+  password.
+- A new SECURITY DEFINER function, `resolve_username_email` (migration 025),
+  the only way to turn a username into an email before there is a session.
+- A new API route, `/api/auth/resolve-identifier`, which is where password
+  sign-in's rate limiting actually lives.
+- A new `"auth"` rate-limit tier in the existing `lib/rate-limit/limiter.ts`.
+- `MagicLinkForm` → `AuthForm` (renamed, not rewritten): the same one
+  component used in the header popover and in Settings, now with a
+  collapsed-by-default third section for the password door.
+- `/auth/reset-password`, a new page reached only through the existing
+  `/auth/callback` (unmodified) after `resetPasswordForEmail`'s link.
+- `SignupMethod` gained a `"password"` value, and `lib/analytics/signup.ts`
+  gained a session-scoped marker to attribute it correctly (Supabase reports
+  both magic-link and password accounts under the identical
+  `provider: "email"` — CODE VERIFIED against this repo's own pre-existing
+  test, which pinned `provider: "email"` → `"magic_link"` before this task).
 
-## The fix — merging two branches that now render the exact same thing
+## Security impact
 
-`!hydrated` and `titles.length === 0 && channels.length === 0` (`channels.length === 0`
-alone for the YouTube board) are now one condition, one shared wrapper
-(`mx-auto max-w-3xl px-4 py-10 md:px-6` — previously the two branches had
-different container classes for no reason beyond rendering different
-content; rendering the same content now, they get the same wrapper), one
-`<EmptyState/>`/`<ChannelEmptyState/>`. The unused `Skeleton` import was
-removed from both files — nothing in either component uses it any more.
+**Who can call what, and what it reveals — worked out before writing code:**
 
-This also removes a latent hydration risk rather than just changing copy:
-before this fix, the server (which only ever takes the `!hydrated` path,
-since it has no localStorage) and a slow client's pre-hydration paint could
-in principle diverge from what a fast client settles on — Skeleton vs.
-EmptyState were two different trees for what is, from the server's point
-of view, the same unknowable state. Now both paths that don't yet know
-whether there's real data render identically, so there is nothing left to
-mismatch.
+- `resolve_username_email(p_username)` — callable by `anon` and
+  `authenticated` (has to be, since it exists specifically for the
+  before-session case). Reads exactly one column across two tables
+  (`profiles.username` → `auth.users.email`) and returns a single `text`
+  value, never a row, never an error that could be told apart from "not
+  found" (CODE VERIFIED: the self-check in migration 025 asserts the return
+  type is plain `text`, and the function's own `exception`-free structure
+  means every non-match path — bad input, no such username, rate-limited —
+  returns the same `null`). Deliberately resolves a **private** profile's
+  username too, which `/u/<username>` itself refuses to confirm exists (see
+  this repo's own 2026-09-02 SSR decision) — this is the one place in the
+  app that reveals more about a private handle than the public page does,
+  and it is unavoidable: the alternative is a private account's owner unable
+  to sign in by their own username. Bounded by two independent rate-limit
+  layers (below), and by the fact that claiming a username already reveals
+  whether it is taken, via the pre-existing `saveProfile` uniqueness check —
+  so "does this username exist" was not a new question this migration
+  introduced, only "resolve it to an email" is new, and that never happens
+  without the caller already knowing the exact username.
+- `/api/auth/resolve-identifier` — no auth required (same reason). Reads the
+  request body, no cookies, no session lookup unless the rate limiter's fast
+  path needs one (existing `decide()` logic in `limiter.ts`, unmodified).
+  Writes nothing except the rate-limit counters both layers touch.
+- Nothing new writes to `profiles` except through the pre-existing
+  `saveProfile`, called with the same `auth.uid() = id`-gated insert policy
+  that already governs every other caller of it (migration 004, unmodified).
+- Nothing new reads `auth.users` except through the one narrow function
+  above — no other code in this change set touches that schema.
 
-## `/tier-list` and `/youtube/tier-list` deliberately did **not** get `force-dynamic`
+**Replayability / automation:** `resolve_username_email` and
+`/api/auth/resolve-identifier` are both idempotent reads with no side effect
+beyond the rate-limit counters, so "replay" here means "probe faster",
+exactly what both limiter layers exist to bound (see Database, below).
+`signUp`/`signInWithPassword`/`resetPasswordForEmail`/`updateUser` are all
+called directly against Supabase's own client SDK, which already carries
+its own account-level protections this app does not reimplement (INFERRED —
+Supabase Auth is known to rate-limit its own token/signup endpoints
+platform-side; not independently probed in this task).
 
-Unlike `/feed` in PR #61, where the fix required `export const dynamic =
-"force-dynamic"` because Supabase data is the same for every visitor and
-was getting baked into the build — here the situation is the opposite.
-`ranked_titles`/`ranked_channels` live in *that specific visitor's own
-browser's* localStorage; the server cannot know them and isn't supposed
-to. The server's job is to hand every visitor the same generic landing
-copy, which is exactly what static prerendering (`○`) already does,
-correctly, both before and after this fix — `npm run build` confirms both
-routes stay `○`; only what that static HTML contains changed.
+## Database
 
-## Verified in raw HTML, per the same method as PR #61
+**New migration: `supabase/migrations/025_password_auth.sql`.**
 
-Built and served the production output on a spare port, then read the
-response with `curl` — no JavaScript executed:
+- Dependency-guarded (`raise exception` unless 004 and 017 have already
+  run), idempotent (`create or replace function`), self-checking (asserts
+  the exact grant state: `anon` and `authenticated` both have EXECUTE, and
+  fails loudly if either is missing).
+- `revoke all … from public` followed by an *explicit* `grant execute … to
+  anon, authenticated` — not left implicit. Migration 023 already documented
+  in this repo that `revoke all … from public` does **not** touch Supabase's
+  default per-role grant, so the explicit grant here is what actually states
+  the intent, matching the pattern `consume_rate_limit`/
+  `increment_post_views` already use for the same reason.
+- Internal rate limiting reuses `consume_rate_limit` (migration 017)
+  directly — no second limiter implementation, keyed by
+  `'username-resolve:' || lower(username)`, 30 requests / 300 seconds.
 
-- **`/tier-list`**: "Your tier list is empty", the full description text,
-  and all four catalog links (`/discover`, `/anime`, `/games`, `/youtube`)
-  present in the raw response. The only `animate-pulse` match left in the
-  page is the unrelated header auth-avatar placeholder (present on every
-  page for a signed-out session, untouched by this task) — the tier-list
-  board's own Skeleton is gone entirely.
-- **`/youtube/tier-list`**: "Nothing here yet", the description, and the
-  "Find channels" link to `/youtube`, same result.
+**No RLS policy changed.** `profiles`' SELECT policy is exactly what it was
+after migration 021; `resolve_username_email` does not read through it at
+all (SECURITY DEFINER bypasses RLS by design, which is the entire reason
+this had to be a function rather than a client query).
 
-## Verified in the browser for hydration correctness
+**`lib/rate-limit/limiter.ts`:** one new entry in the existing `BUDGETS`
+table (`auth: { anonymous: 5, authenticated: 10, windowSeconds: 60 }`), no
+change to `checkRateLimit`/`rateLimitOrNull`/`catalogueGate` themselves.
 
-Served the production build, opened `/tier-list` and `/youtube/tier-list`
-in the Claude Browser pane, and read the console — no `Hydration failed` /
-`did not match` warnings in either case, signed-out and empty. Then seeded
-`localStorage` directly (`cinetier:rankings:v1` / `cinetier:youtube-rankings:v1`)
-with one real title / one real channel and reloaded: the console stayed
-clean (still no hydration warnings), and the page text confirmed the real
-board rendered correctly — "Inception" in tier S on `/tier-list`, "A Test
-Channel" in tier S on `/youtube/tier-list` — with no visible flash back to
-the empty state. A visitor with something already ranked never sees this
-landing at all; hydration and the swap to the real board land before the
-first paint a human eye would catch, exactly as it already did when this
-branch was a Skeleton.
+## Abuse cases checked
 
-## What's new
-
-- **`components/tier-list/tier-list-board.tsx`** — `!hydrated` and the
-  empty-board check merged into one condition rendering `<EmptyState/>`;
-  unused `Skeleton` import removed.
-- **`components/youtube-tier-list/channel-tier-list-board.tsx`** — same
-  merge, rendering `<ChannelEmptyState/>`; unused `Skeleton` import
-  removed.
+| Case | Result |
+|---|---|
+| Anonymous read of a private profile via `resolve_username_email` | Resolves to the email anyway — **intended**, see Security impact. Confirmed the `profiles` row itself is still unreadable by anon in the same test run (VERIFIED, `22_username_resolution_checks.sql` check 2) |
+| Direct `POST /rest/v1/rpc/resolve_username_email`, bypassing `/api/auth/resolve-identifier` entirely | Bounded by the function's own internal `consume_rate_limit` call — VERIFIED: 35 rapid calls against one username in the local harness, ~28 allowed (fewer than the configured 30, because earlier checks in the same test file already spent part of that bucket — the shared counter behaving exactly as designed, not a bug) then refused |
+| Enumerating which usernames exist, by trying to sign in | `/api/auth/resolve-identifier` returns the raw identifier unchanged when nothing resolves — `signInWithPassword` then fails the identical generic way it would for a wrong password. VERIFIED at the route level (`resolve-identifier-route.test.ts`) and at the form level (`auth-form-password.test.tsx`, asserts no "no such user"-shaped text ever renders) |
+| Enumerating which emails have accounts, via forgot-password | `resetPasswordForEmail` is asked regardless of whether resolution found anything, and the UI shows the identical "if an account exists…" copy either way — VERIFIED in `auth-form-password.test.tsx` |
+| Brute-forcing a known account's password | `/api/auth/resolve-identifier` gates every password-sign-in attempt (not just ones that needed username resolution — CODE VERIFIED: the route is called unconditionally before `signInWithPassword`, and a dedicated test pins that an already-email-shaped identifier still counts against the limiter) at 5/min anonymous. The actual password check itself (`signInWithPassword`) is Supabase's own endpoint, outside this app's rate limiter — INFERRED to carry Supabase's own platform-level protection, not independently verified |
+| Registering an account and writing to `profiles` without a session | Structurally impossible: `saveProfile` is only ever called after `signUp` returns a session (CODE VERIFIED, the `if (data.session)` branch), and `profiles`' insert policy independently requires `auth.uid() = id` regardless (migration 004, unmodified) |
+| A taken username at registration silently overwriting or exposing another account | `saveProfile` is the same uniqueness-checked function `UsernameDialog` already uses; a collision fails cleanly and the new account still exists, unclaimed — no other account is touched (CODE VERIFIED, no change to `saveProfile` itself) |
+| Client-side password floor weaker than the server's | `minLength={8}` set on every password input regardless of Supabase's own dashboard minimum, which defaults lower — the client is never laxer than the server, only possibly stricter (see the dashboard reminder below) |
 
 ## Tests
 
-- **`__tests__/tier-list-board-empty-landing.test.tsx`** (new, 6 tests) —
-  for each board: the real EmptyState/ChannelEmptyState copy renders before
-  hydration (`hydrated: false`) with no `.animate-pulse` element anywhere
-  on the page; the exact same copy renders once hydrated with nothing
-  ranked; the real board (not the empty state) renders once hydration
-  lands with something ranked.
-- Verified with a negative control on both components: reintroducing the
-  old `Skeleton` branch for `!hydrated` made the corresponding "renders the
-  real EmptyState/ChannelEmptyState before hydration" test fail as
-  expected (`Unable to find an element with the text: …`), confirming the
-  tests actually pin the fix rather than passing vacuously; reverted
-  immediately after.
-
-## Verification
+All commands run from a fully clean state; results below are from the final
+run after every fix in this task.
 
 | check | result |
 |---|---|
 | `npm run lint` | 0 errors (1 pre-existing, unrelated warning) |
 | `npm run typecheck` | clean |
-| `npm test` | 1328 passed, 103 files (was 1322/102) |
-| `npm run build` | clean — `/tier-list` and `/youtube/tier-list` stay `○` (static) before and after, as expected |
-| `npx playwright test` | 15 passed, including the `tier-list-clear-and-menu` suite which exercises `/tier-list` with real data |
-| Raw HTML via `curl` against a production build | both routes now carry real landing copy, no Skeleton |
-| Browser console (production build, empty and seeded localStorage) | no hydration-mismatch warnings in either case |
+| `npm test` | **1361 passed**, 106 files (was 1328/103 before this task) |
+| `npm run build` | clean — `/api/auth/resolve-identifier` is `ƒ` (dynamic, correct for an API route); `/auth/reset-password` is `○` (static, correct — it reads its own session client-side, same as every other guest-safe page) |
+| `npx playwright test` | 15 passed, unchanged |
+| `supabase/testing/run.sh` (local Postgres, migrations 004→025 applied) | **VERIFIED** — every pre-existing check plus all 6 new ones in `22_username_resolution_checks.sql` (public resolves, private resolves, nonexistent → null, case-insensitive, return type is plain text, per-username ceiling engages) |
 
-No migration in this task — nothing here touches a database table; the
-only store involved is localStorage, and `getServerSnapshot()`'s existing
-behavior was left exactly as it was, per the brief.
+**New test files:** `resolve-identifier-route.test.ts` (10), `auth-form-password.test.tsx`
+(14), `reset-password-panel.test.tsx` (5), `22_username_resolution_checks.sql`
+(6 behavioral SQL checks), plus extensions to `analytics-signup.test.ts` (+4)
+and `rate-limiter.test.ts` (+1). `auth-form-signup-started.test.tsx` (renamed
+from `magic-link-signup-started.test.tsx`) confirms the magic-link path is
+byte-identical in behavior after the rename.
 
-## One adjacent, out-of-scope note
+**Negative controls run and reverted, all caught the intended failure:**
 
-`site.ts`'s own comment on `SITEMAP_ROUTES` says `/u/*` is "deliberately
-absent... worth adding once the sitemap is allowed to read the database" —
-PR #61 already gave `lib/supabase/public-read.ts` exactly that capability
-(`getPublicTierListServer`), so the sitemap itself could plausibly grow
-`/u/<username>` entries now. Not attempted here: which usernames, at what
-volume, and with what pagination against `PUBLIC_PROFILE_LIMIT` is a
-product call, not something this task's diagnosis touched.
+- SQL: none needed — the local harness already runs a `--negative` mode
+  covering unrelated migrations; this migration's own 6 checks were written
+  and verified directly against the real function, VERIFIED end to end
+  including the rate-limit ceiling actually engaging (not just asserted as
+  configured).
+- `lib/analytics/signup.ts`: removed the marker's `sessionStorage.removeItem`
+  → the "consumes the marker" test failed as expected (`expected 'password'
+  to be 'magic_link'`) → reverted.
+- `components/auth/auth-form.tsx`: passed the raw identifier instead of the
+  resolved email into `signInWithPassword` → the "resolves the identifier"
+  test failed as expected → reverted.
+- The rate-limit gate itself in `/api/auth/resolve-identifier` was **not**
+  live-mutated for a negative control — the session's own safety tooling
+  declined to run tests while that specific check was disabled in source,
+  which this report treats as the correct outcome rather than something to
+  route around. Its correctness rests instead on: the route test's explicit
+  assertion that `rateLimitOrNull`'s refusal short-circuits before the RPC
+  is ever called (VERIFIED via a mocked refusal), and the pre-existing,
+  extensive `rate-limiter.test.ts` suite that already exercises
+  `rateLimitOrNull`'s own refusal/pass-through machinery generically
+  (unmodified by this task, still 100% passing).
+
+**Manually verified in a real browser, production build, no live Supabase
+writes:** opened the header popover and the Settings panel, expanded the
+password section, switched through sign-in → register → forgot-password →
+back to sign-in, typed into every field (including a live username →
+`/u/<handle>` hint check), and read the console throughout — **VERIFIED**,
+zero React/hydration warnings at any point. Did **not** click through an
+actual `signUp`/`signInWithPassword`/`resetPasswordForEmail` submission
+against the real configured Supabase project — that would create a real,
+throwaway account in the same project this app's other e2e specs
+deliberately avoid touching (the existing magic-link e2e spec stops at
+"Link sent" for the same reason). Functional correctness of those calls is
+covered instead by the mocked component/route tests above, which is judged
+sufficient for logic whose only remaining risk is "did I call the SDK
+method with the right arguments" — already pinned by those tests.
+
+Hydration-mismatch risk was also reasoned through structurally, not only
+observed: `AuthForm`'s initial render is pure `useState` literals with no
+external data source, so server and first-client-render are identical by
+construction; `ResetPasswordPanel` uses the existing `useSupabaseSession`
+hook exactly as `AuthArea`/`AccountPanel` already do, whose
+`getServerSessionSnapshot()` already returns the same `loading` state the
+client's own first render starts from (CODE VERIFIED, unmodified from
+before this task) — no new divergence was introduced.
+
+## Security regression — existing controls re-checked
+
+- **`profiles` SELECT policy** (migration 004/021): re-verified anonymous
+  read of a private profile still fails, in the same test run that verifies
+  the new function's private-profile behavior (VERIFIED, check 2 of
+  `22_username_resolution_checks.sql`).
+- **`profiles` INSERT policy** (`auth.uid() = id`): unmodified; the
+  registration path is structurally incapable of reaching it without a
+  session (see Abuse cases checked).
+- **`consume_rate_limit`'s own self-check** (migration 017): re-ran as part
+  of `run.sh` alongside every other check in this task's verification pass
+  — VERIFIED still passing, unmodified.
+- **Full pre-existing behavioral suite** (`10_rls_checks.sql` through
+  `21_custom_board_deletion_checks.sql`): VERIFIED all still pass unchanged,
+  run in the same harness invocation as the new checks.
+- **`RATE_LIMIT_SECRET` degrade-safely-when-absent** behavior (limiter.ts,
+  unmodified): the new `"auth"` tier goes through the exact same
+  `bucketFor`/`saltFor` path as every other tier, so it inherits this
+  property rather than needing its own — CODE VERIFIED, no tier-specific
+  branching exists in that code path.
+
+## Remaining risks
+
+- **UNKNOWN**: Supabase project's actual current "Confirm email" setting.
+  If it is on, one-step registration degrades to "account created, username
+  claim deferred to Settings" rather than failing — reasoned through and
+  tested for both branches (CODE VERIFIED + `auth-form-password.test.tsx`),
+  but which branch real users actually hit in production is unverified from
+  this environment.
+- **UNKNOWN**: Supabase project's actual current password minimum length
+  (dashboard default is commonly 6). **Action for Denis, outside code, per
+  the task's own explicit ask**: Supabase → Authentication → Policies (or
+  Password settings, depending on dashboard version) — raise the minimum to
+  at least 8 to match what this app's own forms already enforce
+  client-side.
+- **INFERRED, not directly probed**: Supabase Auth's own platform-level
+  rate limiting on `signInWithPassword`/`signUp`/`resetPasswordForEmail`
+  themselves — this app's new limiter covers the identifier-resolution step
+  every attempt passes through, not the password-check call itself, which
+  this app has no way to intercept without proxying the entire auth
+  exchange server-side (a materially larger change this task did not scope
+  in).
+- **Not attempted, deliberately out of scope**: no live end-to-end password
+  signup/sign-in/reset was run against the real Supabase project (see
+  Tests). If Denis wants that level of confidence before shipping, it would
+  need to be done manually or via a disposable test account, not by this
+  session.
