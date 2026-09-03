@@ -45,12 +45,28 @@ export function ChangePasswordPanel() {
     };
   }, [user]);
 
+  // Every branch below owns its own <h1> — the page component around this
+  // panel deliberately has none, since only this panel knows enough (the
+  // recovery session, and once loaded, hasPasswordState) to pick the right
+  // word. A static page-level title is what caused "Change password" as
+  // the page heading next to a "Set password" button in the first place.
+
   if (!configured) {
-    return <p className="text-sm text-muted">Cloud accounts are not configured.</p>;
+    return (
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Password</h1>
+        <p className="mt-2 text-sm text-muted">Cloud accounts are not configured.</p>
+      </div>
+    );
   }
 
   if (loading) {
-    return <p className="text-sm text-muted">Checking your link…</p>;
+    return (
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Password</h1>
+        <p className="mt-2 text-sm text-muted">Checking your link…</p>
+      </div>
+    );
   }
 
   // Same handling as ResetPasswordPanel: an expired or already-used link
@@ -59,7 +75,8 @@ export function ChangePasswordPanel() {
   if (!user) {
     return (
       <div>
-        <p className="flex items-center gap-1.5 text-sm text-tier-s">
+        <h1 className="text-2xl font-bold tracking-tight">Password</h1>
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-tier-s">
           <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
           This link is invalid or has expired.
         </p>
@@ -73,12 +90,40 @@ export function ChangePasswordPanel() {
     );
   }
 
+  if (hasPasswordState.kind === "loading") {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Password</h1>
+        <p className="mt-2 text-sm text-muted">Checking your account…</p>
+      </div>
+    );
+  }
+
+  if (hasPasswordState.kind === "error") {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Password</h1>
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-tier-s">
+          <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
+          Could not load your account. Please refresh and try again.
+        </p>
+      </div>
+    );
+  }
+
+  // Reached only once hasPasswordState is "known" — status.kind === "done"
+  // below relies on that, since a submission could not have happened before
+  // this was known in the first place.
+  const hasPassword = hasPasswordState.hasPassword;
+
   if (status.kind === "done") {
     return (
       <div>
-        <p className="flex items-center gap-1.5 text-sm text-accent">
+        <h1 className="text-2xl font-bold tracking-tight">Password</h1>
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-accent">
           <Check className="h-4 w-4 shrink-0" aria-hidden />
-          Password updated. Other signed-in devices have been signed out.
+          {hasPassword ? "Password updated." : "Password set."} Other signed-in devices have been
+          signed out.
         </p>
         <Button asChild size="sm" className="mt-3">
           <Link href="/settings">Continue to Settings</Link>
@@ -87,20 +132,6 @@ export function ChangePasswordPanel() {
     );
   }
 
-  if (hasPasswordState.kind === "loading") {
-    return <p className="text-sm text-muted">Checking your account…</p>;
-  }
-
-  if (hasPasswordState.kind === "error") {
-    return (
-      <p className="flex items-center gap-1.5 text-sm text-tier-s">
-        <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
-        Could not load your account. Please refresh and try again.
-      </p>
-    );
-  }
-
-  const hasPassword = hasPasswordState.hasPassword;
   const mismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -129,54 +160,59 @@ export function ChangePasswordPanel() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-      {hasPassword && (
+    <div>
+      <h1 className="text-2xl font-bold tracking-tight">
+        {hasPassword ? "Change your password" : "Set a password"}
+      </h1>
+      <form onSubmit={handleSubmit} className="mt-2 flex flex-col gap-2">
+        {hasPassword && (
+          <Input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Current password"
+            aria-label="Current password"
+            autoComplete="current-password"
+            required
+          />
+        )}
         <Input
           type="password"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          placeholder="Current password"
-          aria-label="Current password"
-          autoComplete="current-password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          placeholder="New password"
+          aria-label="New password"
+          autoComplete="new-password"
+          minLength={8}
           required
         />
-      )}
-      <Input
-        type="password"
-        value={newPassword}
-        onChange={(e) => setNewPassword(e.target.value)}
-        placeholder="New password"
-        aria-label="New password"
-        autoComplete="new-password"
-        minLength={8}
-        required
-      />
-      <Input
-        type="password"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-        placeholder="Confirm new password"
-        aria-label="Confirm new password"
-        autoComplete="new-password"
-        minLength={8}
-        required
-      />
-      <Button type="submit" disabled={status.kind === "saving" || mismatch}>
-        <KeyRound className="h-4 w-4" aria-hidden />
-        {hasPassword ? "Change password" : "Set password"}
-      </Button>
-      {mismatch && (
-        <p className="flex items-center gap-1.5 text-sm text-tier-s">
-          <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          The new passwords don&rsquo;t match.
-        </p>
-      )}
-      {status.kind === "error" && (
-        <p className="flex items-center gap-1.5 text-sm text-tier-s">
-          <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          {status.message}
-        </p>
-      )}
-    </form>
+        <Input
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          placeholder="Confirm new password"
+          aria-label="Confirm new password"
+          autoComplete="new-password"
+          minLength={8}
+          required
+        />
+        <Button type="submit" disabled={status.kind === "saving" || mismatch}>
+          <KeyRound className="h-4 w-4" aria-hidden />
+          {hasPassword ? "Change password" : "Set a password"}
+        </Button>
+        {mismatch && (
+          <p className="flex items-center gap-1.5 text-sm text-tier-s">
+            <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            The new passwords don&rsquo;t match.
+          </p>
+        )}
+        {status.kind === "error" && (
+          <p className="flex items-center gap-1.5 text-sm text-tier-s">
+            <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {status.message}
+          </p>
+        )}
+      </form>
+    </div>
   );
 }

@@ -9,10 +9,7 @@ export const metadata: Metadata = {
 
 export default function ChangePasswordPage() {
   return (
-    <div className="mx-auto max-w-sm space-y-6 px-4 py-16 md:px-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Change password</h1>
-      </div>
+    <div className="mx-auto max-w-sm px-4 py-16 md:px-6">
       <ChangePasswordPanel />
     </div>
   );

@@ -7,12 +7,13 @@ let sessionState: { configured: boolean; loading: boolean; user: { email: string
   user: { email: "reader@example.test" },
 };
 const signOut = vi.fn();
+const rpc = vi.fn();
 
 vi.mock("@/lib/hooks/use-supabase-session", () => ({
   useSupabaseSession: () => sessionState,
 }));
 vi.mock("@/lib/supabase/client", () => ({
-  getSupabaseBrowserClient: () => ({ auth: { signOut: () => signOut() } }),
+  getSupabaseBrowserClient: () => ({ auth: { signOut: () => signOut() }, rpc: (...a: unknown[]) => rpc(...a) }),
 }));
 vi.mock("@/components/auth/auth-form", () => ({ AuthForm: () => null }));
 
@@ -33,6 +34,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   sessionState = { configured: true, loading: false, user: { email: "reader@example.test" } };
   signOut.mockResolvedValue({ error: null });
+  rpc.mockResolvedValue({ data: true, error: null });
   mockFetch({ status: 200, body: { ok: true } });
 });
 afterEach(() => {
@@ -77,5 +79,13 @@ describe("requesting a password change", () => {
     sessionState = { configured: true, loading: false, user: null };
     render(<AccountPanel />);
     expect(screen.queryByRole("button", { name: /change password/i })).toBeNull();
+  });
+
+  it("reads 'Set a password' instead, for an account that has never had one", async () => {
+    rpc.mockResolvedValue({ data: false, error: null });
+    render(<AccountPanel />);
+
+    expect(await screen.findByRole("button", { name: "Set a password" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Change password" })).toBeNull();
   });
 });
