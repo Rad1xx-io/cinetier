@@ -1,6 +1,6 @@
 import type { RankedChannel } from "@/lib/types/youtube";
 import type { AddChannelInput, ChannelRankingRepository } from "@/lib/storage/youtube/repository";
-import { isStorageAvailable } from "@/lib/storage/local-storage-repository";
+import { isStorageAvailable, markStorageUnavailable } from "@/lib/storage/local-storage-repository";
 import { validateImportedChannels } from "@/lib/storage/youtube/validation";
 
 const STORAGE_KEY = "cinetier:youtube-rankings:v1";
@@ -29,7 +29,13 @@ export class LocalStorageChannelRepository implements ChannelRankingRepository {
 
   private write(channels: RankedChannel[]) {
     if (!isStorageAvailable()) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
+    } catch {
+      // Same reasoning as the titles repository's own write.
+      markStorageUnavailable();
+      return;
+    }
     notifyChanged();
   }
 
