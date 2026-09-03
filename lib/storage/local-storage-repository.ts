@@ -9,16 +9,48 @@ const STORAGE_KEY = "cinetier:rankings:v1";
 /** Fired on `window` whenever the underlying data changes, so any mounted hook can resync. */
 export const RANKINGS_CHANGED_EVENT = "cinetier:rankings-changed";
 
+/**
+ * How long one answer about storage stands before it is probed again.
+ *
+ * The probe is a real write and delete, and it used to run on every single
+ * read — a client-side navigation to /tier-list mounts several hooks that
+ * each read the board more than once, which measured at 18 round trips for
+ * one navigation. Answering a burst from one probe is the point of this;
+ * the window is short so that a browser which genuinely changes its mind
+ * (quota exhausted, permission granted) is noticed in the next moment
+ * rather than at the next full page load.
+ */
+const AVAILABILITY_TTL_MS = 1000;
+
+let probed: { at: number; available: boolean } | null = null;
+
 export function isStorageAvailable(): boolean {
   if (typeof window === "undefined") return false;
+
+  if (probed && Date.now() - probed.at < AVAILABILITY_TTL_MS) return probed.available;
+
+  let available: boolean;
   try {
     const testKey = "__tierlistonline_test__";
     window.localStorage.setItem(testKey, "1");
     window.localStorage.removeItem(testKey);
-    return true;
+    available = true;
   } catch {
-    return false;
+    available = false;
   }
+  probed = { at: Date.now(), available };
+  return available;
+}
+
+/**
+ * Records that a real write just failed.
+ *
+ * Better evidence than any probe: the write that mattered is the one that
+ * threw. Without this, a cached "available" from a moment ago would stand
+ * until it expired, while writes kept failing behind it.
+ */
+export function markStorageUnavailable(): void {
+  probed = { at: Date.now(), available: false };
 }
 
 function notifyChanged() {
@@ -43,7 +75,15 @@ export class LocalStorageRepository implements RankingRepository {
 
   private write(titles: RankedTitle[]) {
     if (!isStorageAvailable()) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(titles));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(titles));
+    } catch {
+      // Quota reached between the probe and this write, or storage revoked
+      // mid-session. Nothing was saved, so nothing is announced — and the
+      // next read learns the truth from here rather than from a stale probe.
+      markStorageUnavailable();
+      return;
+    }
     notifyChanged();
   }
 

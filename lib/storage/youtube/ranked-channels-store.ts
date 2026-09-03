@@ -11,13 +11,18 @@ export type RankedChannelsSnapshot =
   | { status: "ready"; channels: RankedChannel[] };
 
 const LOADING_SNAPSHOT: RankedChannelsSnapshot = { status: "loading" };
+/** One object, not a fresh one per call — `useSyncExternalStore` compares by identity. */
+const UNAVAILABLE_SNAPSHOT: RankedChannelsSnapshot = { status: "unavailable" };
 
 let cachedSnapshot: RankedChannelsSnapshot = LOADING_SNAPSHOT;
-let cachedKey = "";
+/** `null` means nothing valid is cached — never a key any board could serialize to. */
+let cachedKey: string | null = null;
 
+/** Same shape as the titles store, including why the key is cleared here — see its comment. */
 function computeSnapshot(): RankedChannelsSnapshot {
   if (!isStorageAvailable()) {
-    cachedSnapshot = { status: "unavailable" };
+    cachedKey = null;
+    cachedSnapshot = UNAVAILABLE_SNAPSHOT;
     return cachedSnapshot;
   }
 
