@@ -17,14 +17,14 @@ vi.mock("@/components/auth/google-sign-in-button", () => ({
   GoogleSignInButton: () => null,
 }));
 
-import { MagicLinkForm } from "@/components/auth/magic-link-form";
+import { AuthForm } from "@/components/auth/auth-form";
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
 describe("signup_started — the moment an email goes out for a magic link", () => {
   it("fires when the form is submitted, before Supabase answers", async () => {
-    render(<MagicLinkForm redirectTo="/tier-list" />);
+    render(<AuthForm redirectTo="/tier-list" />);
 
     fireEvent.change(screen.getByLabelText("Email address"), {
       target: { value: "reader@example.test" },
@@ -40,7 +40,7 @@ describe("signup_started — the moment an email goes out for a magic link", () 
 
   it("still fires when Supabase goes on to refuse the address", async () => {
     signInWithOtp.mockResolvedValueOnce({ error: { message: "rate limited" } });
-    render(<MagicLinkForm />);
+    render(<AuthForm />);
 
     fireEvent.change(screen.getByLabelText("Email address"), {
       target: { value: "reader@example.test" },

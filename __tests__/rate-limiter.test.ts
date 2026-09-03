@@ -117,6 +117,29 @@ describe("every tier that spends something is priced", () => {
     const b = (rpc.mock.calls[1][1] as { p_bucket: string }).p_bucket;
     expect(a).not.toBe(b);
   });
+
+  /*
+   * Password sign-in (migration 025's resolve_username_email, called from
+   * /api/auth/resolve-identifier) was the first password-checkable flow this
+   * app had — until it existed, there was nothing here for a brute-force
+   * attempt to spend against.
+   */
+  it("gives password sign-in a budget as tight as filing a report, not as loose as an ordinary read", async () => {
+    rpc.mockClear();
+    await checkRateLimit(request({ "x-forwarded-for": "1.1.1.1" }), "auth");
+    const auth = rpc.mock.calls[0][1] as { p_limit: number };
+
+    rpc.mockClear();
+    await checkRateLimit(request({ "x-forwarded-for": "1.1.1.1" }), "report");
+    const report = rpc.mock.calls[0][1] as { p_limit: number };
+
+    rpc.mockClear();
+    await checkRateLimit(request({ "x-forwarded-for": "1.1.1.1" }), "search");
+    const search = rpc.mock.calls[0][1] as { p_limit: number };
+
+    expect(auth.p_limit).toBeLessThanOrEqual(report.p_limit);
+    expect(auth.p_limit).toBeLessThan(search.p_limit);
+  });
 });
 
 describe("the bucket is derived, never accepted", () => {

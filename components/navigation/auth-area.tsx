@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronDown, Download, ListChecks, LogOut, Settings as SettingsIcon, User, Images } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MagicLinkForm } from "@/components/auth/magic-link-form";
+import { AuthForm } from "@/components/auth/auth-form";
 import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
@@ -79,7 +79,7 @@ function SignedOutButtons({ compact }: { compact: boolean }) {
             If you do not have an account yet, one is created for you.
           </p>
           <div className="mt-3">
-            <MagicLinkForm redirectTo="/" />
+            <AuthForm redirectTo="/" />
           </div>
         </div>
       )}

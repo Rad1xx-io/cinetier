@@ -1,3 +1,5 @@
+"use client";
+
 import type { SignupMethod } from "@/lib/analytics/events";
 
 /**
@@ -39,15 +41,52 @@ export function isFirstSession(user: SignupUserLike): boolean {
   return reference - created < FIRST_SESSION_WINDOW_MS && reference >= created;
 }
 
+const PASSWORD_SIGNUP_KEY = "cinetier:analytics:password-signup";
+
+/**
+ * Armed by the password registration form right before it calls `signUp`,
+ * since Supabase reports both a magic-link account and a password account
+ * under the identical `app_metadata.provider === "email"` — nothing in the
+ * callback session tells them apart on its own. Same "arm before, consume
+ * once on the other side" shape as `armForkInteraction`/`takeForkInteraction`
+ * in `lib/storage/fork-handoff.ts`, sessionStorage for the same reason: this
+ * only has to survive the current tab, not a reload days later.
+ *
+ * Not armed for password SIGN-IN, only registration — signing in never
+ * creates the account `isFirstSession` would need to see anyway, so there is
+ * nothing here for a returning password user to mislabel.
+ */
+export function armPasswordSignup(): void {
+  try {
+    sessionStorage.setItem(PASSWORD_SIGNUP_KEY, "1");
+  } catch {
+    // Lost the marker: falls back to the same "magic_link" guess this made
+    // before password accounts existed — wrong, but the conservative kind.
+  }
+}
+
+function wasPasswordSignupArmed(): boolean {
+  try {
+    const value = sessionStorage.getItem(PASSWORD_SIGNUP_KEY);
+    if (value !== null) sessionStorage.removeItem(PASSWORD_SIGNUP_KEY);
+    return value === "1";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Which door the account came through.
  *
- * Supabase reports the magic link as `email`; everything unrecognised is
- * reported as a magic link too, since that is the only other route this app
- * offers and a wrong guess here is less useful than a conservative one.
+ * Supabase reports the magic link and a password account under the same
+ * `email` provider, so `armPasswordSignup`'s marker is what actually tells
+ * them apart; everything else unrecognised is reported as a magic link,
+ * since that is the oldest route this app offers and a wrong guess here is
+ * less useful than a conservative one.
  */
 export function signupMethod(user: SignupUserLike): SignupMethod {
-  return user.app_metadata?.provider === "google" ? "google" : "magic_link";
+  if (user.app_metadata?.provider === "google") return "google";
+  return wasPasswordSignupArmed() ? "password" : "magic_link";
 }
 
 const RECORDED_KEY = "cinetier:analytics:signup";
