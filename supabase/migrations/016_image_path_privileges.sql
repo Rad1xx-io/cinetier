@@ -181,7 +181,7 @@ returns uuid
 language plpgsql
 volatile
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_user uuid := auth.uid();

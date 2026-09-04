@@ -141,7 +141,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1 from public.content_moderation m
@@ -159,7 +159,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1 from public.upload_grants g
@@ -190,7 +190,7 @@ returns text
 language plpgsql
 volatile
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_user uuid := auth.uid();
@@ -275,7 +275,7 @@ returns uuid
 language plpgsql
 volatile
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_user uuid := auth.uid();
