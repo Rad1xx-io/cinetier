@@ -1,94 +1,47 @@
-# Sign-in sync at realistic data sizes
+# "Change your password" shown on a supposedly passwordless account
 
-**The freeze did not reproduce, and the theorized mechanism is refuted by measurement — but the probe it asked for found a real, previously untested scaling defect somewhere else in the same path.** Both halves of that sentence matter, so both are reported plainly rather than one being dressed up as the other.
+**Branch 1 of the two: this is not a bug. The account genuinely has a password.** `encrypted_password` for `den4ik6447@gmail.com` is a real bcrypt hash — **60 characters, `$2a$` prefix** — not null, not an empty string, not a placeholder. The RPC returned `true` because `true` is the correct answer, and the UI rendered the correct form for it. **No code changed.**
 
-**Is the fix general?** Yes. The number of requests is now `O(rows / 100)` for any board — grouping and chunking, not a threshold tuned to make a new test pass. Tests drive it at 20, 200, 350 and 1000 rows.
+Evidence vocabulary as usual: **VERIFIED** (queried against production) · **CODE VERIFIED** · **INFERRED** · **UNKNOWN**.
 
-Evidence vocabulary as usual: **VERIFIED** (measured/executed here) · **CODE VERIFIED** · **INFERRED** · **UNKNOWN**.
+## The evidence, queried against production
 
-## Was it scale-related, as theorized?
-
-**No — not on any of the three surfaces the brief named.** Measured before changing anything, with real `localStorage` and boards on both sides:
-
-| surface | measured at realistic size | verdict |
+| fact | value | source |
 |---|---|---|
-| `CloudSyncProvider` event handling (200 local + 200 cloud, every owner combination) | **1 pull, 0 stray pushes, 1 change event** | PR #67's fix holds at scale |
-| board mount + the write cascade `reorderAll` sets off | 50 → 19ms · 200 → 4ms · 800 → 16ms · **2000 → 33ms mount, 7ms cascade** | linear and small |
-| storage probes per mount, at each of those sizes | **14, constant — not 14·n** | PR #68's cache holds at scale; the feared burst does not materialize |
-| `decideSync` with both sides populated | all four actions (`adopt` / `replace` / `discard-local` / `abort`) driven end to end | no branch loops or misbehaves |
+| `encrypted_password` | **hash, 60 chars, `$2a$` prefix** | VERIFIED — `auth.users` |
+| account created | 2026-08-11 21:42 UTC | VERIFIED |
+| account last updated | **2026-09-03 22:39 UTC** | VERIFIED |
+| identities | **`email`, `google`** | VERIFIED — `auth.identities` |
+| live RPC predicate | `encrypted_password is not null` (migration 026 is the live definition) | VERIFIED |
+| grants in production | `anon` = **false**, `authenticated` = **true** | VERIFIED |
 
-So "the same loop as PR #67, just bigger" is **refuted by measurement**, not by argument. That is worth stating positively: the two prior fixes were verified to hold under exactly the conditions that were suspected of breaking them.
+`$2a$` is bcrypt's own version marker and 60 characters is bcrypt's exact output length, so this is a genuine, usable hash rather than something a code path left behind. (The hash itself was deliberately never printed — length and a four-character prefix answer the question without moving credential material into a chat log.)
 
-## What the probe did find — VERIFIED
+**What it means for Denis:** that account has a password, set on the evening of 2026-09-03. The right move is **"Forgot password"** on the sign-in screen (or simply the password set that evening) — not "set a password", which is precisely what the page correctly declined to offer.
 
-The brief's third bullet ("anything in `pushCloudTitles`/`pushCloudChannels` that scales badly with a real payload") was right, and this is the one place where behaviour genuinely changes with size:
+**INFERRED, not proven:** *which* action set it. `updated_at` moves on other updates too, so the timestamp alone does not name the culprit. But the combination — an `email` identity beside the Google one, plus a real bcrypt hash, on an account created three weeks earlier — means a password was set at some point, and the timestamp falls inside the window when the password-signup (#63) and set-a-password (#65/#66) flows were being tested. Read charitably, this is those features working: the account crossed from passwordless to having a password, and the page then correctly stopped offering to set one.
 
-```ts
-for (const row of staleRows) {
-  await supabase.from("ranked_titles").delete()
-    .eq("user_id", userId).eq("tmdb_id", row.tmdb_id).eq("media_type", row.media_type);
-}
-```
+## The population-wide answer, since one account was never the question
 
-**One awaited HTTP round trip per stale row.** Measured against a fake client:
+Denis's concern was that a fix must serve every user, not one email. The population query answers it directly, and the answer is that **no user is currently mis-served**:
 
-| case | delete requests, before | after |
+| `encrypted_password` state | users | providers seen |
 |---|---|---|
-| local 200 replacing a cloud of 200 different rows | **200** | 2 |
-| an empty push against a cloud of 200 (what a leaked push does) | **200** | 2 |
-| a cloud of 1000 | **1000** | 10 |
-| nothing stale | 0 | 0 |
+| real hash | 2 | `email` (1), `google` (2) |
+| `null` | 2 | `google` (2) |
+| **empty string** | **0** | — |
 
-At zero rows this is invisible, which is exactly why every previous test missed it. On a real account it is tens of seconds of strictly serialized requests, with the sync held open for all of them — and it compounded the danger PR #67 dealt with: an accidental empty push did not merely wipe the cloud board, it wiped it one request at a time. Both `lib/storage/cloud-sync.ts` and `lib/storage/youtube/cloud-sync.ts` had it, the channels one being a copy of the titles one, same as the previous two rounds.
+(Users holding two identities appear under both providers, which is why the per-provider counts exceed the totals.)
 
-## What I could not establish — UNKNOWN, stated plainly
+**The empty-string hypothesis is refuted for this project — VERIFIED.** That was the one mechanism that would have made `is not null` wrong, and it does not occur here: every account in the database is either a real hash or a true `null`. So migration 026's predicate returns the correct answer for **every** account currently present, across all three signup paths this app supports (password, magic link, Google).
 
-**The reported freeze itself did not reproduce, and its cause is not established.**
+## What this did expose, without being a bug
 
-Two things keep me from presenting the delete loop as the answer:
+The harness checks for migration 026 (`supabase/testing/23_account_has_password_checks.sql`) pin exactly two shapes: a hash → `true`, and `null` → `false`. **The empty-string shape was never tested** (CODE VERIFIED), and the fixture even carries a comment asserting, as an assumption, that a Google or magic-link account is `null` "exactly the way it would be on a real Supabase project". That assumption has now been checked against production for the first time and **held** — but it held by verification, not by the reasoning that originally put it there.
 
-1. It is **async I/O**. Two hundred serialized requests make a sync take minutes; they cannot block a content process, and the report is specific that the process was genuinely unresponsive (Firefox's own `Content process … isn't responsive` line, DevTools unable to attach).
-2. **The reported scenario does not even reach it.** Signing out of account A and into account B is the `replace` path — cloud has data, local is replaced by it, and nothing is pushed. The delete loop is on `adopt` and on debounced local edits. So in that particular run it never ran.
-
-Calling it the root cause would be forcing the framing, so I am not. It is a real defect, found by the requested probe, fixed on its merits.
-
-**Next diagnostic step, if it recurs** — evidence rather than another theory: `sessionStorage`'s `cinetier:sync:trace` survives the redirects and holds the last 25 sync decisions with their timings; reading it straight after a reproduction says whether the sync even ran. A Firefox performance profile started before the click would say what the main thread was actually doing, which is the one thing none of this harness can observe.
-
-## Changed
-
-- **`lib/storage/cloud-sync.ts`** — stale rows are grouped by `media_type` and deleted with one `in (…)` per group, chunked at 100 ids. Grouping is what keeps the composite key exact: a `tmdb_id` is only ever deleted for its own media type, never across. Errors are now surfaced too — the row-at-a-time version discarded every delete's result.
-- **`lib/storage/youtube/cloud-sync.ts`** — same, minus the grouping: its key is one column.
-- **Unchanged, deliberately**: `CloudSyncProvider`, `sync-decision.ts`, both stores, both repositories. Nothing in the measurements justified touching them, and PR #67/#68 are not re-litigated here.
-
-## Tests
-
-The coverage gap was "both sides empty", so the new tests are the opposite of that.
-
-- **`__tests__/cloud-sync-scale.test.ts`** (12) — the push paths against real row counts: request count bounded, the *right* rows removed and no others, composite key not collapsed by grouping (a film's id must not delete the series sharing it), every delete scoped to the account, chunking past any URL limit, one `select` rather than one per row, and no delete request at all when nothing is stale.
-- **`__tests__/cloud-sync-realistic-boards.test.tsx`** (7) — sign-in driven through the real provider with 200 titles *and* 200 channels on each side: a real cloud board replaces a real local one and pushes nothing back; a real guest board is adopted whole; **a real board belonging to someone else is dropped, not pushed into the arriving account** (the ownership protection, now at a size where getting it wrong would be visible damage); a failed read leaves a full board untouched on both halves; the write notifies readers once per board; and the board does not read as "unavailable" after a large write.
-
-| check | result |
-|---|---|
-| `npm run lint` | 0 errors (1 pre-existing, unrelated warning) |
-| `npm run typecheck` | clean |
-| `npm test` | **1458 passed**, 117 files (was 1439 — 19 new) |
-| `npm run build` | clean |
-| `npx playwright test` | 15 passed |
-
-**Negative controls — actually run, then reverted:**
-
-- Restored the row-at-a-time delete loop in the titles push: **4 tests failed**, including the request-count and the composite-key ones.
-- Restored it in the channels push: **3 tests failed**.
-
-Both files were confirmed back to their correct state afterwards, and the suite green again.
-
-## On the scoping question
-
-**Agreed, with the scope as recommended.** Three bugs in one subsystem in one evening is a concentration, not a verdict on the rest of the app — and this round is itself evidence for that reading: two of the three suspected surfaces measured clean under the exact conditions thought to break them. A blanket audit would spend most of its effort confirming healthy code.
-
-What this round did expose is the shape of the gap worth closing: **every one of these bugs lived in a case the tests did not represent** — an event kind nobody enumerated (#67), a failure that persisted rather than passed (#68), a row count above zero (this one). So the useful follow-up is not "read everything again" but "test this subsystem against realistic shapes and volumes" across `CloudSyncProvider`, `sync-decision.ts` and both `cloud-sync.ts` files — including the combinations this round only sampled: mixed media types, partial overlaps between local and cloud, and boards an order of magnitude larger. A separate prompt for that, as suggested, rather than folded in here.
+Left alone deliberately, per the brief's instruction not to change code on this branch. Worth knowing it is available as cheap insurance if Denis wants it later: treating an empty or whitespace-only value as "no password" (`nullif(trim(encrypted_password), '') is not null`) is correct under any signup path — an empty string is never a usable hash — and would make the predicate robust to a future GoTrue version that populates the column differently. That is a decision to take deliberately, not a fix to smuggle in under a report that just concluded nothing is broken.
 
 ## Remaining risks
 
-- **UNKNOWN**: the freeze's actual cause, as above. If it recurs before that is pinned down, the trace plus a profile is what would settle it.
-- **INFERRED**: chunk size 100 is a URL-length ceiling, not a measured optimum — chosen so an ordinary board is one request and an extraordinary one is still a handful. If PostgREST ever rejects a chunk, the error now surfaces in the console instead of being discarded, which is how it would be noticed.
+- **UNKNOWN**: whether a future Supabase/GoTrue version, or a signup path not yet used here, could write an empty string. Nothing in the current data suggests it does. Today's evidence is four accounts, which is the whole user base but still a small sample — the conclusion is exact for the present, not a guarantee about future rows.
+- Nothing else. No code, migration, grant or test was changed by this investigation.

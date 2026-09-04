@@ -53,3 +53,8 @@ serviceAccountKey.json
 /test-results/
 /playwright-report/
 /blob-report/
+
+# MCP server config — local-machine only. Holds a `${SUPABASE_ACCESS_TOKEN}`
+# reference (not the raw token itself), but this repo is public, so it stays
+# out of git on principle rather than relying on the placeholder being safe.
+.mcp.json
