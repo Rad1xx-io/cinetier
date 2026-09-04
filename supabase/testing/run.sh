@@ -86,17 +86,49 @@ fi
 
 $PSQL -c "drop database if exists $DB;" -c "create database $DB;" > /dev/null
 $PSQL -d "$DB" -f "$HERE/00_platform.sql" > /dev/null
-# Only the migrations the checks below actually exercise — 00_platform.sql
-# stands in for everything earlier (profiles, auth, storage). This list was
-# 012 alone until now, which meant 013 and its own check file
-# (11_publication_checks.sql) had never once been run by this script: the
-# self-check inside 013 requires 009 first and would have failed the moment
-# anyone tried. Add the next migration here when its checks are added, or this
-# goes stale exactly the same way again.
-for migration in "$HERE"/../migrations/*.sql; do
-  case "$(basename "$migration")" in
-    004_*|009_*|012_*|013_*|014_*|015_*|016_*|017_*|018_*|019_*|020_*|021_*|022_*|023_*|024_*|025_*|026_*) $PSQL -d "$DB" -f "$migration" > /dev/null ;;
+# Every migration runs, unless it is named below with a reason.
+#
+# This was an allowlist of prefixes until now, and everything unlisted fell
+# through the `case` doing nothing — no error, no warning, just fewer checks
+# than the script appeared to be running. That default cost real coverage
+# twice: 013 and its own check file (11_publication_checks.sql) had never once
+# been run, because nobody added them and nothing said so; 026 came within one
+# forgotten line of the same. An allowlist fails open, and it fails silently,
+# which is the worst pair of properties for a thing whose only job is to
+# notice problems.
+#
+# Inverting it was not a guess about the old list. Every migration it left out
+# was applied to the stub by hand first: 002, 003, 005, 006, 007, 008 and 010
+# all apply cleanly and had simply never been added. Exactly one has a real
+# reason, and it is below.
+EXCLUDED_MIGRATIONS="011_public_profile_sitemap.sql"
+
+excluded_reason() {
+  case "$1" in
+    # Reads profiles.updated_at, which 00_platform.sql's abbreviated stand-in
+    # does not carry. Not a fault in the migration: `create table if not
+    # exists` means the stub's short `profiles` wins here and 004's real
+    # definition never runs — the same asymmetry the --fresh block above
+    # describes from the other side. --fresh does apply this migration, so it
+    # is covered where the schema is real.
+    011_*) echo "stub profiles has no updated_at column; covered by --fresh instead" ;;
+    *)     echo "" ;;
   esac
+}
+
+is_excluded() {
+  case " $EXCLUDED_MIGRATIONS " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+}
+
+for migration in "$HERE"/../migrations/*.sql; do
+  name="$(basename "$migration")"
+  if is_excluded "$name"; then
+    echo "  skipping $name — $(excluded_reason "$name")"
+    continue
+  fi
+  # No `case` to fall through any more: an unlisted migration is applied, and
+  # if it cannot be, `set -e` stops the run instead of quietly skipping it.
+  $PSQL -d "$DB" -f "$migration" > /dev/null
 done
 
 if [ "$negative" = "1" ]; then
@@ -113,7 +145,30 @@ if [ "$negative" = "1" ]; then
   exit 0
 fi
 
-for checks in 10_rls_checks.sql 11_publication_checks.sql 12_ranked_title_publication_checks.sql 13_image_path_checks.sql 14_post_view_checks.sql 15_cross_list_checks.sql 16_migration_idempotency_checks.sql 17_report_dedup_checks.sql 18_profile_visibility_checks.sql 19_tier_row_moderation_checks.sql 21_custom_board_deletion_checks.sql 22_username_resolution_checks.sql 23_account_has_password_checks.sql; do
-  [ -f "$HERE/$checks" ] || continue
-  $PSQL -d "$DB" -f "$HERE/$checks" 2>&1 | grep -E "NOTICE|ERROR" | sed 's/^.*NOTICE:  //'
+# Found by name, not by a list, for the same reason the migrations above are.
+# The old explicit list had the identical failure mode — a new check file that
+# nobody remembered to add simply never ran — and `*_checks.sql` cannot forget.
+# 00_platform.sql and 20_negative_control.sql do not match the pattern, which
+# is what keeps them out of a normal run.
+for checks in "$HERE"/[0-9][0-9]_*_checks.sql; do
+  $PSQL -d "$DB" -f "$checks" 2>&1 | grep -E "NOTICE|ERROR" | sed 's/^.*NOTICE:  //'
+done
+
+# Does each exclusion still deserve to be one?
+#
+# Runs last, after the checks, because it applies the excluded migration to
+# find out — and the answer matters: if the stub is ever taught the column
+# that 011 needs, the exclusion becomes a lie that silently costs coverage
+# again. A list nobody re-examines is how this script got into trouble in the
+# first place, so it re-examines itself.
+for name in $EXCLUDED_MIGRATIONS; do
+  file="$HERE/../migrations/$name"
+  if [ ! -f "$file" ]; then
+    echo "STALE EXCLUSION: $name is excluded but no such migration exists — remove it."
+    exit 1
+  fi
+  if $PSQL -d "$DB" -f "$file" > /dev/null 2>&1; then
+    echo "STALE EXCLUSION: $name applies cleanly now — take it off EXCLUDED_MIGRATIONS."
+    exit 1
+  fi
 done
