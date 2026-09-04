@@ -28,17 +28,30 @@ Nothing had changed, so the drop went ahead.
 
 **Result — VERIFIED:** public went from **22 tables to 20**; both orphans absent; both of their foreign keys absent. The migration is idempotent — its first block skips tables that are already gone, so the local harness (which never created them) and a re-run both pass.
 
-## One thing found while connected — migration 027 is not applied
+## Migration 027 was found unapplied, and has now been applied too
 
-**VERIFIED, and it is not a consequence of this change.** Production still reports four `security definer` functions on `search_path = public` — `is_blocked`, `has_upload_grant`, `issue_upload_grant`, `attach_upload`. Six are on `search_path=""`.
+**Found VERIFIED, then closed.** While connected, production still reported four `security definer` functions on `search_path = public` — `is_blocked`, `has_upload_grant`, `issue_upload_grant`, `attach_upload`. PR #70 was merged in the repository but had **never been run in the SQL Editor**: exactly the drift class the audit flagged, arriving on schedule. Nothing was broken by it (the audit established the loose setting is not exploitable here — bodies fully schema-qualified, `CREATE` on `public` not held by `anon`/`authenticated`), but main claimed a state production did not have.
 
-So PR #70 is merged in the repository but **was never run in the SQL Editor**. Nothing is broken by this: the audit already established the loose setting is not exploitable here (bodies fully schema-qualified, and `CREATE` on `public` is not held by `anon`/`authenticated`). But main currently claims a state production does not have — exactly the drift class the audit flagged, arriving on schedule.
+Reported rather than fixed silently, and applied on Denis's explicit go-ahead. The file was confirmed unchanged since the commit that introduced it before being applied.
 
-026 is applied (`account_has_password` present with an empty search path). Not applied on my own initiative: applying 027 is a separate production change from the one that was asked for, and it takes one call whenever Denis says so.
+**Verified afterwards, independently of the migration's own self-check:**
+
+| check | result |
+|---|---|
+| definer functions on `search_path=""` | **10 of 10**, none left loose |
+| `anon` can still execute `is_blocked` | yes — public boards keep resolving |
+| `anon` can execute `attach_upload` / `issue_upload_grant` | **no** — migration 023 intact |
+| `authenticated` retains both | yes |
+
+The one risk this conversion carried was checked **on production**, not only on the stub: `issue_upload_grant` calls `gen_random_uuid()` unqualified, and here that function exists in both `pg_catalog` *and* `extensions`. A throwaway `pg_temp` function pinned to `search_path = ''` resolved both it and `hashtext()` — so the implicit `pg_catalog` still wins, as reasoned. The probe vanished with the session and left nothing in the schema.
+
+026 was already applied (`account_has_password` present with an empty search path).
 
 ## Access
 
-Write access was granted specifically for this drop by removing `read_only=true` from `.mcp.json`, and **has been put back** in the file — it takes effect at the next app restart. Nothing else was written while it was open: the drop, plus read-only queries.
+Write access came from removing `read_only=true` from `.mcp.json`. I restored the flag afterwards; Denis then removed it again deliberately, because toggling it per migration costs a file edit and a full app restart for no safety it was actually buying — the discipline that matters (DDL only from a reviewed migration, applied out loud, never quietly) does not depend on the flag. Attempting to remove it myself is blocked by the permission classifier, which gates any action that widens my own privileges — so that edit is his, once, and stays.
+
+Everything written while the access was open is listed above: two migrations and one session-scoped temp function. Everything else was a read.
 
 ## Remaining risks
 
