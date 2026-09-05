@@ -1,59 +1,94 @@
-# Dropping the two orphan tables
+# PostHog behind a same-origin proxy, so Firefox visitors are visible at all
 
-Small, low-risk change, and it went as expected. **Applied to production and verified** — this is the first migration in this project applied by tooling rather than pasted into the SQL Editor by hand.
+Evidence vocabulary: **VERIFIED** (executed/measured here) · **CODE VERIFIED** · **INFERRED** · **UNKNOWN**.
 
-Evidence vocabulary as usual: **VERIFIED** (executed/queried here) · **CODE VERIFIED** · **INFERRED** · **UNKNOWN**.
+## Which of the two diagnosed causes mattered
 
-## The fresh pre-drop check
+**Only the first.** They are both real, but only one of them was breaking anything:
 
-Re-run against production immediately before the drop, not carried over from the audit — two PRs and a day had passed:
-
-| condition | result |
+| cause | verdict |
 |---|---|
-| `criteria_definitions` rows | **0** |
-| `item_ratings` rows | **0** |
-| incoming foreign keys, either table | **none** |
-| references anywhere in the repo | **none in code, SQL or `schema.sql`** — only the audit report, this migration, and Denis's own prompt notes |
+| Firefox ETP blocking `eu-assets.i.posthog.com` at the network layer | **this is the failure.** Requests never leave the browser, so nothing downstream matters |
+| `connect-src` naming only `POSTHOG_ORIGIN`, not the `-assets` subdomain | **real, but blocked nothing** — the policy is sent `Content-Security-Policy-Report-Only`, which reports and does not enforce (CODE VERIFIED, and confirmed in the live headers below) |
 
-Nothing had changed, so the drop went ahead.
+Worth being precise about the second one, because the original note understated it: the assets host serves the **recorder bundle the SDK fetches lazily**, which is a `script-src` fetch, not `connect-src`. So the mismatch was not one missing entry in one directive — the asset origin appeared in *neither* directive. Report-only is the only reason that never mattered. Both are moot now that the traffic is same-origin.
 
-## What ran
+## Which proxy option, and why
 
-`supabase/migrations/028_drop_orphan_tables.sql`, guarded rather than trusting the decision that produced it:
+**`vercel.json` rewrites**, not PostHog's managed reverse proxy.
 
-- refuses with `raise exception` if either table holds a row **at the moment it executes** — the gap a hand-applied workflow opens between writing a migration and running it;
-- checks for incoming foreign keys **before** the drop, not after, so a dependency that appeared later stops it instead of being discovered by a cascade;
-- deliberately no `cascade` — an unanticipated dependency should fail loudly rather than quietly take another object with it;
-- self-check afterwards: both tables gone, and neither of their own outgoing foreign keys (`item_ratings_user_id_fkey`, `criteria_definitions_created_by_user_id_fkey`) left behind.
+The managed option is genuinely better on two axes their docs name: free for Cloud users, and it moves proxied traffic off Vercel's egress billing — the docs call out session recordings (1–5 MB per session) as the biggest driver of that cost. Against that: it needs a DNS CNAME Denis adds by hand, outside the repository, so the configuration stops being reviewable in a diff and stops travelling with the code.
 
-**Result — VERIFIED:** public went from **22 tables to 20**; both orphans absent; both of their foreign keys absent. The migration is idempotent — its first block skips tables that are already gone, so the local harness (which never created them) and a re-run both pass.
+At this project's traffic the egress saving is theoretical; the "configuration lives in git" property is not. If traffic grows enough for the bill to be real, switching is three `destination` values and a DNS record — not a rewrite of anything. Stated rather than picked silently, because the alternative is a documented option and not a fallback.
 
-## Migration 027 was found unapplied, and has now been applied too
+## What changed
 
-**Found VERIFIED, then closed.** While connected, production still reported four `security definer` functions on `search_path = public` — `is_blocked`, `has_upload_grant`, `issue_upload_grant`, `attach_upload`. PR #70 was merged in the repository but had **never been run in the SQL Editor**: exactly the drift class the audit flagged, arriving on schedule. Nothing was broken by it (the audit established the loose setting is not exploitable here — bodies fully schema-qualified, `CREATE` on `public` not held by `anon`/`authenticated`), but main claimed a state production did not have.
+- **`vercel.json`** (new) — three rewrites under `/api/px`, in PostHog's documented order: `/static/*` and `/array/*` to `eu-assets.i.posthog.com`, catch-all to `eu.i.posthog.com`. EU throughout, matching `NEXT_PUBLIC_POSTHOG_HOST` (`https://eu.i.posthog.com`) — a region mismatch surfaces as 401s only after deploy, per their docs.
+- **`app/providers/PostHogProvider.tsx`** — `api_host` is the proxy path; `ui_host` is derived from the ingest host (`eu.i.posthog.com` → `eu.posthog.com`) so the SDK's own links still reach the dashboard. `ui_host` is supported in the installed `posthog-js@1.417.1` — **VERIFIED** by reading `@posthog/types`, whose own doc comment describes this exact case, not by trusting the docs page.
+- **`next.config.ts`** — `POSTHOG_ORIGIN` dropped from `connect-src`. `ENFORCED_CSP_DIRECTIVES`, the `/widgets/*` framing carve-out and the image hosts are untouched.
+- **`__tests__/analytics-proxy.test.ts`** (new, 9 tests).
 
-Reported rather than fixed silently, and applied on Denis's explicit go-ahead. The file was confirmed unchanged since the commit that introduced it before being applied.
+**Path naming:** `/api/px`, shaped like one of the app's own API routes. PostHog's docs are explicit that blockers match on path as well as domain, so `/analytics`, `/telemetry`, `/ingest` or `/posthog` would hand the problem straight back. Vercel checks the filesystem before applying a rewrite, so this cannot shadow a real route — the reverse can happen, and is written down: an `app/api/px/` route added later would silently take the prefix back.
 
-**Verified afterwards, independently of the migration's own self-check:**
+**Not combined with `next.config` rewrites**, which PostHog warns can conflict. The project had none, so there was nothing to choose between.
+
+## Verification
+
+**Done here — VERIFIED:**
 
 | check | result |
 |---|---|
-| definer functions on `search_path=""` | **10 of 10**, none left loose |
-| `anon` can still execute `is_blocked` | yes — public boards keep resolving |
-| `anon` can execute `attach_upload` / `issue_upload_grant` | **no** — migration 023 intact |
-| `authenticated` retains both | yes |
+| `npm run typecheck` / `npm run lint` | clean (1 pre-existing, unrelated warning) |
+| `npm test` | **1467 passed**, 118 files (was 1458 — 9 new) |
+| `npm run build` | clean |
+| `npx playwright test` | 15 passed |
+| live headers, production build via `curl` | `connect-src 'self' https://…supabase.co https://*.vercel-scripts.com` — PostHog origin gone, everything else identical |
+| HSTS, nosniff, Referrer-Policy, Permissions-Policy, enforced CSP, `X-Frame-Options` | all present and unchanged |
+| `/widgets/*` framing carve-out | still exempt — no `X-Frame-Options`, no `frame-ancestors` |
 
-The one risk this conversion carried was checked **on production**, not only on the stub: `issue_upload_grant` calls `gen_random_uuid()` unqualified, and here that function exists in both `pg_catalog` *and* `extensions`. A throwaway `pg_temp` function pinned to `search_path = ''` resolved both it and `hashtext()` — so the implicit `pg_catalog` still wins, as reasoned. The probe vanished with the session and left nothing in the schema.
+**Negative controls — run, then reverted:**
 
-026 was already applied (`account_has_password` present with an empty search path).
+- Drifted the provider's path away from `vercel.json`'s (`/api/px` → `/api/pixel`): **3 tests failed**. This is the most likely future breakage — two files that must agree, in different languages, with nothing connecting them.
+- Pointed a rewrite at `us.i.posthog.com`: **2 tests failed**, including the region check written for the 401-after-deploy failure mode.
 
-## Access
+## What I could not verify, and why — UNKNOWN
 
-Write access came from removing `read_only=true` from `.mcp.json`. I restored the flag afterwards; Denis then removed it again deliberately, because toggling it per migration costs a file edit and a full app restart for no safety it was actually buying — the discipline that matters (DDL only from a reviewed migration, applied out loud, never quietly) does not depend on the flag. Attempting to remove it myself is blocked by the permission classifier, which gates any action that widens my own privileges — so that edit is his, once, and stays.
+The three checks the brief asks for **cannot be done from here**, and I would rather say so than imply the fix is confirmed:
 
-Everything written while the access was open is listed above: two migrations and one session-scoped temp function. Everything else was a read.
+1. **Firefox tracking-protection panel.** My browser tooling is Chromium-based; there is no Firefox I can drive, let alone one with default protections.
+2. **An event landing in the PostHog dashboard.** No dashboard access from this session.
+3. **CSP report-only violations gone from a fresh load.** Same reason as (1) — it needs the real browser on the real deployment.
+
+There is also a hard technical floor: **`vercel.json` rewrites do not apply to `next start`**. VERIFIED — `/api/px/static/array.js` returns **404** against the local production build, exactly as expected. The proxy only exists on a Vercel deployment, so nothing about it is testable locally by construction.
+
+**The preview deployment cannot stand in for it either — VERIFIED, and not for the reason I expected.** Every path on the preview returns `302` to `vercel.com/sso-api`, including the root: Vercel Deployment Protection gates the whole deployment before routing runs, so the proxy path and the home page are indistinguishable from outside. A 302 there says nothing about whether the rewrite applied.
+
+So the end-to-end check is a **before/after on production**, and the "before" half is already recorded:
+
+| probe, production, today (rewrite not merged) | result |
+|---|---|
+| `tierlistonline.com/api/px/static/array.js` | **404** — nothing serves that path yet |
+| `tierlistonline.com/` | 200 — production has no SSO gate, so the probe is meaningful there |
+| `connect-src` on production | still names `https://eu.i.posthog.com` — the old policy |
+| `eu-assets.i.posthog.com/static/array.js` direct | **200** — the rewrite's target is live, so a failure after merge would be ours |
+
+After merge, the same first probe returning **200** is the proof the rewrite works:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://tierlistonline.com/api/px/static/array.js
+```
+
+**401 instead would mean the region mismatch** PostHog's docs describe, not a broken rewrite — worth knowing which is which before reacting.
+
+**The Firefox checklist for Denis, on the preview or production URL, in a normal profile with protections at default:**
+
+1. Open the site, then the shield icon in the address bar — the tracking-protection panel should list **nothing** blocked for `posthog`, where it previously listed `eu-assets.i.posthog.com`.
+2. In the Network tab, requests to `/api/px/…` should be **200** and same-origin. If any show **401**, that is the region mismatch the docs warn about, not a proxy failure.
+3. Trigger something instrumented (a sign-in produces `trackSyncDecision`), then check the PostHog activity feed for the event. Request leaving the browser is not the same as the event arriving — this is the step that actually proves the channel works.
+4. Console on a fresh load: no CSP report-only violation naming `eu-assets.i.posthog.com`.
 
 ## Remaining risks
 
-- **INFERRED, unchanged from the audit**: that the two tables were genuinely dead. Zero rows, zero policies, zero references and no incoming keys is as strong as that gets without a time machine; they were also unreachable through the API the whole time (RLS enabled, no policies), so nothing could have been using them through the app in any case.
-- **UNKNOWN**, and now sharper: which of migrations 002–025 are applied exactly as their files read. `list_migrations` was empty before this; it now holds exactly one entry — this drop — so the record starts here rather than covering what came before.
+- **INFERRED**: that ETP was the sole reason Firefox events were missing. It is the one mechanism observed blocking at the network layer, and same-origin removes it — but if events still fail to arrive after this deploys, the next suspect is an ad-blocking extension matching on path, which is why the prefix is not an obvious one.
+- **Vercel egress**: proxied traffic now bills as Vercel bandwidth, session replay included. Not a concern at current volume; the managed proxy is the documented answer if it becomes one.
+- Local development is unaffected either way: `opt_out_capturing_by_default` is on in development, so the 404 above never fires in practice.
