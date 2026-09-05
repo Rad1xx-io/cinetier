@@ -76,6 +76,29 @@ function start(): boolean {
     capture_pageview: "history_change",
     capture_pageleave: true,
     person_profiles: "identified_only",
+    /*
+     * Off, because this app is one hostname and the probe is noisy.
+     *
+     * With it on (the default), the SDK works out the widest domain it may
+     * scope its cookie to by trying to set one: it walks the hostname's
+     * suffixes from the shortest up, writing `dmn_chk_<random>=1;domain=.<suffix>`
+     * with a three-second lifetime, and keeps the widest that sticks — deleting
+     * it again immediately with `max-age=0`. Read from the installed
+     * posthog-js, not inferred from the name.
+     *
+     * The first suffix it tries for tierlistonline.com is `.com`, which every
+     * browser refuses as a public suffix — and Firefox reports that refusal in
+     * the console as `Cookie "dmn_chk_…" has been rejected for invalid domain`.
+     * So the message is the probe working, not a fault, and it has nothing to
+     * do with the proxy: it depends only on the hostname.
+     *
+     * It is still worth turning off. Cross-subdomain identity buys this app
+     * nothing — there are no subdomains sharing a session — and an unexplained
+     * red line on every page load costs attention every time somebody opens the
+     * console to look at something else. If a subdomain ever needs to share
+     * identity, this is the line to remove.
+     */
+    cross_subdomain_cookie: false,
     session_recording: {
       /*
        * Replay records the live DOM, and this app asks for an email address to

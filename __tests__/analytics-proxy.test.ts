@@ -87,6 +87,30 @@ describe("the SDK is pointed at the proxy, not at PostHog directly", () => {
   });
 });
 
+describe("the trailing slash PostHog's ingest paths end in", () => {
+  it("is not redirected away by Next before the rewrite can see it", () => {
+    /*
+     * `/i/v0/e/` and `/decide/` end in a slash. Next normalises that away with
+     * a 308, and Vercel processes redirects before rewrites — so every event
+     * cost two round trips, the first thrown away. Measured against a
+     * production build with no rewrite present: the POST returned 308 before
+     * this setting and 404 after, which is what proves the redirect was Next's
+     * own and had nothing to do with the proxy.
+     */
+    expect(nextConfig).toContain("skipTrailingSlashRedirect: true");
+  });
+});
+
+describe("the dmn_chk cookie probe", () => {
+  it("is turned off, since this app is a single hostname", () => {
+    // posthog-js finds the widest cookie domain by trying to set one per
+    // hostname suffix, starting at `.com` — which browsers refuse, and Firefox
+    // reports as `rejected for invalid domain` on every load. Nothing here
+    // shares a session across subdomains, so the probe buys nothing.
+    expect(provider).toContain("cross_subdomain_cookie: false");
+  });
+});
+
 describe("the two rewrite mechanisms are not both in play", () => {
   it("leaves next.config.ts without rewrites of its own", () => {
     // PostHog's docs are explicit that vercel.json and next.config rewrites
