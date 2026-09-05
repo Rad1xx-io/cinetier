@@ -61,7 +61,24 @@ The three checks the brief asks for **cannot be done from here**, and I would ra
 
 There is also a hard technical floor: **`vercel.json` rewrites do not apply to `next start`**. VERIFIED — `/api/px/static/array.js` returns **404** against the local production build, exactly as expected. The proxy only exists on a Vercel deployment, so nothing about it is testable locally by construction.
 
-What I *can* do once this PR's preview deploys is `curl` the proxy path there and confirm it returns PostHog's asset rather than a 404 — that closes "the rewrite works" end to end and leaves only the Firefox-specific half. I will do that and report the result.
+**The preview deployment cannot stand in for it either — VERIFIED, and not for the reason I expected.** Every path on the preview returns `302` to `vercel.com/sso-api`, including the root: Vercel Deployment Protection gates the whole deployment before routing runs, so the proxy path and the home page are indistinguishable from outside. A 302 there says nothing about whether the rewrite applied.
+
+So the end-to-end check is a **before/after on production**, and the "before" half is already recorded:
+
+| probe, production, today (rewrite not merged) | result |
+|---|---|
+| `tierlistonline.com/api/px/static/array.js` | **404** — nothing serves that path yet |
+| `tierlistonline.com/` | 200 — production has no SSO gate, so the probe is meaningful there |
+| `connect-src` on production | still names `https://eu.i.posthog.com` — the old policy |
+| `eu-assets.i.posthog.com/static/array.js` direct | **200** — the rewrite's target is live, so a failure after merge would be ours |
+
+After merge, the same first probe returning **200** is the proof the rewrite works:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://tierlistonline.com/api/px/static/array.js
+```
+
+**401 instead would mean the region mismatch** PostHog's docs describe, not a broken rewrite — worth knowing which is which before reacting.
 
 **The Firefox checklist for Denis, on the preview or production URL, in a normal profile with protections at default:**
 
