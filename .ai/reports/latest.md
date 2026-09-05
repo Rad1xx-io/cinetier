@@ -1,47 +1,59 @@
-# "Change your password" shown on a supposedly passwordless account
+# Dropping the two orphan tables
 
-**Branch 1 of the two: this is not a bug. The account genuinely has a password.** `encrypted_password` for `den4ik6447@gmail.com` is a real bcrypt hash — **60 characters, `$2a$` prefix** — not null, not an empty string, not a placeholder. The RPC returned `true` because `true` is the correct answer, and the UI rendered the correct form for it. **No code changed.**
+Small, low-risk change, and it went as expected. **Applied to production and verified** — this is the first migration in this project applied by tooling rather than pasted into the SQL Editor by hand.
 
-Evidence vocabulary as usual: **VERIFIED** (queried against production) · **CODE VERIFIED** · **INFERRED** · **UNKNOWN**.
+Evidence vocabulary as usual: **VERIFIED** (executed/queried here) · **CODE VERIFIED** · **INFERRED** · **UNKNOWN**.
 
-## The evidence, queried against production
+## The fresh pre-drop check
 
-| fact | value | source |
-|---|---|---|
-| `encrypted_password` | **hash, 60 chars, `$2a$` prefix** | VERIFIED — `auth.users` |
-| account created | 2026-08-11 21:42 UTC | VERIFIED |
-| account last updated | **2026-09-03 22:39 UTC** | VERIFIED |
-| identities | **`email`, `google`** | VERIFIED — `auth.identities` |
-| live RPC predicate | `encrypted_password is not null` (migration 026 is the live definition) | VERIFIED |
-| grants in production | `anon` = **false**, `authenticated` = **true** | VERIFIED |
+Re-run against production immediately before the drop, not carried over from the audit — two PRs and a day had passed:
 
-`$2a$` is bcrypt's own version marker and 60 characters is bcrypt's exact output length, so this is a genuine, usable hash rather than something a code path left behind. (The hash itself was deliberately never printed — length and a four-character prefix answer the question without moving credential material into a chat log.)
+| condition | result |
+|---|---|
+| `criteria_definitions` rows | **0** |
+| `item_ratings` rows | **0** |
+| incoming foreign keys, either table | **none** |
+| references anywhere in the repo | **none in code, SQL or `schema.sql`** — only the audit report, this migration, and Denis's own prompt notes |
 
-**What it means for Denis:** that account has a password, set on the evening of 2026-09-03. The right move is **"Forgot password"** on the sign-in screen (or simply the password set that evening) — not "set a password", which is precisely what the page correctly declined to offer.
+Nothing had changed, so the drop went ahead.
 
-**INFERRED, not proven:** *which* action set it. `updated_at` moves on other updates too, so the timestamp alone does not name the culprit. But the combination — an `email` identity beside the Google one, plus a real bcrypt hash, on an account created three weeks earlier — means a password was set at some point, and the timestamp falls inside the window when the password-signup (#63) and set-a-password (#65/#66) flows were being tested. Read charitably, this is those features working: the account crossed from passwordless to having a password, and the page then correctly stopped offering to set one.
+## What ran
 
-## The population-wide answer, since one account was never the question
+`supabase/migrations/028_drop_orphan_tables.sql`, guarded rather than trusting the decision that produced it:
 
-Denis's concern was that a fix must serve every user, not one email. The population query answers it directly, and the answer is that **no user is currently mis-served**:
+- refuses with `raise exception` if either table holds a row **at the moment it executes** — the gap a hand-applied workflow opens between writing a migration and running it;
+- checks for incoming foreign keys **before** the drop, not after, so a dependency that appeared later stops it instead of being discovered by a cascade;
+- deliberately no `cascade` — an unanticipated dependency should fail loudly rather than quietly take another object with it;
+- self-check afterwards: both tables gone, and neither of their own outgoing foreign keys (`item_ratings_user_id_fkey`, `criteria_definitions_created_by_user_id_fkey`) left behind.
 
-| `encrypted_password` state | users | providers seen |
-|---|---|---|
-| real hash | 2 | `email` (1), `google` (2) |
-| `null` | 2 | `google` (2) |
-| **empty string** | **0** | — |
+**Result — VERIFIED:** public went from **22 tables to 20**; both orphans absent; both of their foreign keys absent. The migration is idempotent — its first block skips tables that are already gone, so the local harness (which never created them) and a re-run both pass.
 
-(Users holding two identities appear under both providers, which is why the per-provider counts exceed the totals.)
+## Migration 027 was found unapplied, and has now been applied too
 
-**The empty-string hypothesis is refuted for this project — VERIFIED.** That was the one mechanism that would have made `is not null` wrong, and it does not occur here: every account in the database is either a real hash or a true `null`. So migration 026's predicate returns the correct answer for **every** account currently present, across all three signup paths this app supports (password, magic link, Google).
+**Found VERIFIED, then closed.** While connected, production still reported four `security definer` functions on `search_path = public` — `is_blocked`, `has_upload_grant`, `issue_upload_grant`, `attach_upload`. PR #70 was merged in the repository but had **never been run in the SQL Editor**: exactly the drift class the audit flagged, arriving on schedule. Nothing was broken by it (the audit established the loose setting is not exploitable here — bodies fully schema-qualified, `CREATE` on `public` not held by `anon`/`authenticated`), but main claimed a state production did not have.
 
-## What this did expose, without being a bug
+Reported rather than fixed silently, and applied on Denis's explicit go-ahead. The file was confirmed unchanged since the commit that introduced it before being applied.
 
-The harness checks for migration 026 (`supabase/testing/23_account_has_password_checks.sql`) pin exactly two shapes: a hash → `true`, and `null` → `false`. **The empty-string shape was never tested** (CODE VERIFIED), and the fixture even carries a comment asserting, as an assumption, that a Google or magic-link account is `null` "exactly the way it would be on a real Supabase project". That assumption has now been checked against production for the first time and **held** — but it held by verification, not by the reasoning that originally put it there.
+**Verified afterwards, independently of the migration's own self-check:**
 
-Left alone deliberately, per the brief's instruction not to change code on this branch. Worth knowing it is available as cheap insurance if Denis wants it later: treating an empty or whitespace-only value as "no password" (`nullif(trim(encrypted_password), '') is not null`) is correct under any signup path — an empty string is never a usable hash — and would make the predicate robust to a future GoTrue version that populates the column differently. That is a decision to take deliberately, not a fix to smuggle in under a report that just concluded nothing is broken.
+| check | result |
+|---|---|
+| definer functions on `search_path=""` | **10 of 10**, none left loose |
+| `anon` can still execute `is_blocked` | yes — public boards keep resolving |
+| `anon` can execute `attach_upload` / `issue_upload_grant` | **no** — migration 023 intact |
+| `authenticated` retains both | yes |
+
+The one risk this conversion carried was checked **on production**, not only on the stub: `issue_upload_grant` calls `gen_random_uuid()` unqualified, and here that function exists in both `pg_catalog` *and* `extensions`. A throwaway `pg_temp` function pinned to `search_path = ''` resolved both it and `hashtext()` — so the implicit `pg_catalog` still wins, as reasoned. The probe vanished with the session and left nothing in the schema.
+
+026 was already applied (`account_has_password` present with an empty search path).
+
+## Access
+
+Write access came from removing `read_only=true` from `.mcp.json`. I restored the flag afterwards; Denis then removed it again deliberately, because toggling it per migration costs a file edit and a full app restart for no safety it was actually buying — the discipline that matters (DDL only from a reviewed migration, applied out loud, never quietly) does not depend on the flag. Attempting to remove it myself is blocked by the permission classifier, which gates any action that widens my own privileges — so that edit is his, once, and stays.
+
+Everything written while the access was open is listed above: two migrations and one session-scoped temp function. Everything else was a read.
 
 ## Remaining risks
 
-- **UNKNOWN**: whether a future Supabase/GoTrue version, or a signup path not yet used here, could write an empty string. Nothing in the current data suggests it does. Today's evidence is four accounts, which is the whole user base but still a small sample — the conclusion is exact for the present, not a guarantee about future rows.
-- Nothing else. No code, migration, grant or test was changed by this investigation.
+- **INFERRED, unchanged from the audit**: that the two tables were genuinely dead. Zero rows, zero policies, zero references and no incoming keys is as strong as that gets without a time machine; they were also unreachable through the API the whole time (RLS enabled, no policies), so nothing could have been using them through the app in any case.
+- **UNKNOWN**, and now sharper: which of migrations 002–025 are applied exactly as their files read. `list_migrations` was empty before this; it now holds exactly one entry — this drop — so the record starts here rather than covering what came before.
