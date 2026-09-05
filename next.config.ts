@@ -26,7 +26,20 @@ function originOf(value: string | undefined): string | null {
  * matches it instead of one that silently blocks it.
  */
 const SUPABASE_ORIGIN = originOf(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const POSTHOG_ORIGIN = originOf(process.env.NEXT_PUBLIC_POSTHOG_HOST);
+
+/*
+ * PostHog is deliberately absent from this file now.
+ *
+ * Analytics used to go straight to `eu.i.posthog.com`, so its origin had to be
+ * named in connect-src. It goes through a same-origin rewrite instead (see
+ * vercel.json and app/providers/PostHogProvider.tsx), which `'self'` already
+ * covers — in connect-src for the events, and in script-src for the recorder
+ * bundle the SDK fetches lazily. That second one never worked: the asset host
+ * is `eu-assets.i.posthog.com`, a different origin from the one this file was
+ * building from, so it was never listed anywhere. Report-only, so it blocked
+ * nothing and only ever showed up as a violation report — but it is the reason
+ * removing the entry is a simplification rather than a loss.
+ */
 
 /**
  * The image CDNs, mirroring DIRECT_HOSTS in lib/utils/image-source.ts.
@@ -58,7 +71,7 @@ const IMAGE_HOSTS = [
  * evidence are enforced separately below.
  */
 function contentSecurityPolicyReportOnly(): string {
-  const connect = ["'self'", SUPABASE_ORIGIN, POSTHOG_ORIGIN, "https://*.vercel-scripts.com"]
+  const connect = ["'self'", SUPABASE_ORIGIN, "https://*.vercel-scripts.com"]
     .filter(Boolean)
     .join(" ");
 

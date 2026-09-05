@@ -8,6 +8,50 @@ import { getSessionSnapshot, subscribeToSession } from "@/lib/supabase/session-s
 let started = false;
 
 /**
+ * Where the browser sends analytics, on this app's own origin.
+ *
+ * Not `NEXT_PUBLIC_POSTHOG_HOST` any more, and the reason is not tidiness:
+ * Firefox's Enhanced Tracking Protection blocks requests to
+ * `eu-assets.i.posthog.com` outright, at the network layer, with default
+ * settings. Every event from every Firefox visitor was being dropped before it
+ * left the browser — including `trackSyncDecision`, which is the only way a
+ * real visitor hitting the sign-in freeze would ever be visible without
+ * somebody reproducing it by hand. A same-origin path is not a trick to evade
+ * a user's choice: it is what makes first-party product analytics reach the
+ * first party, which is what a tracking-protection list is not aiming at.
+ *
+ * `vercel.json` rewrites this prefix to PostHog's EU ingest and asset hosts.
+ * Deliberately shaped like one of this app's own API routes rather than
+ * `/analytics`, `/telemetry` or `/posthog` — PostHog's own documentation notes
+ * that blocklists match on path as well as domain, so an obvious name puts the
+ * problem straight back. Vercel checks the filesystem before applying a
+ * rewrite, so this cannot shadow a real route; the reverse is worth knowing,
+ * though — an `app/api/px/` route added later would quietly take the prefix
+ * back and silence analytics again.
+ */
+const ANALYTICS_PROXY_PATH = "/api/px";
+
+/**
+ * The PostHog app itself, for links the SDK generates (the toolbar, session
+ * replay deep links). Without it those point at the proxy path, which serves
+ * ingest and not a dashboard.
+ *
+ * Derived from the ingest host rather than hardcoded, so a project that moves
+ * region — or a self-hosted one — stays correct: `eu.i.posthog.com` is served
+ * by `eu.posthog.com`, `us.i.posthog.com` by `us.posthog.com`, and anything
+ * else is its own app URL already.
+ */
+function dashboardOriginFor(ingestHost: string): string | undefined {
+  try {
+    const url = new URL(ingestHost);
+    url.hostname = url.hostname.replace(/^([a-z0-9-]+)\.i\.posthog\.com$/, "$1.posthog.com");
+    return url.origin;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Brings up PostHog once per page load, on the client only.
  *
  * The module-level flag rather than a ref: React Strict Mode mounts this twice
@@ -19,10 +63,13 @@ function start(): boolean {
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
   // Missing keys are a valid state, not a failure: local runs and forks without
   // a PostHog project should behave exactly as they did before this existed.
+  // The host is still required even though it is no longer the api_host: it is
+  // what says a project is configured at all, and which region serves it.
   if (started || !key || !host) return started;
 
   posthog.init(key, {
-    api_host: host,
+    api_host: ANALYTICS_PROXY_PATH,
+    ui_host: dashboardOriginFor(host),
     // PostHog's own $pageview, captured natively. The App Router changes routes
     // without a document load, so the default `history_change` mode is what
     // makes navigation visible at all — and session replay indexes against it.
