@@ -1,6 +1,15 @@
 -- TierListOnline: publishing a custom board to the feed.
 -- Run once in the Supabase SQL Editor. Safe to re-run.
 --
+-- SUPERSEDED IN PART BY MIGRATION 029 — read that first. The paragraph below
+-- describing pictures as live is no longer how this works: a published post
+-- keeps the picture it was published with, because a post should behave like a
+-- post. What 029 did NOT change is the requirement the paragraph is really
+-- about — moderation still reaches a published post — and it reaches it by
+-- keeping the card's row alive rather than by re-resolving it. The reasoning
+-- is kept here rather than deleted because it explains what any replacement
+-- has to preserve.
+--
 -- A publication freezes the SHAPE of a board and nothing else. The snapshot
 -- holds which cards were in which tier, in what order, under what captions, at
 -- the moment Publish was pressed. It holds no file paths and copies no

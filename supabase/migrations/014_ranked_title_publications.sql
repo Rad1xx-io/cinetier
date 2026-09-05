@@ -1,6 +1,16 @@
 -- TierListOnline: freezing a regular tier-list post at the moment it is
 -- published. Run once in the Supabase SQL Editor. Safe to re-run.
 --
+-- SUPERSEDED IN PART BY MIGRATION 029 — read that first. The paragraph below
+-- explaining why the titles themselves are NOT frozen no longer describes what
+-- happens: posts published from now on carry their own copy of the name,
+-- poster and release date, so un-ranking a title afterwards edits the board
+-- and not the post. The table itself is unchanged — the snapshot is jsonb and
+-- simply carries more fields — and posts published before that change keep
+-- resolving live exactly as described here, because a snapshot is never
+-- rewritten. The reasoning is kept rather than deleted for the same reason as
+-- 013's: it records what the replacement had to keep true.
+--
 -- Mirrors 013's custom_list_publications, for the other kind of post. A post
 -- carries no ranking data of its own (009) — it is rendered by re-reading the
 -- author's current ranked_titles every time, live, which means editing your

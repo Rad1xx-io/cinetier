@@ -1,12 +1,20 @@
 -- What a published board promises, checked against a running Postgres.
 --
+-- The second promise below changed with migration 029 — a deleted card no
+-- longer leaves the post, it is detached and the post keeps showing it. The
+-- checks in this file that still hold are the ones about SHAPE, and about
+-- hiding and blocking, which reach a published post exactly as they always
+-- did. The freeze itself, and the moderation paths under it, are checked in
+-- 25_frozen_publication_checks.sql.
+--
 -- Two promises, and they pull in opposite directions, which is why they are
 -- worth testing together:
 --
 --   * the SHAPE is frozen — editing the live board afterwards leaves the post
 --     showing what it showed when Publish was pressed;
---   * the PICTURES are live — hiding, blocking or deleting a card takes it out
---     of the post at once, because the post never held a copy.
+--   * the PICTURES were live — hiding, blocking or deleting a card took it out
+--     of the post at once, because the post never held a copy. Deleting no
+--     longer does; hiding and blocking still do.
 --
 -- As in 10_rls_checks, every scenario runs as `authenticated` with a real
 -- claim, and a control proves the role can do the allowed thing first.
@@ -99,9 +107,30 @@ do $$
 declare
   v_items jsonb;
   v_captions text;
+  v_outcome text;
+  v_still_there boolean;
 begin
   -- Everything a person does to a board after publishing it.
-  delete from public.custom_items where id = 'cccccccc-0000-4000-8000-0000000000b2';
+  --
+  -- Removing a card is `remove_custom_item` now, not a direct delete —
+  -- migration 029 revoked DELETE on this table precisely so the choice
+  -- between detaching and deleting cannot be stepped around. A card this
+  -- publication names comes back 'detached', and its row (and therefore its
+  -- picture, and therefore the file the collector would otherwise reap)
+  -- outlives its removal from the board.
+  v_outcome := public.remove_custom_item('cccccccc-0000-4000-8000-0000000000b2');
+  if v_outcome <> 'detached' then
+    raise exception 'FAILED: a published card was %, not detached', v_outcome;
+  end if;
+
+  select exists (
+    select 1 from public.custom_items
+    where id = 'cccccccc-0000-4000-8000-0000000000b2' and detached_at is not null
+  ) into v_still_there;
+  if not v_still_there then
+    raise exception 'FAILED: the published card is gone from the table, so its picture cannot survive';
+  end if;
+
   update public.custom_items set position = 7, caption = 'renamed since'
   where id = 'cccccccc-0000-4000-8000-0000000000b1';
   update public.custom_tier_rows set label = 'Best', color = '#00ff00'

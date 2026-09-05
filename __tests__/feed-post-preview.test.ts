@@ -543,3 +543,114 @@ describe("tierCountPhrase", () => {
     expect(tierCountPhrase(3)).toBe("3 tiers");
   });
 });
+
+/*
+ * The frozen generation.
+ *
+ * The tests above describe posts published before this change, and they still
+ * describe them correctly — a snapshot can never be rewritten, so those posts
+ * keep resolving live for as long as they exist. These cover the generation
+ * published after it, where the post carries its own copy and the board can do
+ * what it likes.
+ */
+describe("a post published with its catalogue facts frozen in", () => {
+  it("shows what it was published with, not what the board says now", () => {
+    const live = [
+      { ...title(1, "Renamed Since", "F"), posterPath: "/new.jpg", releaseDate: "2030-01-01" },
+    ];
+    const snapshot: RankedTitleSnapshotEntry[] = [
+      {
+        tmdbId: 1,
+        mediaType: "movie",
+        tier: "S",
+        order: 0,
+        title: "As Published",
+        posterPath: "/original.jpg",
+        releaseDate: "1999-01-01",
+      },
+    ];
+
+    const resolved = resolveSnapshotTitles(snapshot, live);
+
+    expect(resolved[0]).toMatchObject({
+      title: "As Published",
+      posterPath: "/original.jpg",
+      releaseDate: "1999-01-01",
+      tier: "S",
+    });
+  });
+
+  it("keeps the title after the author un-ranks it — the reversal, stated as a test", () => {
+    // The same scenario as "drops a title the author has since un-ranked"
+    // above, one generation later, with the opposite expectation. Editing the
+    // board no longer edits the post.
+    const snapshot: RankedTitleSnapshotEntry[] = [
+      {
+        tmdbId: 1,
+        mediaType: "movie",
+        tier: "S",
+        order: 0,
+        title: "Still Here",
+        posterPath: "/still.jpg",
+        releaseDate: "2001-01-01",
+      },
+    ];
+
+    const resolved = resolveSnapshotTitles(snapshot, []);
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0]).toMatchObject({
+      title: "Still Here",
+      posterPath: "/still.jpg",
+      tier: "S",
+      order: 0,
+    });
+  });
+
+  it("does the same for channels", () => {
+    const snapshot: RankedChannelSnapshotEntry[] = [
+      {
+        channelId: "c1",
+        tier: "A",
+        order: 2,
+        title: "As Published",
+        thumbnailUrl: "https://yt3.example/original.jpg",
+        country: "US",
+      },
+    ];
+
+    const resolved = resolveSnapshotChannels(snapshot, [channel("c1", "Renamed Since", "F")]);
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0]).toMatchObject({
+      title: "As Published",
+      thumbnailUrl: "https://yt3.example/original.jpg",
+      country: "US",
+      tier: "A",
+      order: 2,
+    });
+  });
+
+  it("still carries a frozen channel the author has since un-ranked", () => {
+    const snapshot: RankedChannelSnapshotEntry[] = [
+      { channelId: "c1", tier: "S", order: 0, title: "Gone From The Board" },
+    ];
+
+    expect(resolveSnapshotChannels(snapshot, [])).toHaveLength(1);
+  });
+
+  it("leaves an older, thinner entry on its own behaviour, in the same snapshot", () => {
+    // Mixed entries cannot occur today — a snapshot is written once, whole —
+    // but the marker is per entry, so this pins which rule each one follows
+    // rather than assuming they can never meet.
+    const snapshot: RankedTitleSnapshotEntry[] = [
+      { tmdbId: 1, mediaType: "movie", tier: "S", order: 0, title: "Frozen" },
+      { tmdbId: 2, mediaType: "movie", tier: "A", order: 1 },
+    ];
+
+    const resolved = resolveSnapshotTitles(snapshot, []);
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].title).toBe("Frozen");
+  });
+});

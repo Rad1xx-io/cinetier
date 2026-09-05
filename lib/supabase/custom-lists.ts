@@ -117,6 +117,10 @@ export async function getCustomBoard(
       .from("custom_items")
       .select("id, list_id, row_id, position, caption, image_path, hidden_at")
       .eq("list_id", listId)
+      // Detached cards belong to a published post, not to the board any more
+      // (migration 029). They stay readable so the post can render them; this
+      // is the filter that keeps them off the board they were taken off.
+      .is("detached_at", null)
       .order("position", { ascending: true }),
     // Meaningless for the owner's own view, and skipped for it: nobody needs
     // to ask themselves whether they allow their own boards to be forked.
@@ -217,7 +221,10 @@ export async function listMyCustomBoardSummaries(
     supabase
       .from("custom_items")
       .select("list_id, row_id, image_path, position")
-      .in("list_id", listIds),
+      .in("list_id", listIds)
+      // Same reason as getCustomBoard: a detached card is not on the board, so
+      // it must not supply the board's cover either.
+      .is("detached_at", null),
     supabase.from("custom_list_publications").select("list_id").in("list_id", listIds),
   ]);
 
@@ -474,8 +481,14 @@ export async function clearCustomBoard(supabase: SupabaseClient, listId: string)
   const { data } = await supabase.from("custom_items").select("image_path").eq("list_id", listId);
   const paths = (data ?? []).map((row) => (row as { image_path: string | null }).image_path);
 
-  const { error } = await supabase.from("custom_items").delete().eq("list_id", listId);
-  if (error) return;
+  // Card by card, the same decision `deleteItem` makes — but taken inside one
+  // statement pair in the database, because a half-cleared board is not a
+  // state anyone should be able to observe. See migration 029.
+  const { error } = await supabase.rpc("clear_custom_board", { p_list_id: listId });
+  if (error) {
+    console.error("TierListOnline: clearing a board failed —", error);
+    return;
+  }
 
   await removeUnreferencedFiles(supabase, paths);
 }
@@ -646,17 +659,35 @@ export async function setItemHidden(
     .eq("id", itemId);
 }
 
+/**
+ * Takes a card off the board — and off the board only.
+ *
+ * `remove_custom_item` (migration 029) decides between deleting the row and
+ * detaching it, because a card a published post still shows must keep
+ * existing: that row IS the post's picture, and its `image_path` cannot be
+ * changed by anyone, so keeping the row is what freezes the picture. A direct
+ * delete is no longer possible — 029 revoked the privilege — so this is not
+ * merely the polite route, it is the only one.
+ *
+ * The file collector runs exactly as before and needs no knowledge of any of
+ * this: a detached row still references its path, so the file reads as in use.
+ */
 export async function deleteItem(supabase: SupabaseClient, itemId: string): Promise<void> {
-  const { data } = await supabase
+  const { data: existing } = await supabase
     .from("custom_items")
     .select("image_path")
     .eq("id", itemId)
     .maybeSingle();
 
-  const { error } = await supabase.from("custom_items").delete().eq("id", itemId);
-  if (error) return;
+  const { error } = await supabase.rpc("remove_custom_item", { p_item_id: itemId });
+  if (error) {
+    console.error("TierListOnline: removing a card failed —", error);
+    return;
+  }
 
-  await removeUnreferencedFiles(supabase, [(data as { image_path: string | null } | null)?.image_path ?? null]);
+  await removeUnreferencedFiles(supabase, [
+    (existing as { image_path: string | null } | null)?.image_path ?? null,
+  ]);
 }
 
 /* ------------------------------------------------------------ publishing -- */

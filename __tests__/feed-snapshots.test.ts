@@ -92,19 +92,25 @@ describe("publishing a post freezes the board that was on screen", () => {
       post_id: "post-1",
       snapshot: {
         titles: [
-          { tmdbId: 1, mediaType: "movie", tier: "S", order: 0 },
-          { tmdbId: 2, mediaType: "anime", tier: "A", order: 1 },
+          { tmdbId: 1, mediaType: "movie", tier: "S", order: 0, title: "A" },
+          { tmdbId: 2, mediaType: "anime", tier: "A", order: 1, title: "B" },
         ],
         // No channels handed in — an empty array, not a missing key, so a
         // reader never has to guess whether this post predates channels.
         channels: [],
       },
     });
-    // No catalogue data in the frozen part — that is resolved live. (The
-    // wrapper key is itself called "titles", so the check is for the
-    // catalogue field specifically, not the substring.)
-    expect(JSON.stringify(inserted[0].snapshot)).not.toContain('"title":');
-    expect(JSON.stringify(inserted[0].snapshot)).not.toContain("posterPath");
+    /*
+     * The catalogue facts ARE frozen now, which reverses what this test used
+     * to assert. A post is a post: un-ranking a title afterwards edits the
+     * board, not what somebody already read. Nothing moderates an individual
+     * catalogue title, so freezing them takes no takedown lever away — the
+     * author's whole-profile is_public flag still gates the post entirely.
+     */
+    const frozen = JSON.stringify(inserted[0].snapshot);
+    expect(frozen).toContain('"title":"A"');
+    expect(frozen).toContain("posterPath");
+    expect(frozen).toContain("releaseDate");
   });
 
   it("freezes channels the same way, and just as thinly", async () => {
@@ -137,12 +143,15 @@ describe("publishing a post freezes the board that was on screen", () => {
 
     expect(result).toEqual({ ok: true, postId: "post-1" });
     expect(inserted[0]).toMatchObject({
-      snapshot: { titles: [], channels: [{ channelId: "c1", tier: "S", order: 0 }] },
+      snapshot: {
+        titles: [],
+        channels: [{ channelId: "c1", tier: "S", order: 0, title: "Some Channel" }],
+      },
     });
-    // Same promise as titles: no name, no thumbnail frozen in — those stay
-    // live, resolved from ranked_channels at render time.
-    expect(JSON.stringify(inserted[0].snapshot)).not.toContain('"title":');
-    expect(JSON.stringify(inserted[0].snapshot)).not.toContain("thumbnailUrl");
+    // Same reversal as titles, for the same reason.
+    const frozenChannels = JSON.stringify(inserted[0].snapshot);
+    expect(frozenChannels).toContain('"title":"Some Channel"');
+    expect(frozenChannels).toContain("thumbnailUrl");
   });
 
   it("withdraws the post rather than leaving one with no snapshot", async () => {

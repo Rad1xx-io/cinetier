@@ -1,94 +1,118 @@
-# PostHog behind a same-origin proxy, so Firefox visitors are visible at all
+# A published post keeps the picture it was published with
 
-Evidence vocabulary: **VERIFIED** (executed/measured here) · **CODE VERIFIED** · **INFERRED** · **UNKNOWN**.
+**This is a deliberate reversal, not a bug fix.** Migrations 013 and 014 state the opposite intent in their own headers, at length and with reasons. Denis's decision is that a post should behave like a post on any social network: once published, nobody changes the photo. His earlier report — a picture vanishing from an already-published post after he deleted the card — was that design working exactly as built, not a regression of something already fixed.
 
-## Which of the two diagnosed causes mattered
+The half 013 was right about does not change: **moderation still reaches a published post.** Everything below is shaped by keeping that true.
 
-**Only the first.** They are both real, but only one of them was breaking anything:
+Evidence vocabulary: **VERIFIED** (executed/queried here) · **CODE VERIFIED** · **INFERRED** · **UNKNOWN**.
 
-| cause | verdict |
+## The cascade question, which decided the design
+
+Asked first, because both candidate mechanisms depend on the answer.
+
+**VERIFIED, queried against production:** `content_moderation` is `(subject_type text, subject_id uuid, blocked_at, note)`, primary key on the pair, and **zero foreign keys**. A block is a free-standing fact. It does not cascade away when its subject row is deleted, and it can be placed on a subject that no longer exists.
+
+So "is this card blocked?" stays answerable after the card leaves the board. Without that, keeping a picture alive past its row would have meant inventing a way to remember blocks separately — and that invention is where a moderation hole would have lived.
+
+## Which mechanism, and why the other was rejected
+
+**Chosen: keep the row (soft detach). Rejected: copy the path into the snapshot and add a second storage grant.**
+
+Three facts, each checked rather than assumed, made the cheap option the safe one:
+
+| checked | result |
 |---|---|
-| Firefox ETP blocking `eu-assets.i.posthog.com` at the network layer | **this is the failure.** Requests never leave the browser, so nothing downstream matters |
-| `connect-src` naming only `POSTHOG_ORIGIN`, not the `-assets` subdomain | **real, but blocked nothing** — the policy is sent `Content-Security-Policy-Report-Only`, which reports and does not enforce (CODE VERIFIED, and confirmed in the live headers below) |
+| Can a card's picture be swapped after creation? | **No** — CODE VERIFIED. Migration 016 grants update on exactly `(row_id, position, caption, hidden_at)` and revokes insert outright. `image_path` is immutable to every client, so **a card's row *is* the frozen picture**. |
+| Do published posts render tier pictures? | **No** — CODE VERIFIED. `PublishedBoard.rows` carries no image; `row.imageUrl` appears only in the live board editor. Tier paths never needed freezing. |
+| Does a block survive its subject? | **Yes** — VERIFIED above. |
 
-Worth being precise about the second one, because the original note understated it: the assets host serves the **recorder bundle the SDK fetches lazily**, which is a `script-src` fetch, not `connect-src`. So the mismatch was not one missing entry in one directive — the asset origin appeared in *neither* directive. Report-only is the only reason that never mattered. Both are moot now that the traffic is same-origin.
+Because the row is the picture, keeping the row freezes the picture completely — with no new path to storage, and no second place where moderation could be got wrong. The existing SELECT policy on `custom_items`, which already calls `is_blocked('custom_item', id)`, stays the single place a card's visibility is decided, for the live board and the frozen post alike.
 
-## Which proxy option, and why
+The rejected option would have needed an RLS policy searching a JSONB snapshot for per-item blocks, as a **second** moderation gate beside the existing one. More code, in the one area where a mistake is worst.
 
-**`vercel.json` rewrites**, not PostHog's managed reverse proxy.
+**The garbage collector needed no change at all** — which was the sharpest test of the choice. A detached row still references its path, so `removeUnreferencedFiles` reads the file as in use, at every one of its five call sites, without knowing publications exist. Under the rejected design each of those five sites would have needed a new rule.
 
-The managed option is genuinely better on two axes their docs name: free for Cloud users, and it moves proxied traffic off Vercel's egress billing — the docs call out session recordings (1–5 MB per session) as the biggest driver of that cost. Against that: it needs a DNS CNAME Denis adds by hand, outside the repository, so the configuration stops being reviewable in a diff and stops travelling with the code.
+Narrowing worth recording: only **two** of the five call sites could ever have orphaned a published picture. `deleteCustomBoard` cascades the publication away with the board (`custom_list_publications.list_id → ON DELETE CASCADE`, VERIFIED), and `clearTierRowImage`/`deleteTierRow` touch tier pictures, which posts never show.
 
-At this project's traffic the egress saving is theoretical; the "configuration lives in git" property is not. If traffic grows enough for the bill to be real, switching is three `destination` values and a DNS record — not a rewrite of anything. Stated rather than picked silently, because the alternative is a documented option and not a fallback.
+## Direct delete is revoked, and that is the point
 
-## What changed
+**VERIFIED:** `authenticated` and `anon` held `DELETE` on `custom_items`, so "remove this card" was a plain PostgREST delete. Leaving it would have made the freeze an app convention any other caller could step around.
 
-- **`vercel.json`** (new) — three rewrites under `/api/px`, in PostHog's documented order: `/static/*` and `/array/*` to `eu-assets.i.posthog.com`, catch-all to `eu.i.posthog.com`. EU throughout, matching `NEXT_PUBLIC_POSTHOG_HOST` (`https://eu.i.posthog.com`) — a region mismatch surfaces as 401s only after deploy, per their docs.
-- **`app/providers/PostHogProvider.tsx`** — `api_host` is the proxy path; `ui_host` is derived from the ingest host (`eu.i.posthog.com` → `eu.posthog.com`) so the SDK's own links still reach the dashboard. `ui_host` is supported in the installed `posthog-js@1.417.1` — **VERIFIED** by reading `@posthog/types`, whose own doc comment describes this exact case, not by trusting the docs page.
-- **`next.config.ts`** — `POSTHOG_ORIGIN` dropped from `connect-src`. `ENFORCED_CSP_DIRECTIVES`, the `/widgets/*` framing carve-out and the image hosts are untouched.
-- **`__tests__/analytics-proxy.test.ts`** (new, 9 tests).
+Migration 029 revokes it and routes removal through `remove_custom_item` and `clear_custom_board`, which decide in the database, atomically, whether a card is spoken for by a publication. Same move 013 made with "no UPDATE policy" and 016 with column grants: the invariant belongs to the database, not to the app's good manners.
 
-**Path naming:** `/api/px`, shaped like one of the app's own API routes. PostHog's docs are explicit that blockers match on path as well as domain, so `/analytics`, `/telemetry`, `/ingest` or `/posthog` would hand the problem straight back. Vercel checks the filesystem before applying a rewrite, so this cannot shadow a real route — the reverse can happen, and is written down: an `app/api/px/` route added later would silently take the prefix back.
+Both functions also re-check ownership and refuse on a board under review — a report must not be answerable by deleting the evidence.
 
-**Not combined with `next.config` rewrites**, which PostHog warns can conflict. The project had none, so there was nothing to choose between.
+## What hiding still does, and why that is deliberate
 
-## Verification
+Hiding a card **still** removes it from a published post. That is a boundary, not an oversight: "frozen" means the author cannot *substitute* what was shown, but an author must keep a way to retract their own content. Without it, detaching would leave deleting the entire post as the only route. Blocking and hiding reach a published post; editing the board no longer does.
 
-**Done here — VERIFIED:**
+## Verification — all three directions
+
+### 1. The direction Denis reported
+
+- **VERIFIED (database):** publish a board, remove a card → the function reports `detached`, the row survives with `detached_at` set, and an **anonymous reader still resolves the original `image_path`**. Assertion: *"the already-published post still resolves the picture it was published with"*.
+- **VERIFIED (unit):** `deleteItem` on a published card removes **no** file; clearing a board removes only the unpublished cards' files.
+- **VERIFIED (unit):** a frozen ranked-title post keeps its title, poster and tier after the author un-ranks it entirely.
+
+### 2. The direction nobody asked about — moderation
+
+Given equal weight, and checked for the state that did not exist before this change: a card that has **already been detached**.
+
+| subject blocked | result |
+|---|---|
+| `custom_item`, already detached | **VERIFIED gone** from the published post — *"a blocked card disappears from the published post even though it is no longer on any board"* |
+| `custom_item`, still on the board | **VERIFIED gone**, unchanged from before |
+| `custom_tier_row` | **VERIFIED gone** from the live board. Published posts never showed tier pictures, so there is nothing to check on that side — stated rather than pretended |
+| `custom_list` | **VERIFIED gone** — blocking the board makes the whole publication unreadable |
+| board under review | **VERIFIED refused** — its owner cannot remove cards from it |
+| direct delete by a client | **VERIFIED refused** — `insufficient_privilege` |
+
+### 3. Ordinary tier-list posts
+
+Confirmed before treating as low-risk, as instructed: **no per-title moderation path exists.** `is_blocked` is never called for `ranked_titles` (CODE VERIFIED — no such subject type anywhere). The only lever is the author's whole-profile `is_public` flag from 004, which gates the entire post regardless of snapshot contents. So freezing name, poster and date takes no takedown lever away.
+
+Channels got the same treatment: not named in the brief, but `resolveSnapshotChannels` is the same function for the same problem, and leaving it live would have made YouTube posts behave differently from every other kind for no stated reason.
+
+## Posts published before this ships
+
+**They keep behaving exactly as they do today**, and cannot be upgraded in place.
+
+- Custom boards: their cards were never detached, so nothing changes. If a card is deleted from now on it will be detached, so *older* posts benefit too — the mechanism is not generational on this side.
+- Ranked-title and channel posts: their snapshots carry placement only. `resolveSnapshotTitles` treats the presence of `title` as the marker for the new generation; without it, the old path runs unchanged, including dropping a title the author has since un-ranked. A snapshot is never rewritten — 014 has no UPDATE policy and a self-check that fails if one appears — so an old post **cannot** grow the new fields. It stays on the old behaviour until its author deletes it and publishes again. The same generational boundary 013 and 014 drew for their own predecessors.
+
+A test pins this explicitly, including a mixed snapshot, so the rule is per entry rather than assumed uniform.
+
+## The immutability invariant
+
+Untouched and re-checked. 013's and 014's self-checks pass unmodified, and 029 restates the assertion itself: if any UPDATE policy ever appears on `custom_list_publications`, the migration fails. 029 adds three more — a client cannot delete cards, cannot write `detached_at`, and the new functions are `authenticated`-only.
+
+## Tests
 
 | check | result |
 |---|---|
-| `npm run typecheck` / `npm run lint` | clean (1 pre-existing, unrelated warning) |
-| `npm test` | **1467 passed**, 118 files (was 1458 — 9 new) |
-| `npm run build` | clean |
+| local Postgres harness, normal | **exit 0, 115 assertions** (was 105 — 10 new) |
+| harness `--fresh` | every migration applies to an empty database, 029 included |
+| `npm test` | **1474 passed**, 118 files (was 1467) |
+| typecheck / lint / build | clean · clean (1 pre-existing warning) · clean |
 | `npx playwright test` | 15 passed |
-| live headers, production build via `curl` | `connect-src 'self' https://…supabase.co https://*.vercel-scripts.com` — PostHog origin gone, everything else identical |
-| HSTS, nosniff, Referrer-Policy, Permissions-Policy, enforced CSP, `X-Frame-Options` | all present and unchanged |
-| `/widgets/*` framing carve-out | still exempt — no `X-Frame-Options`, no `frame-ancestors` |
+
+**Rewritten rather than re-passed, as expected** — these asserted the behaviour just reversed:
+
+- `11_publication_checks.sql` — "the snapshot is unchanged by deleting…" now removes the card through `remove_custom_item` and asserts it comes back `detached` with its row intact. Its header records which of its two promises changed.
+- `custom-storage-cleanup.test.ts` — the fake client learned both new functions; the delete-order assertion now names the RPC. Two tests added for the kept-file case.
+- `feed-snapshots.test.ts` — asserted the snapshot contained **no** `title`/`posterPath`; now asserts it does, with the reason.
+- `custom-board-fork.test.ts` — mock chain taught `.is()`.
+- `e2e/custom-board-clear.spec.ts` — stubbed a `DELETE` that no longer happens; now stubs the RPC.
+
+**New:** `25_frozen_publication_checks.sql` (10 assertions) and a frozen-generation block in `feed-post-preview.test.ts` (5 tests).
 
 **Negative controls — run, then reverted:**
 
-- Drifted the provider's path away from `vercel.json`'s (`/api/px` → `/api/pixel`): **3 tests failed**. This is the most likely future breakage — two files that must agree, in different languages, with nothing connecting them.
-- Pointed a rewrite at `us.i.posthog.com`: **2 tests failed**, including the region check written for the 401-after-deploy failure mode.
-
-## What I could not verify, and why — UNKNOWN
-
-The three checks the brief asks for **cannot be done from here**, and I would rather say so than imply the fix is confirmed:
-
-1. **Firefox tracking-protection panel.** My browser tooling is Chromium-based; there is no Firefox I can drive, let alone one with default protections.
-2. **An event landing in the PostHog dashboard.** No dashboard access from this session.
-3. **CSP report-only violations gone from a fresh load.** Same reason as (1) — it needs the real browser on the real deployment.
-
-There is also a hard technical floor: **`vercel.json` rewrites do not apply to `next start`**. VERIFIED — `/api/px/static/array.js` returns **404** against the local production build, exactly as expected. The proxy only exists on a Vercel deployment, so nothing about it is testable locally by construction.
-
-**The preview deployment cannot stand in for it either — VERIFIED, and not for the reason I expected.** Every path on the preview returns `302` to `vercel.com/sso-api`, including the root: Vercel Deployment Protection gates the whole deployment before routing runs, so the proxy path and the home page are indistinguishable from outside. A 302 there says nothing about whether the rewrite applied.
-
-So the end-to-end check is a **before/after on production**, and the "before" half is already recorded:
-
-| probe, production, today (rewrite not merged) | result |
-|---|---|
-| `tierlistonline.com/api/px/static/array.js` | **404** — nothing serves that path yet |
-| `tierlistonline.com/` | 200 — production has no SSO gate, so the probe is meaningful there |
-| `connect-src` on production | still names `https://eu.i.posthog.com` — the old policy |
-| `eu-assets.i.posthog.com/static/array.js` direct | **200** — the rewrite's target is live, so a failure after merge would be ours |
-
-After merge, the same first probe returning **200** is the proof the rewrite works:
-
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" https://tierlistonline.com/api/px/static/array.js
-```
-
-**401 instead would mean the region mismatch** PostHog's docs describe, not a broken rewrite — worth knowing which is which before reacting.
-
-**The Firefox checklist for Denis, on the preview or production URL, in a normal profile with protections at default:**
-
-1. Open the site, then the shield icon in the address bar — the tracking-protection panel should list **nothing** blocked for `posthog`, where it previously listed `eu-assets.i.posthog.com`.
-2. In the Network tab, requests to `/api/px/…` should be **200** and same-origin. If any show **401**, that is the region mismatch the docs warn about, not a proxy failure.
-3. Trigger something instrumented (a sign-in produces `trackSyncDecision`), then check the PostHog activity feed for the event. Request leaving the browser is not the same as the event arriving — this is the step that actually proves the channel works.
-4. Console on a fresh load: no CSP report-only violation naming `eu-assets.i.posthog.com`.
+- Made `remove_custom_item` delete instead of detach: the harness failed with *"the published card is gone from the table, so its picture cannot survive"*.
+- Removed the `is_blocked` clause from the card policy: the existing exploit check failed with *"EXPLOIT 2 SUCCEEDED: a blocked card is still readable by its owner"* — the moderation path is guarded by a test that fires before any of mine.
 
 ## Remaining risks
 
-- **INFERRED**: that ETP was the sole reason Firefox events were missing. It is the one mechanism observed blocking at the network layer, and same-origin removes it — but if events still fail to arrive after this deploys, the next suspect is an ad-blocking extension matching on path, which is why the prefix is not an obvious one.
-- **Vercel egress**: proxied traffic now bills as Vercel bandwidth, session replay included. Not a concern at current volume; the managed proxy is the documented answer if it becomes one.
-- Local development is unaffected either way: `opt_out_capturing_by_default` is on in development, so the 404 above never fires in practice.
+- **UNKNOWN**: nothing here has run against production. Migration 029 is written and passes locally in both harness modes; applying it is a separate, deliberate step.
+- A detached card whose post is later deleted stays detached forever — the publication cascades away and nothing sweeps the row. Costs one row and one file per case, no correctness issue. Deliberately not built: a sweeper that deletes storage on a schedule is exactly the kind of thing that should be added with its own tests, not slipped into a reversal.
+- **INFERRED**: that hiding remaining a takedown lever is what Denis wants. It is the reading that keeps an author able to retract their own content, and it is called out here rather than buried so it can be overruled cheaply.

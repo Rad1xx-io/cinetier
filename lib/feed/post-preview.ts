@@ -258,15 +258,24 @@ export function suggestedPostCategory(
 }
 
 /**
- * What a post actually shows: the frozen placement, with catalogue facts —
- * name, poster, release date — filled in from whatever the author's board
- * looks like right now.
+ * What a post actually shows.
  *
- * `undefined` means the post predates snapshots; the live board is shown
- * whole, exactly as it always was. Given a snapshot, a title the live board no
- * longer has (the author un-ranked it since publishing) is left out rather
- * than guessed at — a gap, the same way a taken-down custom card leaves one,
- * not a reason to fail the whole post.
+ * Three generations of post pass through here, and telling them apart is the
+ * whole job:
+ *
+ *   * `undefined` — predates snapshots entirely. The live board is shown
+ *     whole, exactly as it always was.
+ *   * a snapshot with placement only — published between snapshots arriving
+ *     and posts being frozen. Placement is honoured, the catalogue facts are
+ *     filled in from the author's board as it is now, and a title the author
+ *     has since un-ranked drops out. Unchanged, deliberately: a snapshot can
+ *     never be rewritten, so these posts cannot be upgraded in place, and
+ *     changing how they render would change posts nobody republished.
+ *   * a snapshot carrying its own copy of the title, poster and date — the
+ *     post shows what it was published with, whatever the board does after.
+ *
+ * The third is the one Denis asked for: un-ranking a title edits the board,
+ * not what somebody already read.
  */
 export function resolveSnapshotTitles(
   snapshot: RankedTitleSnapshotEntry[] | undefined,
@@ -278,6 +287,28 @@ export function resolveSnapshotTitles(
   const resolved: RankedTitle[] = [];
   for (const entry of snapshot) {
     const found = live.get(`${entry.tmdbId}:${entry.mediaType}`);
+
+    // `title` is the marker for the frozen generation: it is the one field a
+    // post cannot render without, so a snapshot that has it has all of them.
+    if (entry.title !== undefined) {
+      resolved.push({
+        tmdbId: entry.tmdbId,
+        mediaType: entry.mediaType,
+        title: entry.title,
+        posterPath: entry.posterPath ?? null,
+        releaseDate: entry.releaseDate ?? null,
+        tier: entry.tier,
+        order: entry.order,
+        // Not frozen, and not shown: a rating and the dates a card was touched
+        // belong to the board, not to the post. Carried over when the board
+        // still has the title, so nothing that reads them gets worse.
+        voteAverage: found?.voteAverage,
+        addedAt: found?.addedAt ?? 0,
+        updatedAt: found?.updatedAt ?? 0,
+      });
+      continue;
+    }
+
     if (!found) continue;
     resolved.push({ ...found, tier: entry.tier, order: entry.order });
   }
@@ -298,6 +329,22 @@ export function resolveSnapshotChannels(
   const resolved: RankedChannel[] = [];
   for (const entry of snapshot) {
     const found = live.get(entry.channelId);
+
+    if (entry.title !== undefined) {
+      resolved.push({
+        channelId: entry.channelId,
+        title: entry.title,
+        thumbnailUrl: entry.thumbnailUrl ?? null,
+        country: entry.country ?? null,
+        tier: entry.tier,
+        order: entry.order,
+        subscriberCount: found?.subscriberCount,
+        addedAt: found?.addedAt ?? 0,
+        updatedAt: found?.updatedAt ?? 0,
+      });
+      continue;
+    }
+
     if (!found) continue;
     resolved.push({ ...found, tier: entry.tier, order: entry.order });
   }

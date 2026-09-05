@@ -257,19 +257,35 @@ export type PublishResult =
   | { ok: true; postId: string }
   | { ok: false; error: string };
 
-/** One title's place on the board, as it stood the moment Publish was pressed. */
+/**
+ * One title's place on the board, as it stood the moment Publish was pressed —
+ * and, since the frozen-post change, what it looked like too.
+ *
+ * The three display fields are optional because posts published before that
+ * change do not carry them, and those posts keep resolving live exactly as
+ * they always did. A snapshot is never rewritten (migration 014 has no UPDATE
+ * policy and a self-check that fails if one appears), so an old post cannot
+ * grow them later — it stays on the old behaviour until its author deletes it
+ * and publishes again.
+ */
 export interface RankedTitleSnapshotEntry {
   tmdbId: number;
   mediaType: MediaType;
   tier: RankedTitle["tier"];
   order: number;
+  title?: string;
+  posterPath?: string | null;
+  releaseDate?: string | null;
 }
 
-/** One channel's place on the board, as it stood the moment Publish was pressed. */
+/** One channel's place on the board, and its look. Same generational rule. */
 export interface RankedChannelSnapshotEntry {
   channelId: string;
   tier: RankedChannel["tier"];
   order: number;
+  title?: string;
+  thumbnailUrl?: string | null;
+  country?: string | null;
 }
 
 export interface PostSnapshot {
@@ -277,6 +293,16 @@ export interface PostSnapshot {
   channels: RankedChannelSnapshotEntry[];
 }
 
+/**
+ * The board as it stood, including what it looked like.
+ *
+ * The catalogue facts are copied in rather than re-resolved at render time.
+ * That is the whole change: un-ranking a title afterwards edits the board, not
+ * the post somebody already read. Unlike a custom board's photographs, these
+ * are catalogue rows nobody uploaded and nothing moderates per title — the
+ * only takedown lever here is the author's whole-profile `is_public` flag,
+ * which gates the post regardless of what the snapshot holds.
+ */
 function buildSnapshot(titles: RankedTitle[], channels: RankedChannel[]): PostSnapshot {
   return {
     titles: titles.map((t) => ({
@@ -284,11 +310,17 @@ function buildSnapshot(titles: RankedTitle[], channels: RankedChannel[]): PostSn
       mediaType: t.mediaType,
       tier: t.tier,
       order: t.order,
+      title: t.title,
+      posterPath: t.posterPath,
+      releaseDate: t.releaseDate,
     })),
     channels: channels.map((c) => ({
       channelId: c.channelId,
       tier: c.tier,
       order: c.order,
+      title: c.title,
+      thumbnailUrl: c.thumbnailUrl,
+      country: c.country,
     })),
   };
 }

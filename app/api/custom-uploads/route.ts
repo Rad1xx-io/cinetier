@@ -73,7 +73,13 @@ export async function POST(request: Request) {
   // which is the copy that matters.
   const since = new Date(Date.now() - DAY_MS).toISOString();
   const [{ count: itemsInList }, { count: uploadsToday }] = await Promise.all([
-    supabase.from("custom_items").select("id", { count: "exact", head: true }).eq("list_id", listId),
+    // Detached cards are a published post's, not the board's, so they do not
+    // count against the board's own card limit (migration 029).
+    supabase
+      .from("custom_items")
+      .select("id", { count: "exact", head: true })
+      .eq("list_id", listId)
+      .is("detached_at", null),
     supabase
       .from("upload_grants")
       .select("id", { count: "exact", head: true })
