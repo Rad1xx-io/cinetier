@@ -6,6 +6,7 @@ import {
   deleteCustomBoard,
   deleteItem,
   deleteTierRow,
+  clearCustomBoard,
 } from "@/lib/supabase/custom-lists";
 
 interface Row {
@@ -13,6 +14,8 @@ interface Row {
   list_id?: string;
   image_path: string | null;
   position?: number;
+  /** Set by remove_custom_item when a published post still shows this card. */
+  detached_at?: string | null;
 }
 
 interface World {
@@ -20,6 +23,8 @@ interface World {
   custom_tier_rows: Row[];
   /** list_ids that have a live post — what the fake delete_custom_board reads. */
   published?: string[];
+  /** item ids a publication's snapshot names, which is what makes them survive removal. */
+  publishedItems?: string[];
   /** Set to make the write fail, as a dropped connection would. */
   writeFails?: boolean;
   /** Set to make the bucket refuse, as an outage would. */
@@ -141,6 +146,55 @@ function fakeClient(world: World) {
         return { data: previous, error: null };
       }
 
+      /*
+       * Migration 029: a client can no longer delete a card at all. The
+       * function decides — a card some publication's snapshot names is
+       * detached and keeps its row (and therefore its picture, and therefore
+       * its file); anything else is deleted outright, as before.
+       */
+      if (name === "remove_custom_item") {
+        if (world.writeFails) return { data: null, error: { message: "no connection" } };
+
+        const itemId = args.p_item_id as string;
+        const items = table("custom_items");
+        const index = items.findIndex((r) => r.id === itemId);
+        if (index < 0) return { data: "missing", error: null };
+
+        const item = items[index];
+        const named =
+          (world.publishedItems ?? []).includes(itemId) ||
+          (world.publishedItems === undefined &&
+            (world.published ?? []).includes(item.list_id ?? ""));
+
+        if (named) {
+          item.detached_at = new Date().toISOString();
+          return { data: "detached", error: null };
+        }
+
+        items.splice(index, 1);
+        return { data: "deleted", error: null };
+      }
+
+      if (name === "clear_custom_board") {
+        if (world.writeFails) return { data: null, error: { message: "no connection" } };
+
+        const listId = args.p_list_id as string;
+        let deleted = 0;
+        world.custom_items = table("custom_items").filter((r) => {
+          if (r.list_id !== listId) return true;
+          const named =
+            (world.publishedItems ?? []).includes(r.id) ||
+            (world.publishedItems === undefined && (world.published ?? []).includes(listId));
+          if (named) {
+            r.detached_at = new Date().toISOString();
+            return true;
+          }
+          deleted += 1;
+          return false;
+        });
+        return { data: deleted, error: null };
+      }
+
       if (name === "delete_custom_board") {
         if (world.writeFails) return { data: null, error: { message: "no connection" } };
 
@@ -211,7 +265,38 @@ describe("deleting a card takes its picture with it", () => {
     expect(removed).toEqual([["u/l/one.jpg"]]);
     // The row first, the file after. The other order would delete somebody's
     // picture and then fail to delete the card that shows it.
-    expect(order).toEqual(["delete custom_items", "storage.remove"]);
+    expect(order).toEqual(["rpc remove_custom_item", "storage.remove"]);
+  });
+
+  it("keeps the file when a published post still shows the card", async () => {
+    // The reversal, at the layer that used to defeat it: the collector asks
+    // the database what still references a path, and a detached row still
+    // does — so the file survives without the collector knowing publications
+    // exist at all.
+    const { client, removed } = fakeClient({
+      custom_items: [{ id: "i1", list_id: "l1", image_path: "u/l/published.jpg" }],
+      custom_tier_rows: [],
+      publishedItems: ["i1"],
+    });
+
+    await deleteItem(client, "i1");
+
+    expect(removed).toEqual([]);
+  });
+
+  it("clearing a board deletes the unpublished cards' files and keeps the published one", async () => {
+    const { client, removed } = fakeClient({
+      custom_items: [
+        { id: "i1", list_id: "l1", image_path: "u/l/published.jpg" },
+        { id: "i2", list_id: "l1", image_path: "u/l/draft.jpg" },
+      ],
+      custom_tier_rows: [],
+      publishedItems: ["i1"],
+    });
+
+    await clearCustomBoard(client, "l1");
+
+    expect(removed).toEqual([["u/l/draft.jpg"]]);
   });
 
   it("leaves the file alone while another row still refers to it", async () => {

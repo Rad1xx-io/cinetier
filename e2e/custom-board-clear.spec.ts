@@ -14,18 +14,24 @@ import { test, expect, type Page } from "@playwright/test";
 /** Answers the calls `clearCustomBoard` makes, and remembers whether storage was asked to clean up. */
 function stubClearBoard(page: Page) {
   let storageRemoveCalled = false;
-  let deleteCalled = false;
+  let clearCalled = false;
+
+  /*
+   * Clearing is `clear_custom_board` now, not a DELETE. Migration 029 revoked
+   * the client's delete privilege so that the choice between deleting a card
+   * and detaching one a published post still shows is made in the database —
+   * so this is the call that has to arrive.
+   */
+  page.route("**/rest/v1/rpc/clear_custom_board", (route) => {
+    clearCalled = true;
+    return route.fulfill({ status: 200, contentType: "application/json", body: "2" });
+  });
 
   page.route("**/rest/v1/custom_items**", (route) => {
     const url = route.request().url();
-    const method = route.request().method();
     const json = (body: unknown) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 
-    if (method === "DELETE") {
-      deleteCalled = true;
-      return json([]);
-    }
     // The first read collects what the board is about to lose; the second
     // (queried by path, from inside removeUnreferencedFiles) asks what still
     // refers to those paths — empty, since the rows that did were just deleted.
@@ -48,7 +54,7 @@ function stubClearBoard(page: Page) {
   });
 
   return {
-    deleteWasCalled: () => deleteCalled,
+    clearWasCalled: () => clearCalled,
     storageWasCleaned: () => storageRemoveCalled,
   };
 }
@@ -82,7 +88,7 @@ test("Clear board asks how many cards, then removes them and their files, leavin
   await expect(page.getByRole("textbox", { name: "Tier name" }).nth(0)).toHaveValue("S");
   await expect(page.getByRole("textbox", { name: "Tier name" }).nth(1)).toHaveValue("A");
 
-  await expect.poll(() => calls.deleteWasCalled()).toBe(true);
+  await expect.poll(() => calls.clearWasCalled()).toBe(true);
   await expect.poll(() => calls.storageWasCleaned()).toBe(true);
 });
 
@@ -97,5 +103,5 @@ test("declining the confirmation leaves the board untouched", async ({ page }) =
 
   await expect(page.getByText("first card")).toBeVisible();
   await expect(page.getByText("second card")).toBeVisible();
-  expect(calls.deleteWasCalled()).toBe(false);
+  expect(calls.clearWasCalled()).toBe(false);
 });

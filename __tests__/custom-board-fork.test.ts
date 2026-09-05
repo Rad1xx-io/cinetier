@@ -99,7 +99,11 @@ describe("getCustomBoard — whether a viewer may fork what they are looking at"
         };
       }
       if (table === "custom_tier_rows" || table === "custom_items") {
-        return { select: () => ({ eq: () => ({ order: () => thenable({ data: [], error: null }) }) }) };
+        // `custom_items` gained `.is("detached_at", null)` when publications
+        // started keeping removed cards alive (migration 029); tier rows never
+        // needed it. One shared shape, so the chain works either way.
+        const order = () => thenable({ data: [], error: null });
+        return { select: () => ({ eq: () => ({ order, is: () => ({ order }) }) }) };
       }
       if (table === "profiles") {
         return { select: () => ({ eq: () => ({ maybeSingle: async () => profileResult }) }) };
