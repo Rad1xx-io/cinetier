@@ -183,6 +183,29 @@ const ANTI_FRAMING_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  /**
+   * Stops Next redirecting `/path/` to `/path` on its own.
+   *
+   * PostHog's ingest paths end in a slash — `/i/v0/e/`, `/decide/` — and Next's
+   * trailing-slash normalisation answered them with a 308 before anything else
+   * could. Vercel processes redirects before rewrites, so the redirect won the
+   * race with the proxy rewrite every time: every event cost two round trips,
+   * the first one thrown away. Measured against a production build with no
+   * rewrite present at all, which is what proves it was Next and not the
+   * proxy: `POST /api/px/i/v0/e/` returned 308 locally, where `vercel.json`
+   * does not apply.
+   *
+   * PostHog's own Next.js proxy guide calls this mandatory, and it is
+   * unrelated to which mechanism does the proxying — it is about Next's
+   * redirect, not about the rewrite.
+   *
+   * What it costs: `/discover/` no longer redirects to `/discover`. Both still
+   * render the same page, and every page already emits its own canonical link
+   * (see `alternates` in the metadata above), so the one thing the redirect was
+   * doing for search engines is still being done, by the tag that is meant to.
+   */
+  skipTrailingSlashRedirect: true,
+
   images: {
     /**
      * Deliberately empty: nothing in this app is served through the image
