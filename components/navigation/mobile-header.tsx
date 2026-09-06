@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Clapperboard } from "lucide-react";
+import { PodiumIcon } from "@/components/icons/podium-icon";
 import { GlobalSearch } from "@/components/navigation/global-search";
 import { AuthArea } from "@/components/navigation/auth-area";
 
@@ -13,7 +13,7 @@ export function MobileHeader() {
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur md:hidden">
       <Link href="/" className="flex items-center gap-1.5 font-semibold tracking-tight">
-        <Clapperboard className="h-4.5 w-4.5 text-accent" aria-hidden />
+        <PodiumIcon className="h-4.5 w-4.5 text-accent" aria-hidden />
         <span className="text-sm">
           TierList<span className="text-accent">Online</span>
         </span>
