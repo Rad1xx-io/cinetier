@@ -125,12 +125,18 @@ export async function submitBattleResult(
   const supabase = getSupabaseBrowserClient();
   if (supabase) {
     const userId = currentUserId();
-    await supabase.from("battle_participants").insert({
+    const { error } = await supabase.from("battle_participants").insert({
       battle_id: battleId,
       user_id: userId,
       ratings: participantRatings,
       match_score: comparison.overallMatchPercentage,
     });
+    // Logged, not surfaced: the comment above is the reason this still returns
+    // a result on failure. But a silent failure here is invisible everywhere
+    // except as an unexplained gap between this event and a battle_participants
+    // row — logging it is what makes that gap traceable instead of merely
+    // suspected.
+    if (error) console.error("TierListOnline: failed to record a battle result", error);
   }
 
   trackEvent("battle_completed", {
@@ -167,6 +173,15 @@ interface ParticipantRow {
  * Readable only by the author (and by a signed-in participant, for their own
  * row) — that is enforced by RLS, not here, so a stranger calling this simply
  * gets an empty list rather than an error.
+ *
+ * Ordered by `match_score` and then, for a tie, by who got there first
+ * (`created_at` ascending). Postgres gives no ordering guarantee among rows
+ * that agree on every explicit sort key, so without a second key a tied
+ * leaderboard's top row — the one `BattleOwnerView` hands a trophy to — is
+ * whichever one the query happens to return first, which is not guaranteed
+ * to be the same row on the next read. Earliest-first rather than latest:
+ * it rewards having actually landed the score, not having had one more
+ * chance than someone else to match it.
  */
 export async function getBattleParticipants(battleId: string): Promise<BattleEntry[]> {
   const supabase = getSupabaseBrowserClient();
@@ -176,7 +191,8 @@ export async function getBattleParticipants(battleId: string): Promise<BattleEnt
     .from("battle_participants")
     .select("id,user_id,ratings,match_score,created_at")
     .eq("battle_id", battleId)
-    .order("match_score", { ascending: false });
+    .order("match_score", { ascending: false })
+    .order("created_at", { ascending: true });
 
   if (error || !data) return [];
 
