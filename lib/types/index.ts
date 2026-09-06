@@ -1,4 +1,5 @@
 import type { CriterionScore } from "@/lib/types/criteria";
+import type { GameSource } from "@/lib/types/game";
 
 export type MediaType = "movie" | "tv" | "anime" | "game";
 
@@ -61,6 +62,18 @@ export interface RankedTitle {
   order: number;
   /** TMDB rating at the time of adding, for the optional "sort by rating" view. Optional so older exports without it still validate. */
   voteAverage?: number;
+  /**
+   * Which catalog `tmdbId` came from — meaningful only for `mediaType: "game"`.
+   * Steam appids and IGDB ids are different, overlapping number spaces (see
+   * `lib/games/source.ts`), so this is what keeps a Steam-sourced entry and an
+   * IGDB-sourced entry that happen to share a number from being treated as the
+   * same game everywhere an id alone used to stand in for identity — the
+   * database's own uniqueness, cloud sync, a battle's item id, a widget's
+   * render key. Absent on movie/tv/anime, which were never ambiguous, and on
+   * any game ranked before this field existed — there is no way to recover
+   * which catalog those came from, so absent means "unknown", not "native".
+   */
+  gameSource?: GameSource;
   /**
    * The user's own breakdown, when they filled one in. Absent on everything
    * ranked before criteria existed, and on anything judged by tier alone —

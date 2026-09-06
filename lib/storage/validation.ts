@@ -2,6 +2,11 @@ import type { RankedTitle, TierOrUnrated } from "@/lib/types";
 
 const VALID_TIERS: TierOrUnrated[] = ["S", "A", "B", "C", "D", "F", "Unrated"];
 
+/** Only meaningful on a game, and only ever "steam" or "igdb" when present. */
+function isGameSource(value: unknown): boolean {
+  return value === undefined || value === "steam" || value === "igdb";
+}
+
 export function isValidTier(value: unknown): value is TierOrUnrated {
   return typeof value === "string" && (VALID_TIERS as string[]).includes(value);
 }
@@ -47,6 +52,7 @@ export function isRankedTitle(value: unknown): value is RankedTitle {
     isValidTier(v.tier) &&
     typeof v.order === "number" &&
     (v.voteAverage === undefined || typeof v.voteAverage === "number") &&
+    isGameSource(v.gameSource) &&
     isCriteriaScores(v.criteriaScores) &&
     isAffiliateLinks(v.affiliateLinks) &&
     typeof v.addedAt === "number" &&

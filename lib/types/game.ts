@@ -1,6 +1,15 @@
+/**
+ * Which catalog `appId` came from. Steam appids and IGDB ids are different,
+ * overlapping number spaces — see `lib/games/source.ts` — so this travels with
+ * every game result rather than being reconstructed later from the number.
+ */
+export type GameSource = "steam" | "igdb";
+
 /** Normalized shape used for game search results and discovery listings. */
 export interface GameSummary {
   appId: number;
+  /** Which catalog `appId` names. Stamped by `lib/games/source.ts`, not this module. */
+  source: GameSource;
   title: string;
   /**
    * Portrait 600x900 library art — same 2:3 shape as movie/anime posters, so

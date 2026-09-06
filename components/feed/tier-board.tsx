@@ -3,6 +3,7 @@
 import { Poster } from "@/components/movie-card/poster";
 import { TIER_META } from "@/lib/tier-meta";
 import { tierColorVar } from "@/lib/utils/tier-style";
+import { tierItemKey } from "@/lib/utils/tier-grouping";
 import type { MiniTierRow } from "@/lib/feed/post-preview";
 import { cn } from "@/lib/utils/cn";
 import { SITE_HOST } from "@/lib/seo/site";
@@ -60,7 +61,7 @@ export function TierBoard({ rows, variant = "compact", className }: TierBoardPro
           >
             {row.titles.map((title) => (
               <Poster
-                key={`${title.mediaType}-${title.tmdbId}`}
+                key={tierItemKey(title)}
                 posterPath={title.posterPath}
                 title={title.title}
                 className={cn("shrink-0", compact ? "w-10 sm:w-12" : "w-14 sm:w-16")}

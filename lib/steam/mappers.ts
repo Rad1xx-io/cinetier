@@ -40,6 +40,7 @@ function platformList(raw: SteamAppData): string[] {
 export function mapAppToSummary(raw: SteamAppData): GameSummary {
   return {
     appId: raw.steam_appid,
+    source: "steam",
     title: raw.name,
     posterPath: libraryPosterUrl(raw.steam_appid),
     headerImage: raw.header_image ?? raw.capsule_image ?? null,

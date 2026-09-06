@@ -9,12 +9,15 @@ import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
 import { useLazyCriteria } from "@/lib/hooks/use-lazy-criteria";
 import { pullCriteria, pushCriteria } from "@/lib/storage/criteria-sync";
 import type { MediaType } from "@/lib/types";
+import type { GameSource } from "@/lib/types/game";
 import { criteriaAverage, type CriterionScore } from "@/lib/types/criteria";
 import { trackCriterionRated } from "@/lib/analytics/events";
 
 interface CriteriaSectionProps {
   tmdbId: number;
   mediaType: MediaType;
+  /** Only meaningful when `mediaType` is "game" — see `RankedTitle.gameSource`. */
+  gameSource?: GameSource;
   /** Only ranked items can carry a breakdown — there is nothing to attach it to otherwise. */
   isRanked: boolean;
   criteriaScores: CriterionScore[] | undefined;
@@ -35,6 +38,7 @@ interface CriteriaSectionProps {
 export function CriteriaSection({
   tmdbId,
   mediaType,
+  gameSource,
   isRanked,
   criteriaScores,
   readOnly = false,
@@ -47,9 +51,9 @@ export function CriteriaSection({
     (scores: CriterionScore[]) => {
       // Written straight into the store rather than component state, so the
       // answer survives closing the card and every other view sees it too.
-      setCriteria(tmdbId, mediaType, scores);
+      setCriteria(tmdbId, mediaType, scores, gameSource);
     },
-    [setCriteria, tmdbId, mediaType]
+    [setCriteria, tmdbId, mediaType, gameSource]
   );
 
   /**
@@ -60,6 +64,7 @@ export function CriteriaSection({
   useLazyCriteria({
     tmdbId,
     mediaType,
+    gameSource,
     userId: readOnly ? null : (user?.id ?? null),
     isOpen: isRanked,
     hasLocalScores: (criteriaScores?.length ?? 0) > 0,
@@ -79,9 +84,9 @@ export function CriteriaSection({
     // Local first, exactly like every other write in the app: the UI updates
     // synchronously and the cloud catches up in the background, so a failed or
     // absent connection never blocks saving.
-    setCriteria(tmdbId, mediaType, scores);
+    setCriteria(tmdbId, mediaType, scores, gameSource);
     setOpen(false);
-    if (user) void pushCriteria(user.id, tmdbId, mediaType, scores);
+    if (user) void pushCriteria(user.id, tmdbId, mediaType, scores, gameSource);
 
     // Reported on save rather than on every slider move: dragging a slider
     // fires continuously, and a hundred events for one decision would drown the

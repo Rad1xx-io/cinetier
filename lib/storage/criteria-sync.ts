@@ -2,7 +2,9 @@
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { MediaType } from "@/lib/types";
+import type { GameSource } from "@/lib/types/game";
 import type { CriterionScore } from "@/lib/types/criteria";
+import { toSourceColumn } from "@/lib/storage/cloud-sync";
 
 interface CriteriaRow {
   criterion_id: string;
@@ -21,17 +23,23 @@ interface CriteriaRow {
 async function findRatingId(
   userId: string,
   tmdbId: number,
-  mediaType: MediaType
+  mediaType: MediaType,
+  gameSource: GameSource | undefined
 ): Promise<string | null> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return null;
 
+  // `source` narrows this to one row same as everywhere else `tmdb_id` alone
+  // stopped being enough to name a game (see RankedTitle.gameSource) — without
+  // it, two games sharing a number would make `.maybeSingle()` below throw
+  // instead of finding either one's breakdown.
   const { data } = await supabase
     .from("ranked_titles")
     .select("id")
     .eq("user_id", userId)
     .eq("tmdb_id", tmdbId)
     .eq("media_type", mediaType)
+    .eq("source", toSourceColumn(mediaType, gameSource))
     .maybeSingle();
 
   return (data as { id: string } | null)?.id ?? null;
@@ -47,12 +55,13 @@ export async function pushCriteria(
   userId: string,
   tmdbId: number,
   mediaType: MediaType,
-  scores: CriterionScore[]
+  scores: CriterionScore[],
+  gameSource?: GameSource
 ): Promise<void> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return;
 
-  const ratingId = await findRatingId(userId, tmdbId, mediaType);
+  const ratingId = await findRatingId(userId, tmdbId, mediaType, gameSource);
   // The rating itself has not reached the cloud yet; the next sync will carry
   // the breakdown along with it rather than orphaning it here.
   if (!ratingId) return;
@@ -90,12 +99,13 @@ export async function pushCriteria(
 export async function pullCriteria(
   userId: string,
   tmdbId: number,
-  mediaType: MediaType
+  mediaType: MediaType,
+  gameSource?: GameSource
 ): Promise<CriterionScore[]> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return [];
 
-  const ratingId = await findRatingId(userId, tmdbId, mediaType);
+  const ratingId = await findRatingId(userId, tmdbId, mediaType, gameSource);
   if (!ratingId) return [];
 
   const { data, error } = await supabase

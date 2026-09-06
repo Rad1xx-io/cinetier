@@ -3,8 +3,15 @@ import type { RankedTitle, TierOrUnrated } from "@/lib/types";
 
 export type TierContainers = Record<TierOrUnrated, RankedTitle[]>;
 
+/**
+ * The dnd-kit sortable id for one card. Suffixed with its source for a game
+ * whose source is known, so that two different games sharing a numeric id —
+ * one from Steam, one from IGDB, see `RankedTitle.gameSource` — never hand
+ * dnd-kit the same id for two different cards on the same board.
+ */
 export function tierItemKey(t: RankedTitle): string {
-  return `${t.mediaType}-${t.tmdbId}`;
+  const suffix = t.mediaType === "game" && t.gameSource ? `-${t.gameSource}` : "";
+  return `${t.mediaType}-${t.tmdbId}${suffix}`;
 }
 
 /**
