@@ -95,5 +95,102 @@ Neither is created by any migration or by `schema.sql`, and a search across the 
 ## Remaining risks
 
 - **UNKNOWN**: whether every *older* migration (002–017) is applied in production exactly as its file reads. The recent chain was confirmed object by object, but there is no applied-migrations record to compare against, and reconstructing each one's full effect from live objects was out of proportion here. The two orphan tables show hand edits did happen historically.
+  - **Closed on 2026-09-06 — see the section below.**
 - **INFERRED**: that the two orphan tables are dead. Their emptiness and the total absence of references make it a strong reading, but only Denis can confirm nothing external touches them.
+  - **Closed:** dropped by migration 028, applied and verified 2026-09-05.
 - The migration-by-hand workflow itself is what makes drift possible and unrecorded. Not proposing a change to it here — it is a real trade-off, and the SQL Editor step is also what keeps schema changes deliberate — but it is the reason this section had to infer rather than read.
+
+---
+
+# 2026-09-06 — Are migrations 002–017 applied as written?
+
+Closing the UNKNOWN above. The method turned out to answer more than was asked, so the scope below is **002–029**, not 002–017.
+
+## Method: compare production against a database built from the files
+
+Reconstructing each migration's intended effect by hand — the approach the first pass judged out of proportion — was not needed. The repository already contains a machine that does it: `supabase/testing/run.sh --fresh` applies `schema.sql` and then **every** migration in order to an empty database. That database *is* "what the files say production should look like".
+
+So this pass diffs two catalogs rather than reading sixteen files and guessing:
+
+| | |
+|---|---|
+| **reference** | `cinetier_fresh`, built from the files by `--fresh`, PostgreSQL 16.4 |
+| **production** | PostgreSQL 17.6, via the Supabase MCP |
+
+Comparison is by fingerprint: each object's definition is lower-cased, whitespace-stripped, and hashed, then the two sorted lists are diffed mechanically. Nothing is eyeballed. The two servers are different major versions, so cosmetic deparse differences were expected and would have shown up as false mismatches — **they did not appear at all**, which also means the comparison is strict rather than accidentally lenient.
+
+**Which migration is authoritative** where one supersedes another — the comparison uses the end state of the whole chain, so this is what each object is checked against:
+
+| object | authoritative | superseding |
+|---|---|---|
+| `ranked_titles_media_type_check` | **003** | over 002 |
+| `posts_category_check` | **013** | over 009 |
+| `content_reports_subject_type_check` | **015** | over 012 |
+| `"Custom cards follow their list"` on `custom_items` | **013** | over 012 — the known bug |
+| `"Profiles are publicly readable"` | **021** | over 004 |
+| `increment_post_views` | **018** | over 009 (which it also drops) |
+| `is_blocked`, `has_upload_grant`, `issue_upload_grant` | **027** | over 012 |
+| `attach_upload` | **027** | over 016, over 012 |
+| `custom_items` privileges | **029** | over 016, over 012 |
+| `post_feed` view | **010** | over 009 |
+
+## What came back clean — VERIFIED
+
+| surface | scope | result |
+|---|---|---|
+| tables | all 17 the range creates | **all present**, none missing |
+| RLS | every table in `public` | **none has it disabled** |
+| views | `post_feed`, `public_profile_sitemap` | both present |
+| **RLS policies** | **all 55 in `public`** | **identical, every one** |
+| storage policies | all 3 on `storage.objects` | **identical** |
+| constraints | every constraint on all 19 app tables | **identical** |
+| indexes | same scope | **identical** |
+| columns | same scope (name, type, nullability) | **identical** |
+| column-level grants | `custom_items`, `custom_tier_rows` | **identical** — exactly 016's four and four |
+| function execute grants | all 12 functions, `anon` and `authenticated` | **identical** |
+| function signatures, `security definer`, `search_path` | all 12 | **identical**, all 12 on `search_path=""` |
+
+The known drift case is confirmed repaired: `"Custom cards follow their list"` on production carries the **qualified** `custom_items.hidden_at`, which is 013's correction, not 012's bug.
+
+## Finding 1 — five function bodies in production have lost their comments
+
+**VERIFIED, and it is drift I introduced myself yesterday.**
+
+Five function bodies hash differently from the files:
+
+| function | raw body matches file? |
+|---|---|
+| `attach_upload`, `has_upload_grant`, `issue_upload_grant` (migration 027) | no |
+| `remove_custom_item`, `clear_custom_board` (migration 029) | no |
+| the other seven | yes |
+
+**Cause, established rather than assumed.** Strip SQL comments from both sides and re-hash, and all five match **byte for byte** — production's stored body is the file's body with every comment removed. The executable logic is identical; nothing behavioural differs.
+
+The pattern says where it came from: the five are exactly the functions applied through the MCP's `apply_migration`, which strips comments before executing. Every function Denis applied by hand in the SQL Editor kept its comments. `is_blocked` was also applied by me and *does* match — because its body contains no comments to lose.
+
+**Why it is worth reporting rather than shrugging off.** This repository deliberately keeps the reasoning next to the code, including inside function bodies — `issue_upload_grant`'s advisory-lock comment explains why a limit is a limit and not a suggestion; `attach_upload`'s explains why the recorded MIME type is a security control. Anyone reading these functions in the database now sees the code without the reasons. Nothing is broken and nothing is exposed, but the repo and the database no longer say the same thing, and the next person to compare them will find a mismatch and have to re-derive why.
+
+**To reconcile:** re-run 027 and 029 through the SQL Editor (both are idempotent and their self-checks would re-verify the grants), or accept the database copy as comment-free and record that here. Denis's call, not mine. Nothing was changed in this pass.
+
+## Finding 2 — production grants three privileges no migration asks for
+
+**VERIFIED.** Table-level grants differ from the reference on **every** app table, uniformly, and only in this: production additionally grants **`REFERENCES`, `TRIGGER` and `TRUNCATE`** to both `anon` and `authenticated`.
+
+The privileges the migrations actually manage match exactly:
+
+| table | reference | production |
+|---|---|---|
+| `custom_items` | `SELECT` | `SELECT` + the three |
+| `custom_tier_rows` | `DELETE, SELECT` | same + the three |
+| `posts` | `DELETE, INSERT, SELECT, UPDATE` | same + the three |
+
+So 016's revocations and 029's `revoke delete` are both correctly in place; this is not migration drift. It is Supabase's own default privileges (`grant all on tables` for new projects), applied to every table in `public` and never revoked by anything here.
+
+**Worth a decision anyway.** `TRUNCATE` is not subject to row-level security — a role holding it can empty a table regardless of policy. It is not reachable through PostgREST, which never issues `TRUNCATE`, so the anon key does not expose it; the exposure would need a direct database connection with those roles. It is the platform's default on every Supabase project. Recording it because "production holds privileges the repository never granted" is exactly the class of thing this audit exists to surface, and because revoking them is a one-line migration if Denis wants the database to say only what the repo says.
+
+## Remaining risks after this pass
+
+- **UNKNOWN**: row data. This pass compares structure, not contents. Nothing about it would catch, say, a `content_moderation` row somebody added by hand.
+- **UNKNOWN**: objects outside the app's own schema — Supabase's `auth`, `storage` and extension internals were compared only where a migration touches them (the three storage policies). The local stub stands in for the rest and is not comparable.
+- **Method deviation, stated plainly:** the first pass ran with `transaction_read_only = on`. That flag was removed from `.mcp.json` on 2026-09-05 so migrations 027–029 could be applied, so this pass ran on a connection that *could* write. Every statement it issued was a `select`; nothing was changed. The guarantee is weaker than the first pass's — it rests on the queries, not on the connection.
+- The two findings above are open and unactioned by design.
