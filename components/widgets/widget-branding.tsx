@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Clapperboard } from "lucide-react";
+import { PodiumIcon } from "@/components/icons/podium-icon";
 import type { WidgetTheme } from "@/lib/widgets/params";
 import { cn } from "@/lib/utils/cn";
 
@@ -33,7 +33,7 @@ export function WidgetBranding({ listId, theme, className }: WidgetBrandingProps
         className
       )}
     >
-      <Clapperboard className="h-2.5 w-2.5 shrink-0" aria-hidden />
+      <PodiumIcon className="h-2.5 w-2.5 shrink-0" aria-hidden />
       Powered by TierListOnline
     </Link>
   );
