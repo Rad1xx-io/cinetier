@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clapperboard, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
+import { PodiumIcon } from "@/components/icons/podium-icon";
 import {
   DESKTOP_NAV_LEFT,
   DESKTOP_NAV_RIGHT,
@@ -32,7 +33,7 @@ export function TopNav() {
             href="/"
             className="mr-2 flex shrink-0 items-center gap-2 font-semibold tracking-tight"
           >
-            <Clapperboard className="h-5 w-5 text-accent" aria-hidden />
+            <PodiumIcon className="h-5 w-5 text-accent" aria-hidden />
             <span>
               TierList<span className="text-accent">Online</span>
             </span>
