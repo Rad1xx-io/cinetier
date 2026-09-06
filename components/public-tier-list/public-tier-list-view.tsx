@@ -13,6 +13,7 @@ import type { RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
 import { TIER_META } from "@/lib/tier-meta";
 import { tierColorVar } from "@/lib/utils/tier-style";
+import { tierItemKey } from "@/lib/utils/tier-grouping";
 import { getPublicTierList, type PublicTierList } from "@/lib/supabase/profiles";
 import { titlesCountLabel } from "@/lib/utils/plural";
 import { criteriaAverage, type CriterionScore } from "@/lib/types/criteria";
@@ -239,7 +240,7 @@ function ReadOnlyTierRow({
         {titles.map((t) => {
           const average = criteriaAverage(t.criteriaScores);
           return (
-            <div key={`${t.mediaType}-${t.tmdbId}`} className="w-20 shrink-0 sm:w-24">
+            <div key={tierItemKey(t)} className="w-20 shrink-0 sm:w-24">
               <div className="relative">
                 <Poster posterPath={t.posterPath} title={t.title} sizes="96px" />
                 {average !== null && (

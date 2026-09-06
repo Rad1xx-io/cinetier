@@ -196,6 +196,7 @@ export function GamesDiscoverClient({ initialData }: GamesDiscoverClientProps = 
       posterPath: game.posterPath,
       releaseDate: game.releaseDate,
       voteAverage: game.score ?? undefined,
+      gameSource: game.source,
     });
   }
 

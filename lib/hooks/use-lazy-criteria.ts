@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import type { MediaType } from "@/lib/types";
+import type { GameSource } from "@/lib/types/game";
 import type { CriterionScore } from "@/lib/types/criteria";
 
 /**
@@ -23,13 +24,20 @@ export function resetLazyCriteriaCache(): void {
 export interface UseLazyCriteriaOptions {
   tmdbId: number;
   mediaType: MediaType;
+  /** Only meaningful when `mediaType` is "game" — see `RankedTitle.gameSource`. */
+  gameSource?: GameSource;
   /** Signed-in user id, or null when browsing as a guest. */
   userId: string | null;
   /** True once the item is actually on screen — nothing is fetched for a closed card. */
   isOpen: boolean;
   /** Present locally already; a fetch would be wasted. */
   hasLocalScores: boolean;
-  pull: (userId: string, tmdbId: number, mediaType: MediaType) => Promise<CriterionScore[]>;
+  pull: (
+    userId: string,
+    tmdbId: number,
+    mediaType: MediaType,
+    gameSource?: GameSource
+  ) => Promise<CriterionScore[]>;
   onLoaded: (scores: CriterionScore[]) => void;
 }
 
@@ -43,6 +51,7 @@ export interface UseLazyCriteriaOptions {
 export function useLazyCriteria({
   tmdbId,
   mediaType,
+  gameSource,
   userId,
   isOpen,
   hasLocalScores,
@@ -52,14 +61,18 @@ export function useLazyCriteria({
   useEffect(() => {
     if (!isOpen || !userId || hasLocalScores) return;
 
-    const key = `${userId}:${mediaType}-${tmdbId}`;
+    // gameSource joins the key for the same reason it joins every other
+    // ranked-title key in the app: two different games can now share a
+    // tmdb_id (see RankedTitle.gameSource), and without it here, one game's
+    // fetch would mark the *other* game's breakdown "already attempted".
+    const key = `${userId}:${mediaType}-${tmdbId}${mediaType === "game" && gameSource ? `-${gameSource}` : ""}`;
     if (attempted.has(key)) return;
     // Marked before the request, not after: two cards mounting in the same tick
     // must not both fire it.
     attempted.add(key);
 
     let cancelled = false;
-    pull(userId, tmdbId, mediaType)
+    pull(userId, tmdbId, mediaType, gameSource)
       .then((scores) => {
         // An empty answer is still an answer — `attempted` already records it,
         // and writing nothing locally keeps "no breakdown" meaning exactly that.
@@ -74,5 +87,5 @@ export function useLazyCriteria({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, userId, hasLocalScores, tmdbId, mediaType, pull, onLoaded]);
+  }, [isOpen, userId, hasLocalScores, tmdbId, mediaType, gameSource, pull, onLoaded]);
 }

@@ -97,8 +97,10 @@ function channels(n: number, seed = 0) {
   }));
 }
 
+// None of these fixtures rank a game, so 'native' is the real value the
+// column would hold for every one of them — see toSourceColumn.
 const titleRows = (list: ReturnType<typeof titles>) =>
-  list.map((t) => ({ tmdb_id: t.tmdbId, media_type: t.mediaType }));
+  list.map((t) => ({ tmdb_id: t.tmdbId, media_type: t.mediaType, source: "native" }));
 const channelRows = (list: ReturnType<typeof channels>) =>
   list.map((c) => ({ channel_id: c.channelId }));
 
@@ -134,8 +136,8 @@ describe("replacing a real board's worth of cloud rows", () => {
     // The same numeric id under two media types: grouping must not let a
     // film's id delete the series that happens to share it.
     client = fakeClient([
-      { tmdb_id: 1, media_type: "movie" },
-      { tmdb_id: 1, media_type: "tv" },
+      { tmdb_id: 1, media_type: "movie", source: "native" },
+      { tmdb_id: 1, media_type: "tv", source: "native" },
     ]);
     await pushCloudTitles("u1", titles(1, 1, "tv"));
 

@@ -40,6 +40,7 @@ export function mapGameToSummary(raw: IGDBGame): GameSummary {
 
   return {
     appId: raw.id,
+    source: "igdb",
     title: raw.name,
     posterPath: imageUrl(raw.cover?.image_id, COVER_SIZE),
     headerImage: banner,

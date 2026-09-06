@@ -162,7 +162,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"55555555-5555-4555-8555-555555555555","role":"authenticated"}';
 insert into public.ranked_titles (user_id, tmdb_id, media_type, title, tier, "order", added_at, updated_at)
 values (:'author', 102, 'movie', 'The Other One', 'A', 1, 0, 0)
-on conflict (user_id, tmdb_id, media_type) do nothing;
+on conflict (user_id, tmdb_id, media_type, source) do nothing;
 commit;
 
 -- -------------------------------------- a private profile hides the post --

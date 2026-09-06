@@ -4,6 +4,7 @@ import { trackFirstTitleRanked } from "@/lib/analytics/events";
 import type { RankingRepository } from "@/lib/storage/repository";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { CriterionScore } from "@/lib/types/criteria";
+import type { GameSource } from "@/lib/types/game";
 
 export { RANKINGS_CHANGED_EVENT } from "@/lib/storage/local-storage-repository";
 export type { AddTitleInput, RankingRepository } from "@/lib/storage/repository";
@@ -20,8 +21,12 @@ export function getRatedTitles(): RankedTitle[] {
   return repository.getAll();
 }
 
-export function getRankedTitle(tmdbId: number, mediaType: MediaType): RankedTitle | undefined {
-  return repository.getByKey(tmdbId, mediaType);
+export function getRankedTitle(
+  tmdbId: number,
+  mediaType: MediaType,
+  gameSource?: GameSource
+): RankedTitle | undefined {
+  return repository.getByKey(tmdbId, mediaType, gameSource);
 }
 
 export function addTitle(input: Parameters<RankingRepository["add"]>[0]): RankedTitle {
@@ -45,24 +50,26 @@ export function addTitle(input: Parameters<RankingRepository["add"]>[0]): Ranked
   return added;
 }
 
-export function removeTitle(tmdbId: number, mediaType: MediaType): void {
-  repository.remove(tmdbId, mediaType);
+export function removeTitle(tmdbId: number, mediaType: MediaType, gameSource?: GameSource): void {
+  repository.remove(tmdbId, mediaType, gameSource);
 }
 
 export function updateTier(
   tmdbId: number,
   mediaType: MediaType,
-  tier: TierOrUnrated
+  tier: TierOrUnrated,
+  gameSource?: GameSource
 ): RankedTitle | undefined {
-  return repository.updateTier(tmdbId, mediaType, tier);
+  return repository.updateTier(tmdbId, mediaType, tier, gameSource);
 }
 
 export function updateCriteria(
   tmdbId: number,
   mediaType: MediaType,
-  criteriaScores: CriterionScore[]
+  criteriaScores: CriterionScore[],
+  gameSource?: GameSource
 ): RankedTitle | undefined {
-  return repository.updateCriteria(tmdbId, mediaType, criteriaScores);
+  return repository.updateCriteria(tmdbId, mediaType, criteriaScores, gameSource);
 }
 
 export function reorderAll(titles: RankedTitle[]): void {

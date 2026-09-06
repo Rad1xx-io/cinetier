@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { RankedCard } from "@/components/movie-card/ranked-card";
 import type { RankedTitle } from "@/lib/types";
+import { tierItemKey } from "@/lib/utils/tier-grouping";
 
 interface TitleShelfProps {
   title: string;
@@ -23,7 +24,7 @@ export function TitleShelf({ title, icon, titles, emptyLabel }: TitleShelfProps)
       ) : (
         <div className="scrollbar-thin flex gap-3 overflow-x-auto pb-2">
           {titles.map((t) => (
-            <RankedCard key={`${t.mediaType}-${t.tmdbId}`} title={t} />
+            <RankedCard key={tierItemKey(t)} title={t} />
           ))}
         </div>
       )}

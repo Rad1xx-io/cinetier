@@ -16,6 +16,7 @@ import { useRankedChannels } from "@/lib/hooks/use-ranked-channels";
 import { useToast } from "@/lib/hooks/use-toast";
 import { getMyProfile, type Profile } from "@/lib/supabase/profiles";
 import { TierPill } from "@/components/movie-card/tier-pill";
+import { tierItemKey } from "@/lib/utils/tier-grouping";
 import { titleHref } from "@/lib/utils/title-route";
 import { shareUrl } from "@/lib/seo/site";
 import { cn } from "@/lib/utils/cn";
@@ -205,7 +206,7 @@ export default function ProfilePage() {
           <div className="flex flex-wrap gap-3">
             {visibleTitles.map((t) => (
               <Link
-                key={`${t.mediaType}-${t.tmdbId}`}
+                key={tierItemKey(t)}
                 href={titleHref(t.mediaType, t.tmdbId)}
                 className="w-20 shrink-0 sm:w-24"
               >

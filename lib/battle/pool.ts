@@ -58,9 +58,18 @@ export function battleCategoryOf(mediaType: MediaType): BattleCategory | null {
   }
 }
 
-/** The id a battle uses for a title — the same shape the analytics funnel uses. */
+/**
+ * The id a battle uses for a title.
+ *
+ * Suffixed with its source for a game whose source is known, so that a
+ * Steam-sourced entry and an IGDB-sourced entry sharing a numeric id — the
+ * two id spaces overlap, see `RankedTitle.gameSource` — end up as two
+ * distinct candidates rather than one silently overwriting the other's tier
+ * in `toCreatorRatings`'s `Record<string, string>`.
+ */
 export function battleItemId(title: RankedTitle): string {
-  return `${title.mediaType}-${title.tmdbId}`;
+  const suffix = title.mediaType === "game" && title.gameSource ? `-${title.gameSource}` : "";
+  return `${title.mediaType}-${title.tmdbId}${suffix}`;
 }
 
 function isRatedTier(tier: string): tier is Tier {

@@ -2,7 +2,7 @@ import { TIER_ORDER } from "@/lib/types";
 import type { RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { RankedChannel } from "@/lib/types/youtube";
 import type { CategoryFilter, ContentType } from "@/lib/utils/content-type";
-import type { SortMode } from "@/lib/utils/tier-grouping";
+import { tierItemKey, type SortMode } from "@/lib/utils/tier-grouping";
 
 /**
  * One row on the main board, whichever store it came from.
@@ -17,10 +17,15 @@ export type BoardItem =
   | { kind: "title"; tier: TierOrUnrated; order: number; title: RankedTitle }
   | { kind: "channel"; tier: TierOrUnrated; order: number; channel: RankedChannel };
 
-/** dnd-kit ids must be unique across both kinds — a tmdbId and a channelId could otherwise collide. */
+/**
+ * dnd-kit ids must be unique across both kinds — a tmdbId and a channelId
+ * could otherwise collide. For a title, delegates to `tierItemKey` rather
+ * than repeating its logic, so a game's source-aware suffix (see
+ * `RankedTitle.gameSource`) only has one place it is computed.
+ */
 export function boardItemKey(item: BoardItem): string {
   return item.kind === "title"
-    ? `title:${item.title.mediaType}-${item.title.tmdbId}`
+    ? `title:${tierItemKey(item.title)}`
     : `channel:${item.channel.channelId}`;
 }
 

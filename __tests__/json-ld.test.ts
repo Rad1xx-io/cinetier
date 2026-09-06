@@ -55,6 +55,7 @@ const anime: AnimeDetails = {
 
 const game: GameDetails = {
   appId: 1942,
+  source: "steam",
   title: "The Witcher 3: Wild Hunt",
   posterPath: "https://cdn/poster.jpg",
   headerImage: "https://cdn/header.jpg",

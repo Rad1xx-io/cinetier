@@ -2,9 +2,10 @@ import "server-only";
 import { isIGDBConfigured } from "@/lib/igdb/client";
 import * as igdb from "@/lib/igdb/discovery";
 import * as steam from "@/lib/steam/discovery";
-import type { GameDetails } from "@/lib/types/game";
+import type { GameDetails, GameSource } from "@/lib/types/game";
 
-export type GamesSource = "igdb" | "steam";
+/** Kept as its own export so existing imports of `GamesSource` need no change. */
+export type GamesSource = GameSource;
 
 /**
  * Which catalog backs the games section.
@@ -31,6 +32,14 @@ export interface DiscoverGamesResult {
   correctedQuery?: string | null;
 }
 
+/**
+ * `results`/`getGameDetails`'s objects already carry the right `source` —
+ * `lib/igdb/mappers.ts` and `lib/steam/mappers.ts` stamp it themselves, since
+ * each one unambiguously knows which catalog it maps. This module only has to
+ * pick *which* mapped result to return, not re-tag it afterwards. See
+ * `RankedTitle.gameSource` (`lib/types/index.ts`) for why that tag matters
+ * all the way into a ranked title.
+ */
 export async function discoverGames(
   params: DiscoverGamesParams
 ): Promise<DiscoverGamesResult> {
@@ -49,7 +58,8 @@ export async function discoverGames(
  * are unrelated numbers — without this second lookup every previously ranked
  * game would 404 on its details page. The two id spaces do overlap numerically,
  * so a legacy entry can in principle resolve to a different IGDB game; that is
- * the trade for keeping existing lists openable.
+ * the trade for keeping existing lists openable. `RankedTitle.gameSource` is
+ * how a *new* entry avoids ever needing this same guess.
  */
 export async function getGameDetails(id: number): Promise<GameDetails | null> {
   const primary = activeGamesSource();

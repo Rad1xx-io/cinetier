@@ -2,7 +2,29 @@
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
+import type { GameSource } from "@/lib/types/game";
 import type { PullOutcome } from "@/lib/storage/sync-decision";
+
+/**
+ * `ranked_titles.source` is `not null` (migration 031) so that the unique
+ * constraint keeps deduplicating movie/tv/anime rows — Postgres treats every
+ * `null` in a unique index as distinct from every other `null`, so a nullable
+ * `source` would have silently stopped deduplicating the three media types
+ * that were never ambiguous the moment it was added. `'native'` for those;
+ * `'unknown'` for a game whose source genuinely isn't known (never recorded,
+ * or ranked before this column existed) rather than guessed at.
+ */
+export type RankedTitleSourceColumn = "native" | "steam" | "igdb" | "unknown";
+
+export function toSourceColumn(mediaType: MediaType, gameSource: GameSource | undefined): RankedTitleSourceColumn {
+  if (mediaType !== "game") return "native";
+  return gameSource ?? "unknown";
+}
+
+/** The inverse of `toSourceColumn` — 'native' and 'unknown' both mean "not a known game source". */
+function fromSourceColumn(source: RankedTitleSourceColumn): GameSource | undefined {
+  return source === "steam" || source === "igdb" ? source : undefined;
+}
 
 /**
  * How many ids travel in one `in (…)` filter. PostgREST carries them in the
@@ -15,6 +37,7 @@ const DELETE_CHUNK_SIZE = 100;
 interface RankedTitleRow {
   tmdb_id: number;
   media_type: MediaType;
+  source: RankedTitleSourceColumn;
   title: string;
   poster_path: string | null;
   release_date: string | null;
@@ -30,6 +53,7 @@ function toRow(userId: string, t: RankedTitle): RankedTitleRow & { user_id: stri
     user_id: userId,
     tmdb_id: t.tmdbId,
     media_type: t.mediaType,
+    source: toSourceColumn(t.mediaType, t.gameSource),
     title: t.title,
     poster_path: t.posterPath,
     release_date: t.releaseDate,
@@ -42,9 +66,11 @@ function toRow(userId: string, t: RankedTitle): RankedTitleRow & { user_id: stri
 }
 
 function fromRow(row: RankedTitleRow): RankedTitle {
+  const gameSource = fromSourceColumn(row.source);
   return {
     tmdbId: row.tmdb_id,
     mediaType: row.media_type,
+    ...(gameSource ? { gameSource } : {}),
     title: row.title,
     posterPath: row.poster_path,
     releaseDate: row.release_date,
@@ -69,7 +95,7 @@ export async function pullCloudTitles(userId: string): Promise<PullOutcome<Ranke
 
   const { data, error } = await supabase
     .from("ranked_titles")
-    .select("tmdb_id,media_type,title,poster_path,release_date,tier,order,vote_average,added_at,updated_at")
+    .select("tmdb_id,media_type,source,title,poster_path,release_date,tier,order,vote_average,added_at,updated_at")
     .eq("user_id", userId);
 
   if (error || !data) {
@@ -93,7 +119,7 @@ export async function pushCloudTitles(userId: string, titles: RankedTitle[]): Pr
     const rows = titles.map((t) => toRow(userId, t));
     const { error } = await supabase
       .from("ranked_titles")
-      .upsert(rows, { onConflict: "user_id,tmdb_id,media_type" });
+      .upsert(rows, { onConflict: "user_id,tmdb_id,media_type,source" });
     if (error) {
       console.error("TierListOnline: failed to push rankings to cloud", error);
       return;
@@ -102,14 +128,21 @@ export async function pushCloudTitles(userId: string, titles: RankedTitle[]): Pr
 
   const { data: existing, error: fetchError } = await supabase
     .from("ranked_titles")
-    .select("tmdb_id,media_type")
+    .select("tmdb_id,media_type,source")
     .eq("user_id", userId);
 
   if (fetchError || !existing) return;
 
-  const localKeys = new Set(titles.map((t) => `${t.mediaType}:${t.tmdbId}`));
-  const staleRows = (existing as Pick<RankedTitleRow, "tmdb_id" | "media_type">[]).filter(
-    (row) => !localKeys.has(`${row.media_type}:${row.tmdb_id}`)
+  // `source` is part of the key here for the same reason it is part of the
+  // upsert conflict target above: a Steam-sourced and an IGDB-sourced game
+  // can now share a tmdb_id, and without `source` in this comparison one
+  // would read as "stale" and be deleted out from under the other the moment
+  // they happened to collide.
+  const localKeys = new Set(
+    titles.map((t) => `${t.mediaType}:${t.tmdbId}:${toSourceColumn(t.mediaType, t.gameSource)}`)
+  );
+  const staleRows = (existing as Pick<RankedTitleRow, "tmdb_id" | "media_type" | "source">[]).filter(
+    (row) => !localKeys.has(`${row.media_type}:${row.tmdb_id}:${row.source}`)
   );
 
   /*
@@ -119,26 +152,32 @@ export async function pushCloudTitles(userId: string, titles: RankedTitle[]): Pr
    * invisible on the boards these paths were written against and linear on a
    * real one: a board of two hundred titles replaced by another meant two
    * hundred sequential round trips, each waiting for the last, with the sync
-   * held open for all of them. The rows are grouped by media type so the
-   * composite key still matches exactly what the row-at-a-time version
-   * matched — the same rows, in at most a handful of requests instead of one
-   * each — and chunked so the `in` list cannot grow into a URL no server will
-   * accept.
+   * held open for all of them. The rows are grouped by (media type, source) —
+   * source joined the group for the same reason it joined the key above, so a
+   * batch can never mix a stale Steam row into the same `in (...)` list as a
+   * still-current IGDB one sharing the same tmdb_id — and chunked so the `in`
+   * list cannot grow into a URL no server will accept.
    */
-  const byMediaType = new Map<MediaType, number[]>();
+  const byMediaTypeAndSource = new Map<string, { mediaType: MediaType; source: RankedTitleSourceColumn; ids: number[] }>();
   for (const row of staleRows) {
-    const ids = byMediaType.get(row.media_type) ?? [];
-    ids.push(row.tmdb_id);
-    byMediaType.set(row.media_type, ids);
+    const groupKey = `${row.media_type}:${row.source}`;
+    const group = byMediaTypeAndSource.get(groupKey) ?? {
+      mediaType: row.media_type,
+      source: row.source,
+      ids: [],
+    };
+    group.ids.push(row.tmdb_id);
+    byMediaTypeAndSource.set(groupKey, group);
   }
 
-  for (const [mediaType, ids] of byMediaType) {
+  for (const { mediaType, source, ids } of byMediaTypeAndSource.values()) {
     for (let from = 0; from < ids.length; from += DELETE_CHUNK_SIZE) {
       const { error: deleteError } = await supabase
         .from("ranked_titles")
         .delete()
         .eq("user_id", userId)
         .eq("media_type", mediaType)
+        .eq("source", source)
         .in("tmdb_id", ids.slice(from, from + DELETE_CHUNK_SIZE));
 
       if (deleteError) {

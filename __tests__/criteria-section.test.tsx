@@ -110,7 +110,9 @@ describe("CriteriaSection — lazy loading", () => {
     render(
       <CriteriaSection tmdbId={7} mediaType="movie" isRanked criteriaScores={undefined} />
     );
-    await vi.waitFor(() => expect(pullCriteria).toHaveBeenCalledWith("user-1", 7, "movie"));
+    await vi.waitFor(() =>
+      expect(pullCriteria).toHaveBeenCalledWith("user-1", 7, "movie", undefined)
+    );
   });
 
   it("does not ask when the scores are already local", () => {

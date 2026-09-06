@@ -5,6 +5,7 @@ import { Poster } from "@/components/movie-card/poster";
 import { ChannelThumbnail } from "@/components/channel-card/channel-thumbnail";
 import { WidgetBranding } from "@/components/widgets/widget-branding";
 import { TIERS } from "@/lib/types";
+import { tierItemKey } from "@/lib/utils/tier-grouping";
 import type { RankedChannel } from "@/lib/types/youtube";
 import type { RankedTitle, Tier } from "@/lib/types";
 import { getPublicTierList, type PublicTierList } from "@/lib/supabase/profiles";
@@ -125,7 +126,7 @@ export function WidgetTierList({ listId, params }: WidgetTierListProps) {
             <div className={cn("flex flex-wrap", gap)}>
               {row.titles.map((title) => (
                 <Poster
-                  key={`${title.mediaType}-${title.tmdbId}`}
+                  key={tierItemKey(title)}
                   posterPath={title.posterPath}
                   title={title.title}
                   className={cn(posterWidth, "shrink-0")}

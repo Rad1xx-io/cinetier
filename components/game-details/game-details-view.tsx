@@ -20,7 +20,13 @@ import { trackItemAdded, trackItemRanked } from "@/lib/analytics/events";
 export function GameDetailsView({ details }: { details: GameDetails }) {
   const { titles, add, remove, setTier, hydrated } = useRankedTitles();
 
-  const ranked = titles.find((t) => t.tmdbId === details.appId && t.mediaType === "game");
+  // Matched on source too, same as the storage layer: an old entry ranked
+  // before a game's source was recorded (gameSource absent) and today's
+  // lookup (details.source always set) are treated as different records
+  // rather than guessed to be the same game — see RankedTitle.gameSource.
+  const ranked = titles.find(
+    (t) => t.tmdbId === details.appId && t.mediaType === "game" && t.gameSource === details.source
+  );
 
   function addInput(tier?: TierOrUnrated) {
     return {
@@ -30,6 +36,7 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
       posterPath: details.posterPath,
       releaseDate: details.releaseDate,
       voteAverage: details.score ?? undefined,
+      gameSource: details.source,
       ...(tier ? { tier } : {}),
     };
   }
@@ -42,7 +49,7 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
   function handleTierChange(tier: TierOrUnrated) {
     trackItemRanked(`game-${details.appId}`, tier, ranked?.tier);
     if (!ranked) add(addInput(tier));
-    else setTier(details.appId, "game", tier);
+    else setTier(details.appId, "game", tier, details.source);
   }
 
   return (
@@ -165,7 +172,11 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
                       );
                     })}
                   </div>
-                  <Button variant="destructive" size="sm" onClick={() => remove(details.appId, "game")}>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => remove(details.appId, "game", details.source)}
+                  >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
                     Remove
                   </Button>
@@ -175,6 +186,7 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
               <CriteriaSection
                 tmdbId={details.appId}
                 mediaType={"game"}
+                gameSource={details.source}
                 isRanked={Boolean(ranked)}
                 criteriaScores={ranked?.criteriaScores}
               />
