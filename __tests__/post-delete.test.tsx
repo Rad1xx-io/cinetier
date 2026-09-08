@@ -3,11 +3,12 @@ import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/re
 import type { FeedPost } from "@/lib/supabase/feed";
 
 const deletePost = vi.fn(async () => true);
-const renderBoardPng = vi.fn<(node: HTMLElement) => Promise<string>>(
-  async () => "data:image/png;base64,stub"
+const renderBoardPng = vi.fn<(node: HTMLElement) => Promise<{ dataUrl: string; missingCovers: number }>>(
+  async () => ({ dataUrl: "data:image/png;base64,stub", missingCovers: 0 })
 );
 const downloadPng = vi.fn();
 const trackPostDownloaded = vi.fn();
+const trackImageExported = vi.fn();
 let viewer: { id: string } | null = { id: "author-1" };
 
 vi.mock("@/lib/supabase/feed", async (importOriginal) => ({
@@ -29,6 +30,7 @@ vi.mock("@/lib/utils/board-export", () => ({
 vi.mock("@/lib/analytics/events", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/analytics/events")>()),
   trackPostDownloaded: (...args: unknown[]) => trackPostDownloaded(...(args as [])),
+  trackImageExported: (...args: unknown[]) => trackImageExported(...(args as [])),
 }));
 
 import { PostDialog } from "@/components/feed/post-dialog";
@@ -219,11 +221,34 @@ describe("downloading a post as a picture", () => {
     expect(trackPostDownloaded).not.toHaveBeenCalled();
   });
 
+  // 2026-09-08: a black rectangle over one poster, on a board that looked
+  // identical to ones exporting cleanly. Nothing upstream turned out to be
+  // wrong — this is the gap that investigation actually found: the export
+  // reports success whether every cover made it or not. `renderBoardPng`
+  // now counts them; this pins that the count actually reaches the event
+  // that would have caught this happening for a real visitor, rather than
+  // trusting that the wiring is correct.
+  it("reports how many covers came back blank, even though the export still succeeded", async () => {
+    renderBoardPng.mockResolvedValueOnce({ dataUrl: "data:image/png;base64,stub", missingCovers: 1 });
+    open();
+    openActionsMenu();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: /^download$/i }));
+
+    await waitFor(() =>
+      expect(trackImageExported).toHaveBeenCalledWith(
+        expect.objectContaining({ succeeded: true, missingCovers: 1 })
+      )
+    );
+    // The download itself is unaffected — a partial cover set is still worth saving.
+    expect(trackPostDownloaded).toHaveBeenCalledWith("p1", "custom");
+  });
+
   it("reveals the watermark only for the moment of the capture", async () => {
     let opacityDuringCapture = "";
     renderBoardPng.mockImplementationOnce(async (node: HTMLElement) => {
       opacityDuringCapture = node.querySelector<HTMLElement>("[data-export-watermark]")?.style.opacity ?? "";
-      return "data:image/png;base64,stub";
+      return { dataUrl: "data:image/png;base64,stub", missingCovers: 0 };
     });
 
     open();

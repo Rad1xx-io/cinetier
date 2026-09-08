@@ -87,6 +87,30 @@ export function boardSvgOptions(): Options {
   };
 }
 
+/** What a capture produced: the picture, and how much of it is really there. */
+export interface RenderedBoard {
+  dataUrl: string;
+  /**
+   * How many covers came back as `imagePlaceholder` instead of themselves.
+   *
+   * A board investigated 2026-09-08 (a black rectangle over one poster, on
+   * a board that looked identical to ones exporting cleanly) turned up
+   * nothing wrong anywhere upstream — CORS headers were fine, the fetch
+   * that had once poisoned this same export was confirmed still fixed, and
+   * a faithful standalone replay of the library's own fetch-and-decode step
+   * against the exact failing image succeeded outright. The one thing that
+   * investigation could not do was find out, from inside the app, that a
+   * cover had failed at all: `imagePlaceholder` below exists precisely so
+   * one bad fetch does not sink the whole export, and the cost of that is
+   * that `succeeded: true` fires whether every cover made it or not. This
+   * field is that gap closed, not a fix for a cause that was never found —
+   * next time, the count (and, from `analytics · image_exported`, roughly
+   * when and how big the board was) is on the record instead of needing to
+   * be reconstructed by hand from a downloaded PNG's own pixels.
+   */
+  missingCovers: number;
+}
+
 /**
  * Rasterises a board element and hands back a PNG data url.
  *
@@ -96,13 +120,22 @@ export function boardSvgOptions(): Options {
  * and the export dies on the timeout with nothing to show. What follows is
  * what the library's `toCanvas` does, minus that frame.
  */
-export async function renderBoardPng(node: HTMLElement): Promise<string> {
+export async function renderBoardPng(node: HTMLElement): Promise<RenderedBoard> {
   // Imported here rather than at module scope: the library is only needed the
   // moment somebody actually exports, and it is far from small.
   const { toSvg } = await import("html-to-image");
 
   const render = (async () => {
     const svg = await toSvg(node, boardSvgOptions());
+
+    // Counted here because this is the last point with text to search: the
+    // placeholder is a fixed, exact data url (see above), so every verbatim
+    // occurrence in the serialised SVG is one cover that did not make it.
+    // After the canvas below, there are only pixels left, and telling a
+    // placeholder from a real photo that happens to render mostly black
+    // (a cover can genuinely look like that) is not something a pixel scan
+    // can do reliably — this file already knows the answer without guessing.
+    const missingCovers = svg.split(TRANSPARENT_PIXEL).length - 1;
 
     const image = new Image();
     image.decoding = "async";
@@ -129,7 +162,7 @@ export async function renderBoardPng(node: HTMLElement): Promise<string> {
     context.fillStyle = BOARD_BACKGROUND;
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL();
+    return { dataUrl: canvas.toDataURL(), missingCovers };
   })();
 
   return Promise.race([

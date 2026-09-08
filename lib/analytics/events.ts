@@ -207,6 +207,13 @@ export interface ImageExport {
   succeeded: boolean;
   /** Why it failed, when it did — the timeout, or whatever the library said. */
   reason?: string;
+  /**
+   * Covers that quietly became a blank placeholder inside an export that
+   * otherwise reports `succeeded: true` — see `RenderedBoard` in
+   * board-export.ts for why this exists. Omitted rather than sent as 0, so
+   * the ordinary case does not carry a field that is never useful.
+   */
+  missingCovers?: number;
 }
 
 /**
@@ -217,11 +224,12 @@ export interface ImageExport {
  * their fonts and their memory, so a board that renders here can still fail
  * there, and nothing else in the app would ever say so.
  */
-export function trackImageExported({ itemsCount, succeeded, reason }: ImageExport): void {
+export function trackImageExported({ itemsCount, succeeded, reason, missingCovers }: ImageExport): void {
   trackEvent("image_exported", {
     items_count: itemsCount,
     succeeded,
     ...(reason ? { reason } : {}),
+    ...(missingCovers ? { missing_covers: missingCovers } : {}),
   });
 }
 
