@@ -192,9 +192,9 @@ export function PostDialog({
     if (watermark) watermark.style.opacity = "1";
 
     try {
-      const dataUrl = await renderBoardPng(node);
+      const { dataUrl, missingCovers } = await renderBoardPng(node);
       downloadPng(dataUrl, "tierlistonline");
-      trackImageExported({ itemsCount, succeeded: true });
+      trackImageExported({ itemsCount, succeeded: true, missingCovers });
       trackPostDownloaded(post.id, post.category);
     } catch (err) {
       const reason = describeExportFailure(err);
