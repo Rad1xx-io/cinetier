@@ -241,9 +241,14 @@ export function CustomBoard({ board }: CustomBoardProps) {
     const watermark = node.querySelector<HTMLElement>("[data-export-watermark]");
     if (watermark) watermark.style.opacity = "1";
     try {
-      downloadPng(await renderBoardPng(node), "tierlistonline-board");
-      trackImageExported({ itemsCount: items.length, succeeded: true });
-      setNotice("Image saved");
+      const { dataUrl, missingCovers } = await renderBoardPng(node);
+      downloadPng(dataUrl, "tierlistonline-board");
+      trackImageExported({ itemsCount: items.length, succeeded: true, missingCovers });
+      setNotice(
+        missingCovers > 0
+          ? `Image saved — ${missingCovers} cover${missingCovers === 1 ? "" : "s"} could not be included`
+          : "Image saved"
+      );
     } catch (err) {
       const reason = describeExportFailure(err);
       trackImageExported({ itemsCount: items.length, succeeded: false, reason: reason.slice(0, 120) });

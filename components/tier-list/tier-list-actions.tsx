@@ -131,10 +131,14 @@ export function TierListActions({
     if (watermark) watermark.style.opacity = "1";
 
     try {
-      const dataUrl = await renderBoardPng(node);
+      const { dataUrl, missingCovers } = await renderBoardPng(node);
       downloadPng(dataUrl, "tierlistonline");
-      trackImageExported({ itemsCount, succeeded: true });
-      onNotify("Image saved");
+      trackImageExported({ itemsCount, succeeded: true, missingCovers });
+      onNotify(
+        missingCovers > 0
+          ? `Image saved — ${missingCovers} cover${missingCovers === 1 ? "" : "s"} could not be included`
+          : "Image saved"
+      );
     } catch (err) {
       const reason = describeExportFailure(err);
       trackImageExported({ itemsCount, succeeded: false, reason: reason.slice(0, 120) });
