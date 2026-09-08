@@ -1,48 +1,40 @@
-# The black-rectangle export bug: not reproduced, so not guessed at — the gap that let it hide is closed instead
+# Migration 031 was never applied to production — that's the whole cause
 
-Denis's brief gave three candidate fixes, each tied to a specific cause. None of the three causes held up. Rather than pick one anyway, this went a fourth way: close the actual gap the investigation found — that a cover failing during export has never been visible to anyone, including now.
+Denis's own diagnosis, from a real console screenshot, was already correct before this started: `42703`, `column ranked_titles.source does not exist`. Confirmed, fixed, verified — no code changed, only the database.
 
 Evidence vocabulary: **VERIFIED** (measured here, right now) · **CODE VERIFIED** (read, no runtime instrument) · **INFERRED** · **UNKNOWN**.
 
-## 1. Diagnosis
+## What was actually wrong
 
-**Denis's own hypothesis (missing `Access-Control-Allow-Origin`) — VERIFIED false**, checked directly rather than by the general survey from the previous audit. Found the real, current Undertale entry live (IGDB search, appId 12517, poster `images.igdb.com/.../cob1t2.jpg`) and hit its exact URL with `curl -X GET` carrying `Origin: https://tierlistonline.com`: `Access-Control-Allow-Origin: *`, clean. The current games source is IGDB (VERIFIED — `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` are configured, `activeGamesSource()` picks IGDB whenever they are), so today's Undertale is not a Steam-vs-IGDB id collision either.
+**VERIFIED, not assumed from the error text alone.** `information_schema.columns` on `public.ranked_titles` showed no `source` column at all, before anything was touched. `pullCloudTitles`'s exact select (`lib/storage/cloud-sync.ts:98`) run directly against production reproduced the identical failure Denis saw — same code, same message, word for word:
 
-**The bug itself — could not be reproduced, after genuinely trying hard, not after a quick look.** In order:
+```
+ERROR: 42703: column "source" does not exist
+```
 
-- A guest board with only Undertale: exported clean.
-- A guest board with Undertale plus 6 other real games (concurrent fetch, the scenario closest to "a normal board"): the first two attempts appeared to show exactly one flat-black card, every time, in the same position — which looked like a real, deterministic finding worth chasing. Standalone replays of the library's own fetch-and-decode step against that exact image succeeded outright; pre-embedding every cover as a data url on the live DOM *before* calling into the library (so its own fetch path never ran at all) still showed the same one black card; inspecting the raw SVG the library produced showed all 7 images correctly embedded as real, substantial JPEGs, Undertale's neighbor included. That last check is what turned up the actual explanation: **the "black card" was this investigation's own measurement error.** The card grid was sampled using an assumed even split of the row's width, and the real cards are fixed-width with a trailing gap the assumption didn't account for — the coordinates landed past the last real card, in genuinely-blank space that was never a bug. Measuring the same PNG with the cards' real, live `getBoundingClientRect()` positions instead of a guessed formula showed all 7 covers rendering correctly, including the one that had looked black. Re-run at 37 concurrent covers (twice) with the corrected measurement: zero failures both times.
-- The image that had been flagged specifically (Portal, not Undertale, in these boards) was real texture all along — its poster is simply mostly black, which is what made the measurement error read as plausible instead of obviously wrong.
+Migration 031 (2026-09-06, PR #81) made that column `not null` in the code's expectations; the code shipped, the migration against production's database did not. `sign-in sync aborted, local board left untouched` firing three times in a row is `pullWithRetry` doing exactly its job — retrying a failure that was never going to succeed on its own, and correctly leaving the local board alone rather than overwriting it with a failed pull.
 
-**What this rules out, and what it can't.** Every mechanism any of the three candidate fixes would address is confirmed either working or already fixed: CORS headers on every catalogue CDN (checked live with real URLs, not assumed from the general survey), and the previously-documented cache-poisoning bug (`cache: "reload"` in `boardSvgOptions()`) — reproduced on demand with the fix removed, confirmed gone with it in place. What it can't rule out: Denis's own board and browser, which this investigation never had access to. Undertale is genuinely not in the synced database under any account — **VERIFIED**, queried directly — so the exact `posterPath` his board actually holds, and whether it differs from what a fresh search returns today, is **UNKNOWN**. Nothing here was tested on Safari/WebKit either; this environment only has a Chromium-based browser available.
+**One thing worth Denis knowing, not resolved here:** the 2026-09-06 `DECISIONS.md` entry for this same migration claims it was live-verified against "a real Supabase" — and this project has only one Supabase project, the same one `next dev` and production both point at. That claim and today's finding don't reconcile cleanly. Two candidates, neither confirmed: the migration went through then and something later reset it, or that `apply_migration` call silently didn't land — this session saw repeated Supabase MCP socket drops earlier on, the same failure mode. Not guessed at further; recorded honestly in `DECISIONS.md` as an open question rather than picked to make the story tidy.
 
-**Given that, applying any of the three candidate fixes now would be a guess with a real cost** — `crossOrigin="anonymous"` specifically carries the regression risk Denis's own brief already named (a cover that turns out to lack CORS support stops loading everywhere, not just in export), for a cause that isn't confirmed. None were applied.
+## What was checked before applying
 
-## 2. What was done instead
+Read `031_ranked_title_source.sql` in full before running it. It defines no function with a commented body — only `alter table`, constraints, and `do $$ ... $$` self-checks — so the 2026-09-06 rule (hand-apply through the SQL Editor because `apply_migration` strips comments from function bodies) does not apply to this one. Applied through `apply_migration`, as usual for everything else.
 
-The one concrete finding from all of this: **a cover that fails during export has never been visible to anyone.** `imagePlaceholder` exists so one bad fetch doesn't sink the whole board — the right call — but the cost is that `succeeded: true` fires whether every cover made it or not, and nothing short of downloading the PNG and looking at it (or, this time, several hours of pixel forensics) would ever say otherwise. That gap is real regardless of what actually caused Denis's black rectangle, and it's what made this bug so hard to chase in the first place.
+## Before / after
 
-**`renderBoardPng` ([board-export.ts](lib/utils/board-export.ts)) now returns `{ dataUrl, missingCovers }` instead of a bare string.** `missingCovers` counts exact occurrences of the placeholder's fixed data-url string in the SVG the library produces — the one point left where a placeholder is still distinguishable from a real (if mostly-black) cover; after rasterising to a canvas there is nothing left to search. `fetchRequestInit`, `imagePlaceholder`, `data-export-hide` — untouched, as asked.
+| check | before | after |
+|---|---|---|
+| `information_schema.columns`, `ranked_titles.source` | absent | `text`, `not null`, default `'native'` |
+| `pullCloudTitles`'s exact select, run directly | `42703` | one real row back, `source: "native"` |
+| data shape | — | 22 movie + 17 anime rows → `source = 'native'` (fact, per the migration's own reasoning); all 50 existing game rows → `source = 'unknown'` (honestly unresolved, not backdated by a guess); zero rows outside `('native','steam','igdb','unknown')`; zero violations of `(media_type = 'game') = (source <> 'native')` |
 
-Wired through all three places a board leaves as a PNG:
-- **[tier-list-actions.tsx](components/tier-list/tier-list-actions.tsx)** and **[custom-board.tsx](components/custom-list/custom-board.tsx)**: the existing "Image saved" notice becomes "Image saved — N cover(s) could not be included" when `missingCovers > 0`.
-- **[post-dialog.tsx](components/feed/post-dialog.tsx)** (a post downloaded from the feed): no existing success notice exists here to extend, and none was added — this only gets the analytics signal below. Noting the asymmetry rather than inventing new UI state for it.
-- All three now pass `missingCovers` into `trackImageExported` ([events.ts](lib/analytics/events.ts)), sent as `missing_covers` and omitted entirely when zero, so the ordinary case's event shape is unchanged. If this happens again for a real visitor, it now leaves a PostHog record — board size, rough time, how many covers — instead of needing to be reconstructed by hand from a downloaded file.
+The migration's own closing self-check block ran as part of `apply_migration` and would have raised and failed the whole call on any of the above — it didn't, so this table is what actually landed, not what was merely intended.
 
-## 3. Verification
+## What was deliberately not touched
 
-| check | result |
-|---|---|
-| `npm run typecheck` | clean |
-| `npm run lint` | clean (1 pre-existing warning, unrelated line) |
-| `npm run build` | clean |
-| `npm test` | **1480 passed** (was 1479 — 1 new) |
-| live export, 37 real concurrent covers, in the browser | `{items_count: 38, succeeded: true}` — `missing_covers` correctly absent, not sent as `0` |
+- **The client-side banner and retry logic** (`sync-status-banner.tsx`, `cloud-sync-provider.tsx`) — already correct, as asked. Denis's banner clears on its own at the next successful sync; nothing to walk him through.
+- **The one-off 504 against `ranked_channels`** in the same screenshots, with a side CORS warning — left alone, as asked. If the banner survives this fix, that's the next thing to look at, separately from today's cause.
 
-**New test, proving the counter itself rather than trusting the wiring** (`post-delete.test.tsx`, same "prove the detector detects" shape as this project's other self-checking tests): `renderBoardPng` mocked to resolve with `missingCovers: 1` → asserts `trackImageExported` is called with `missingCovers: 1`, and that the download itself still proceeds (a partial cover set is still worth saving, not a reason to fail the export).
+## Record
 
-**Timing**: exports up to 37 covers completed in 3–5 seconds, well inside the 20 s timeout. The new counting step is one `string.split()` on an SVG string already in memory — no additional network requests, no measurable cost.
-
-## What Denis can do to actually close this
-
-Everything above rules out what the bug *isn't*; it doesn't say what it *is*. The one thing that would: the next time this happens, the exact `posterPath` on the failing board (right-click the broken card → Inspect, or the Network tab during export) plus the browser and OS. If it recurs after this ships, `missing_covers` in PostHog narrows down when and how big the board was, even without that.
+Full account in `.ai/DECISIONS.md` (2026-09-10 entry), including the unreconciled claim above, in the same before/after format this project already uses for every migration applied to production.
