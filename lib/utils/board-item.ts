@@ -20,8 +20,9 @@ export type BoardItem =
 /**
  * dnd-kit ids must be unique across both kinds — a tmdbId and a channelId
  * could otherwise collide. For a title, delegates to `tierItemKey` rather
- * than repeating its logic, so a game's source-aware suffix (see
- * `RankedTitle.gameSource`) only has one place it is computed.
+ * than repeating its logic, so a game's or anime's source-aware suffix (see
+ * `RankedTitle.gameSource`/`RankedTitle.animeSource`) only has one place it
+ * is computed.
  */
 export function boardItemKey(item: BoardItem): string {
   return item.kind === "title"

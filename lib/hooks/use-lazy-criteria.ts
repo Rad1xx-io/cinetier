@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import type { MediaType } from "@/lib/types";
 import type { GameSource } from "@/lib/types/game";
+import type { AnimeCatalogSource } from "@/lib/types/anime";
 import type { CriterionScore } from "@/lib/types/criteria";
 
 /**
@@ -26,6 +27,8 @@ export interface UseLazyCriteriaOptions {
   mediaType: MediaType;
   /** Only meaningful when `mediaType` is "game" — see `RankedTitle.gameSource`. */
   gameSource?: GameSource;
+  /** Only meaningful when `mediaType` is "anime" — see `RankedTitle.animeSource`. */
+  animeSource?: AnimeCatalogSource;
   /** Signed-in user id, or null when browsing as a guest. */
   userId: string | null;
   /** True once the item is actually on screen — nothing is fetched for a closed card. */
@@ -36,7 +39,8 @@ export interface UseLazyCriteriaOptions {
     userId: string,
     tmdbId: number,
     mediaType: MediaType,
-    gameSource?: GameSource
+    gameSource?: GameSource,
+    animeSource?: AnimeCatalogSource
   ) => Promise<CriterionScore[]>;
   onLoaded: (scores: CriterionScore[]) => void;
 }
@@ -52,6 +56,7 @@ export function useLazyCriteria({
   tmdbId,
   mediaType,
   gameSource,
+  animeSource,
   userId,
   isOpen,
   hasLocalScores,
@@ -61,18 +66,25 @@ export function useLazyCriteria({
   useEffect(() => {
     if (!isOpen || !userId || hasLocalScores) return;
 
-    // gameSource joins the key for the same reason it joins every other
-    // ranked-title key in the app: two different games can now share a
-    // tmdb_id (see RankedTitle.gameSource), and without it here, one game's
-    // fetch would mark the *other* game's breakdown "already attempted".
-    const key = `${userId}:${mediaType}-${tmdbId}${mediaType === "game" && gameSource ? `-${gameSource}` : ""}`;
+    // gameSource/animeSource join the key for the same reason either joins
+    // every other ranked-title key in the app: two different games, or two
+    // different anime, can now share a tmdb_id (see RankedTitle.gameSource,
+    // RankedTitle.animeSource), and without it here, one entry's fetch would
+    // mark the *other* entry's breakdown "already attempted".
+    const suffix =
+      mediaType === "game" && gameSource
+        ? `-${gameSource}`
+        : mediaType === "anime" && animeSource
+          ? `-${animeSource}`
+          : "";
+    const key = `${userId}:${mediaType}-${tmdbId}${suffix}`;
     if (attempted.has(key)) return;
     // Marked before the request, not after: two cards mounting in the same tick
     // must not both fire it.
     attempted.add(key);
 
     let cancelled = false;
-    pull(userId, tmdbId, mediaType, gameSource)
+    pull(userId, tmdbId, mediaType, gameSource, animeSource)
       .then((scores) => {
         // An empty answer is still an answer — `attempted` already records it,
         // and writing nothing locally keeps "no breakdown" meaning exactly that.
@@ -87,5 +99,5 @@ export function useLazyCriteria({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, userId, hasLocalScores, tmdbId, mediaType, gameSource, pull, onLoaded]);
+  }, [isOpen, userId, hasLocalScores, tmdbId, mediaType, gameSource, animeSource, pull, onLoaded]);
 }

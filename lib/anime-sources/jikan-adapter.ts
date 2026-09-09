@@ -96,6 +96,7 @@ export function mapJikanToSummary(raw: JikanAnime): AnimeSummary {
     // Deliberately a MAL id in a field named for AniList — see the note in
     // lib/anime-sources/index.ts. Renaming it would rewrite every stored board.
     anilistId: raw.mal_id,
+    catalogSource: "jikan",
     title: pickTitle(raw),
     titles: {
       romaji: raw.title ?? null,

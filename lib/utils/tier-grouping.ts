@@ -5,12 +5,19 @@ export type TierContainers = Record<TierOrUnrated, RankedTitle[]>;
 
 /**
  * The dnd-kit sortable id for one card. Suffixed with its source for a game
- * whose source is known, so that two different games sharing a numeric id —
- * one from Steam, one from IGDB, see `RankedTitle.gameSource` — never hand
- * dnd-kit the same id for two different cards on the same board.
+ * or anime whose source is known, so that two different games sharing a
+ * numeric id — one from Steam, one from IGDB — or two different anime — one
+ * from AniList, one from Jikan/MyAnimeList — never hand dnd-kit the same id
+ * for two different cards on the same board. See `RankedTitle.gameSource`/
+ * `RankedTitle.animeSource`.
  */
 export function tierItemKey(t: RankedTitle): string {
-  const suffix = t.mediaType === "game" && t.gameSource ? `-${t.gameSource}` : "";
+  const suffix =
+    t.mediaType === "game" && t.gameSource
+      ? `-${t.gameSource}`
+      : t.mediaType === "anime" && t.animeSource
+        ? `-${t.animeSource}`
+        : "";
   return `${t.mediaType}-${t.tmdbId}${suffix}`;
 }
 

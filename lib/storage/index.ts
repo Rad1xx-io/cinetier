@@ -5,6 +5,7 @@ import type { RankingRepository } from "@/lib/storage/repository";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { CriterionScore } from "@/lib/types/criteria";
 import type { GameSource } from "@/lib/types/game";
+import type { AnimeCatalogSource } from "@/lib/types/anime";
 
 export { RANKINGS_CHANGED_EVENT } from "@/lib/storage/local-storage-repository";
 export type { AddTitleInput, RankingRepository } from "@/lib/storage/repository";
@@ -24,9 +25,10 @@ export function getRatedTitles(): RankedTitle[] {
 export function getRankedTitle(
   tmdbId: number,
   mediaType: MediaType,
-  gameSource?: GameSource
+  gameSource?: GameSource,
+  animeSource?: AnimeCatalogSource
 ): RankedTitle | undefined {
-  return repository.getByKey(tmdbId, mediaType, gameSource);
+  return repository.getByKey(tmdbId, mediaType, gameSource, animeSource);
 }
 
 export function addTitle(input: Parameters<RankingRepository["add"]>[0]): RankedTitle {
@@ -50,26 +52,33 @@ export function addTitle(input: Parameters<RankingRepository["add"]>[0]): Ranked
   return added;
 }
 
-export function removeTitle(tmdbId: number, mediaType: MediaType, gameSource?: GameSource): void {
-  repository.remove(tmdbId, mediaType, gameSource);
+export function removeTitle(
+  tmdbId: number,
+  mediaType: MediaType,
+  gameSource?: GameSource,
+  animeSource?: AnimeCatalogSource
+): void {
+  repository.remove(tmdbId, mediaType, gameSource, animeSource);
 }
 
 export function updateTier(
   tmdbId: number,
   mediaType: MediaType,
   tier: TierOrUnrated,
-  gameSource?: GameSource
+  gameSource?: GameSource,
+  animeSource?: AnimeCatalogSource
 ): RankedTitle | undefined {
-  return repository.updateTier(tmdbId, mediaType, tier, gameSource);
+  return repository.updateTier(tmdbId, mediaType, tier, gameSource, animeSource);
 }
 
 export function updateCriteria(
   tmdbId: number,
   mediaType: MediaType,
   criteriaScores: CriterionScore[],
-  gameSource?: GameSource
+  gameSource?: GameSource,
+  animeSource?: AnimeCatalogSource
 ): RankedTitle | undefined {
-  return repository.updateCriteria(tmdbId, mediaType, criteriaScores, gameSource);
+  return repository.updateCriteria(tmdbId, mediaType, criteriaScores, gameSource, animeSource);
 }
 
 export function reorderAll(titles: RankedTitle[]): void {
