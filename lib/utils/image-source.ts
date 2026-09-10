@@ -9,7 +9,7 @@
  * keep serving — so the site loses precisely the covers a visitor has not seen
  * before, which on a catalogue is most of them.
  *
- * The four hosts below are all image CDNs that already serve at the size this
+ * The hosts below are all image CDNs that already serve at the size this
  * app asks for (`w342` posters, `t_cover_big` capsules), so going straight to
  * them costs a re-encode — JPEG instead of WebP — and buys immunity from that
  * quota, from the optimizer's own rate limits, and from its refusal to fetch

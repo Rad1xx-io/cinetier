@@ -1,40 +1,53 @@
-# Migration 031 was never applied to production — that's the whole cause
+# Four small, independent cleanups from the 2026-09-08 403/CORS audit, plus one date typo
 
-Denis's own diagnosis, from a real console screenshot, was already correct before this started: `42703`, `column ranked_titles.source does not exist`. Confirmed, fixed, verified — no code changed, only the database.
+Each checked and verified on its own — not one combined claim for all four.
 
 Evidence vocabulary: **VERIFIED** (measured here, right now) · **CODE VERIFIED** (read, no runtime instrument) · **INFERRED** · **UNKNOWN**.
 
-## What was actually wrong
+## 1. Anime routes were silent below status 500
 
-**VERIFIED, not assumed from the error text alone.** `information_schema.columns` on `public.ranked_titles` showed no `source` column at all, before anything was touched. `pullCloudTitles`'s exact select (`lib/storage/cloud-sync.ts:98`) run directly against production reproduced the identical failure Denis saw — same code, same message, word for word:
+**The gap, CODE VERIFIED.** `app/api/anime/genres/route.ts` and `search/route.ts` — plus `details/route.ts`, a third file with the identical pattern, found by checking the actual paths rather than trusting the two named from memory — only called `console.error` when `status >= 500`. AniList's real self-disable during the 2026-09-08 outage answered 403, which is `< 500`: the whole incident left nothing in the logs, which is exactly what that audit found.
 
-```
-ERROR: 42703: column "source" does not exist
-```
+**Fixed: logging is now unconditional.** Reaching the `catch` block at all means the source failed one way or another (an `AnimeSourceError`, any status) or this app has a bug of its own (falls back to `status = 500`) — both are worth a trace, so the status gate is gone rather than widened.
 
-Migration 031 (2026-09-06, PR #81) made that column `not null` in the code's expectations; the code shipped, the migration against production's database did not. `sign-in sync aborted, local board left untouched` firing three times in a row is `pullWithRetry` doing exactly its job — retrying a failure that was never going to succeed on its own, and correctly leaving the local board alone rather than overwriting it with a failed pull.
+**The client message now distinguishes a source failure from our own bug**, not just two — three outcomes: `AnimeSourceError` at 429/503 still passes through the source's own actionable text (unchanged); `AnimeSourceError` at any other status (this is where the silent 403 lived, plus 502/400, previously lumped under the same bare "could not load") now says the data source is unavailable; anything that is not an `AnimeSourceError` (a real bug here) keeps the original generic message, because that is not a source failure. `details/route.ts`'s early 404 return (the requested id genuinely doesn't exist on either catalogue) was left exactly as-is — that is the source answering, not failing, and it never hid an incident.
 
-**One thing worth Denis knowing, not resolved here:** the 2026-09-06 `DECISIONS.md` entry for this same migration claims it was live-verified against "a real Supabase" — and this project has only one Supabase project, the same one `next dev` and production both point at. That claim and today's finding don't reconcile cleanly. Two candidates, neither confirmed: the migration went through then and something later reset it, or that `apply_migration` call silently didn't land — this session saw repeated Supabase MCP socket drops earlier on, the same failure mode. Not guessed at further; recorded honestly in `DECISIONS.md` as an open question rather than picked to make the story tidy.
+**New test file, since none existed for these routes at all** — `__tests__/anime-routes-source-failure.test.ts`, 7 cases: a 403 now logs and shows the new message; a 429 still logs (it didn't before either) and still passes the real AniList text through; a genuine bug (not an `AnimeSourceError`) still logs with the original message; a real 404 logs nothing and isn't confused with a source failure.
 
-## What was checked before applying
+## 2. `IMAGE_HOSTS` added to `connect-src` (still report-only)
 
-Read `031_ranked_title_source.sql` in full before running it. It defines no function with a commented body — only `alter table`, constraints, and `do $$ ... $$` self-checks — so the 2026-09-06 rule (hand-apply through the SQL Editor because `apply_migration` strips comments from function bodies) does not apply to this one. Applied through `apply_migration`, as usual for everything else.
+**The gap, from the same 2026-09-08 audit, not re-derived here.** `img-src` already listed every image CDN; `connect-src` — which actually governs `fetch()`, the mechanism "Download PNG" uses to inline every cover — didn't. Harmless today only because the whole policy ships `Content-Security-Policy-Report-Only`; the day `connect-src` is ever enforced without this, every export with a non-Supabase cover breaks immediately, and the browser's own CSP violation reads exactly like a CORS failure to whoever debugs it next.
 
-## Before / after
+**Fixed:** `...IMAGE_HOSTS` spread into the same array that already builds `connect`, with the reasoning left in place as a comment. `ENFORCED_CSP_DIRECTIVES` (`object-src`/`base-uri`/`form-action`/`frame-ancestors`) is a wholly separate constant and function — untouched.
 
-| check | before | after |
-|---|---|---|
-| `information_schema.columns`, `ranked_titles.source` | absent | `text`, `not null`, default `'native'` |
-| `pullCloudTitles`'s exact select, run directly | `42703` | one real row back, `source: "native"` |
-| data shape | — | 22 movie + 17 anime rows → `source = 'native'` (fact, per the migration's own reasoning); all 50 existing game rows → `source = 'unknown'` (honestly unresolved, not backdated by a guess); zero rows outside `('native','steam','igdb','unknown')`; zero violations of `(media_type = 'game') = (source <> 'native')` |
+**Verified live, not just read back from source:**
 
-The migration's own closing self-check block ran as part of `apply_migration` and would have raised and failed the whole call on any of the above — it didn't, so this table is what actually landed, not what was merely intended.
+| check | result |
+|---|---|
+| enforced `Content-Security-Policy` header, `curl` against `/` | identical to before: `object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'` |
+| report-only header | now carries `connect-src` with all nine hosts, matching `img-src` |
+| live `fetch()` to `image.tmdb.org` from a real tab, `cache: "reload"` | succeeds, `200`, `type: "cors"` |
+| console, same fetch | **no CSP violation logged at all** — before this fix the identical fetch produced "violates connect-src... report-only, logged but no action taken" (seen repeatedly during the 08.09 audit); its absence now is what confirms the browser is actually applying the updated header, not just that it's present in the HTTP response |
 
-## What was deliberately not touched
+## 3. Two stale comments
 
-- **The client-side banner and retry logic** (`sync-status-banner.tsx`, `cloud-sync-provider.tsx`) — already correct, as asked. Denis's banner clears on its own at the next successful sync; nothing to walk him through.
-- **The one-off 504 against `ranked_channels`** in the same screenshots, with a side CORS warning — left alone, as asked. If the banner survives this fix, that's the next thing to look at, separately from today's cause.
+- **`lib/utils/board-export.ts`'s `includeQueryParams` comment** described the pre-2026-08-31 world (`/_next/image`, "differ only in the query"). Since `remotePatterns` was emptied that day, every cover is a direct request to its own CDN — a different path on a different host, never a shared path with a different query. Rewritten to say so, and honest about what that means: the specific cache-key collision the comment used to justify (same path, different query, stripped by the library's default cache key) can no longer happen through `/_next/image`, because nothing goes through it. Left the setting itself **on** — costs nothing today, and is the cheap insurance against a future host that does put an image's identity in its query string. Changing the setting itself was not asked for and wasn't done.
+- **`lib/utils/image-source.ts`'s `DIRECT_HOSTS` comment** said "the four hosts below" — there are nine now (Steam's three, YouTube's two, TMDB/IGDB/AniList/MAL). Reworded without a count, so adding a host doesn't require remembering to touch this comment too.
 
-## Record
+## 4. Date typo in `.ai/DECISIONS.md`
 
-Full account in `.ai/DECISIONS.md` (2026-09-10 entry), including the unreconciled claim above, in the same before/after format this project already uses for every migration applied to production.
+**VERIFIED against git history, not guessed.** The migration-031-applied entry was headed `2026-09-10`. The actual commit (`4be4a12`, "Apply migration 031 to production") is dated `2026-09-08 23:14:47 +0200`, the same evening as PR #83. Corrected to `2026-09-08` — the file's entries read newest-first, and this restores that order against its neighbors (09-08, then 09-06).
+
+## Found nearby, deliberately not touched
+
+`lib/utils/export-error.ts`'s `describeExportFailure` carries the same stale "the board's covers arrive through Next's optimiser" framing as item 3 — confirmed still present, not from memory. Not in the four items asked for; recorded in `.ai/DECISIONS.md` as an honest aside rather than fixed here.
+
+## Verification
+
+| check | result |
+|---|---|
+| `npm run typecheck` | clean |
+| `npm run lint` | clean (1 pre-existing warning, unrelated line) |
+| `npm run build` | clean |
+| `npm test` | **1487 passed** (was 1480 — 7 new, all in the new anime-routes test file) |
+| CSP, live | see table in item 2 |

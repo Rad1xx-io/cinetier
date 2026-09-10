@@ -71,7 +71,20 @@ const IMAGE_HOSTS = [
  * evidence are enforced separately below.
  */
 function contentSecurityPolicyReportOnly(): string {
-  const connect = ["'self'", SUPABASE_ORIGIN, "https://*.vercel-scripts.com"]
+  const connect = [
+    "'self'",
+    SUPABASE_ORIGIN,
+    "https://*.vercel-scripts.com",
+    // `img-src` lets a cover render as an `<img>`, but "Download PNG"
+    // (lib/utils/board-export.ts) inlines every cover with its own `fetch()`
+    // first, which `connect-src` governs — not `img-src`. Found missing here
+    // by a live audit (2026-09-08): harmless today only because this whole
+    // policy is report-only, but the day `connect-src` is enforced without
+    // this, every export with a non-Supabase cover breaks outright, and the
+    // browser's own CSP violation reads exactly like a CORS failure to
+    // whoever is debugging it next.
+    ...IMAGE_HOSTS,
+  ]
     .filter(Boolean)
     .join(" ");
 

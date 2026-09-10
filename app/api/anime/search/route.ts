@@ -39,14 +39,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     const httpStatus = error instanceof AnimeSourceError ? error.status : 500;
-    // The upstream's own wording is passed through for the states a user can
-    // act on — rate limited, catalogue down — because "try again" and "try
-    // again in an hour" are different instructions.
+    // Logged unconditionally, not just at httpStatus >= 500: AniList's own
+    // self-disable answers 403, and that outage (2026-09-08) left nothing in
+    // the logs under the old `>= 500` gate — a real incident, invisible the
+    // whole time it was happening. Reaching this catch at all means the
+    // source failed one way or another; that is always worth a trace.
+    console.error("[anime/search]", error);
     const message =
-      error instanceof AnimeSourceError && (httpStatus === 429 || httpStatus === 503)
-        ? error.message
+      error instanceof AnimeSourceError
+        ? httpStatus === 429 || httpStatus === 503
+          ? // The upstream's own wording, for the two states a user can act
+            // on — rate limited, catalogue down — because "try again" and
+            // "try again in an hour" are different instructions.
+            error.message
+          : "The anime catalogue's data source is unavailable right now. Please try again later."
         : "Could not load anime. Please try again.";
-    if (httpStatus >= 500) console.error("[anime/search]", error);
     return NextResponse.json({ error: message }, { status: httpStatus });
   }
 }
