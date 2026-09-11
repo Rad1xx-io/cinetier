@@ -30,11 +30,22 @@ export async function GET(request: NextRequest) {
     if (status === 404) {
       return NextResponse.json({ error: "Anime not found." }, { status: 404 });
     }
+    // Logged unconditionally, not just at status >= 500: AniList's own
+    // self-disable answers 403, and that outage (2026-09-08) left nothing in
+    // the logs under the old `>= 500` gate — a real incident, invisible the
+    // whole time it was happening. Reaching this point at all (the 404 above
+    // already returned) means the source failed one way or another; that is
+    // always worth a trace.
+    console.error("[anime/details]", error);
     const message =
-      error instanceof AnimeSourceError && (status === 429 || status === 503)
-        ? error.message
+      error instanceof AnimeSourceError
+        ? status === 429 || status === 503
+          ? // The upstream's own wording, for the two states a user can act
+            // on — rate limited, catalogue down — because "try again" and
+            // "try again in an hour" are different instructions.
+            error.message
+          : "The anime catalogue's data source is unavailable right now. Please try again later."
         : "Could not load anime details.";
-    if (status >= 500) console.error("[anime/details]", error);
     return NextResponse.json({ error: message }, { status });
   }
 }

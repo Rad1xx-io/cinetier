@@ -50,14 +50,18 @@ export function boardSvgOptions(): Options {
     imagePlaceholder: TRANSPARENT_PIXEL,
     onImageErrorHandler: () => {},
     /*
-     * Every cover on the board is one `/_next/image` request, and they
-     * differ only in the query. The library caches what it inlines, and
-     * its key drops the query unless this is set — so all of them share
-     * one entry. Within a single export the fetches start together and
-     * each card still gets its own picture, but the entry keeps whichever
-     * finished last, and the *next* export in the same tab hands that one
-     * image to every card. Filters looked like the trigger only because
-     * changing one is what makes somebody export twice.
+     * Written when every cover on the board was one `/_next/image` request
+     * differing only in the query — that stopped being true on 2026-08-31,
+     * when `remotePatterns` was emptied (next.config.ts) and every `<Image>`
+     * became `unoptimized`: each cover is now a direct request straight to
+     * its own CDN, a different path on a different host, not a shared path
+     * with a different query. The library's cache key is the request URL
+     * with the query stripped unless this is set, so distinct *paths* were
+     * never at risk of colliding either way — this is defensive against a
+     * host that starts putting the distinguishing part of an image's
+     * identity in its query string, not something currently firing. Left
+     * on rather than removed: it costs nothing today, and finding out it
+     * was needed the hard way is the exact failure mode it exists to avoid.
      */
     includeQueryParams: true,
     /*
