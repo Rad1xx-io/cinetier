@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, Eraser, Images, MonitorPlay, Send, Share2, Swords } from "lucide-react";
+import { Download, Eraser, Images, MonitorPlay, Send, Share2, Swords, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UsernameDialog } from "@/components/profile/username-dialog";
 import { WidgetEmbedDialog } from "@/components/widgets/widget-embed-dialog";
 import { CreateBattleModal } from "@/components/battle/create-battle-modal";
+import { CreateVotingSessionModal } from "@/components/voting/create-voting-session-modal";
 import { PublishPostDialog } from "@/components/feed/publish-post-dialog";
 import { suggestedPostCategory } from "@/lib/feed/post-preview";
 import { useSupabaseSession } from "@/lib/hooks/use-supabase-session";
@@ -75,6 +76,7 @@ export function TierListActions({
   const [exporting, setExporting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [battleOpen, setBattleOpen] = useState(false);
+  const [votingOpen, setVotingOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [widgetOpen, setWidgetOpen] = useState(false);
 
@@ -179,6 +181,15 @@ export function TierListActions({
     setBattleOpen(true);
   }, [user, onNotify]);
 
+  const handleStartVoting = useCallback(() => {
+    // Same gate as Battle: a voting session is owned by its creator.
+    if (!user) {
+      onNotify("Sign in to start a group vote");
+      return;
+    }
+    setVotingOpen(true);
+  }, [user, onNotify]);
+
   const handlePublish = useCallback(() => {
     // Same gate as the rest: a post is owned by its author and signed with their
     // handle, so there is nothing to insert without a session.
@@ -255,6 +266,15 @@ export function TierListActions({
         </span>
       </Button>
 
+      {/* Titles only, same as Battle's own pool — custom boards are out of v1
+          (migration 033's header), so this stays enabled regardless of the
+          category filter and lets the modal itself pick from whichever
+          categories the account has rated titles in. */}
+      <Button variant="secondary" size="sm" onClick={handleStartVoting}>
+        <Users className="h-3.5 w-3.5" aria-hidden />
+        Group Vote
+      </Button>
+
       {/*
         * Saving a picture, copying the link, fetching an embed code: three
         * things done once and then not again for weeks, which between them
@@ -320,6 +340,8 @@ export function TierListActions({
         titles={titles}
         channels={channels}
       />
+
+      <CreateVotingSessionModal open={votingOpen} onClose={() => setVotingOpen(false)} titles={titles} />
 
       {user && (
         <UsernameDialog

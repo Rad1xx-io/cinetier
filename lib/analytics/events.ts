@@ -425,3 +425,50 @@ export function trackImportCompleted(
     unmatched,
   });
 }
+
+export interface VotingSessionCreated {
+  sessionId: string;
+  category: string;
+  itemsCount: number;
+}
+
+/** A room opened — the pool is frozen, the link exists, nobody has voted yet. */
+export function trackVotingSessionCreated({ sessionId, category, itemsCount }: VotingSessionCreated): void {
+  trackEvent("voting_session_created", {
+    session_id: sessionId,
+    category,
+    items_count: itemsCount,
+  });
+}
+
+export interface VotingBallotSubmitted {
+  sessionId: string;
+  itemsRated: number;
+  itemsInPool: number;
+}
+
+/** One browser's ballot landed. `itemsRated` can be less than `itemsInPool` — a partial ballot is a real one, not an incomplete one (migration 033). */
+export function trackVotingBallotSubmitted({
+  sessionId,
+  itemsRated,
+  itemsInPool,
+}: VotingBallotSubmitted): void {
+  trackEvent("voting_ballot_submitted", {
+    session_id: sessionId,
+    items_rated: itemsRated,
+    items_in_pool: itemsInPool,
+  });
+}
+
+export interface VotingSessionClosed {
+  sessionId: string;
+  resultPostId: string;
+}
+
+/** The room closed: every ballot aggregated, the result frozen as a post. */
+export function trackVotingSessionClosed({ sessionId, resultPostId }: VotingSessionClosed): void {
+  trackEvent("voting_session_closed", {
+    session_id: sessionId,
+    result_post_id: resultPostId,
+  });
+}
