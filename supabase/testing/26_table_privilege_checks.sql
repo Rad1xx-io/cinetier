@@ -1,9 +1,13 @@
 -- No app table hands `anon` or `authenticated` a privilege the app never uses.
 --
--- Migration 030 revoked REFERENCES, TRIGGER and TRUNCATE, which Supabase grants
--- by default on every table in `public` and which nothing here has ever needed.
--- TRUNCATE is the one worth naming: it is not subject to row-level security, so
--- a role holding it empties a table whatever the policies say.
+-- Migrations 030 and 035 revoke REFERENCES, TRIGGER and TRUNCATE, which
+-- Supabase grants by default on every table and view in `public` and which
+-- nothing here has ever needed. TRUNCATE is the one worth naming: it is not
+-- subject to row-level security, so a role holding it empties a table
+-- whatever the policies say. Two migrations, not one, because 030's own
+-- revoke loop only covered ordinary tables (relkind 'r') and missed the two
+-- views already in `public` at the time — 035 closes that gap; see its
+-- header and the 2026-09-11 DECISIONS.md entry for how that was found.
 --
 -- A WARNING ABOUT WHAT THIS FILE PROVES LOCALLY. The harness's platform stub
 -- does not grant those three in the first place, so the final assertion below
