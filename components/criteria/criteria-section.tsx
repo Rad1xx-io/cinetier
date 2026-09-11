@@ -10,6 +10,7 @@ import { useLazyCriteria } from "@/lib/hooks/use-lazy-criteria";
 import { pullCriteria, pushCriteria } from "@/lib/storage/criteria-sync";
 import type { MediaType } from "@/lib/types";
 import type { GameSource } from "@/lib/types/game";
+import type { AnimeCatalogSource } from "@/lib/types/anime";
 import { criteriaAverage, type CriterionScore } from "@/lib/types/criteria";
 import { trackCriterionRated } from "@/lib/analytics/events";
 
@@ -18,6 +19,8 @@ interface CriteriaSectionProps {
   mediaType: MediaType;
   /** Only meaningful when `mediaType` is "game" — see `RankedTitle.gameSource`. */
   gameSource?: GameSource;
+  /** Only meaningful when `mediaType` is "anime" — see `RankedTitle.animeSource`. */
+  animeSource?: AnimeCatalogSource;
   /** Only ranked items can carry a breakdown — there is nothing to attach it to otherwise. */
   isRanked: boolean;
   criteriaScores: CriterionScore[] | undefined;
@@ -39,6 +42,7 @@ export function CriteriaSection({
   tmdbId,
   mediaType,
   gameSource,
+  animeSource,
   isRanked,
   criteriaScores,
   readOnly = false,
@@ -51,9 +55,9 @@ export function CriteriaSection({
     (scores: CriterionScore[]) => {
       // Written straight into the store rather than component state, so the
       // answer survives closing the card and every other view sees it too.
-      setCriteria(tmdbId, mediaType, scores, gameSource);
+      setCriteria(tmdbId, mediaType, scores, gameSource, animeSource);
     },
-    [setCriteria, tmdbId, mediaType, gameSource]
+    [setCriteria, tmdbId, mediaType, gameSource, animeSource]
   );
 
   /**
@@ -65,6 +69,7 @@ export function CriteriaSection({
     tmdbId,
     mediaType,
     gameSource,
+    animeSource,
     userId: readOnly ? null : (user?.id ?? null),
     isOpen: isRanked,
     hasLocalScores: (criteriaScores?.length ?? 0) > 0,
@@ -84,9 +89,9 @@ export function CriteriaSection({
     // Local first, exactly like every other write in the app: the UI updates
     // synchronously and the cloud catches up in the background, so a failed or
     // absent connection never blocks saving.
-    setCriteria(tmdbId, mediaType, scores, gameSource);
+    setCriteria(tmdbId, mediaType, scores, gameSource, animeSource);
     setOpen(false);
-    if (user) void pushCriteria(user.id, tmdbId, mediaType, scores, gameSource);
+    if (user) void pushCriteria(user.id, tmdbId, mediaType, scores, gameSource, animeSource);
 
     // Reported on save rather than on every slider move: dragging a slider
     // fires continuously, and a hundred events for one decision would drown the

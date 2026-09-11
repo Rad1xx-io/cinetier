@@ -33,6 +33,7 @@ const movie: TitleDetails = {
 
 const anime: AnimeDetails = {
   anilistId: 16498,
+  catalogSource: "anilist",
   title: "Attack on Titan",
   titles: { romaji: "Shingeki no Kyojin", english: "Attack on Titan", native: "進撃の巨人" },
   coverImage: "https://s4.anilist.co/cover.jpg",

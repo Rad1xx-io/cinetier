@@ -7,6 +7,11 @@ function isGameSource(value: unknown): boolean {
   return value === undefined || value === "steam" || value === "igdb";
 }
 
+/** Only meaningful on an anime, and only ever "anilist" or "jikan" when present. */
+function isAnimeSource(value: unknown): boolean {
+  return value === undefined || value === "anilist" || value === "jikan";
+}
+
 export function isValidTier(value: unknown): value is TierOrUnrated {
   return typeof value === "string" && (VALID_TIERS as string[]).includes(value);
 }
@@ -53,6 +58,7 @@ export function isRankedTitle(value: unknown): value is RankedTitle {
     typeof v.order === "number" &&
     (v.voteAverage === undefined || typeof v.voteAverage === "number") &&
     isGameSource(v.gameSource) &&
+    isAnimeSource(v.animeSource) &&
     isCriteriaScores(v.criteriaScores) &&
     isAffiliateLinks(v.affiliateLinks) &&
     typeof v.addedAt === "number" &&

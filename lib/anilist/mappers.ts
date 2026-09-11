@@ -30,6 +30,7 @@ function pickTitle(raw: AniListMedia): string {
 export function mapMediaToSummary(raw: AniListMedia): AnimeSummary {
   return {
     anilistId: raw.id,
+    catalogSource: "anilist",
     title: pickTitle(raw),
     titles: {
       romaji: raw.title.romaji,

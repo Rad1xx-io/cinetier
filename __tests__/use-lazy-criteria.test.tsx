@@ -40,7 +40,7 @@ describe("useLazyCriteria", () => {
   it("fetches when a ranked card opens without a local breakdown", async () => {
     const { pull, onLoaded } = setup();
     await waitFor(() => expect(onLoaded).toHaveBeenCalledWith(scores));
-    expect(pull).toHaveBeenCalledWith("user-1", 1, "movie", undefined);
+    expect(pull).toHaveBeenCalledWith("user-1", 1, "movie", undefined, undefined);
   });
 
   it("does not fetch for a closed card", () => {

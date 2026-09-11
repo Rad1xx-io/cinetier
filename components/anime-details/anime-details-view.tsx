@@ -20,36 +20,38 @@ import { trackItemAdded, trackItemRanked } from "@/lib/analytics/events";
 export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
   const { titles, add, remove, setTier, hydrated } = useRankedTitles();
 
-  const ranked = titles.find((t) => t.tmdbId === details.anilistId && t.mediaType === "anime");
+  // Matched on source too, same as the storage layer: an old entry ranked
+  // before an anime's source was recorded (animeSource absent) and today's
+  // lookup (details.catalogSource always set) are treated as different
+  // records rather than guessed to be the same anime — see
+  // RankedTitle.animeSource.
+  const ranked = titles.find(
+    (t) => t.tmdbId === details.anilistId && t.mediaType === "anime" && t.animeSource === details.catalogSource
+  );
   const releaseDate = details.year ? `${details.year}-01-01` : null;
 
-  function handleAdd() {
-    trackItemAdded(`anime-${details.anilistId}`, "anime", "details");
-    add({
+  function addInput(tier?: TierOrUnrated) {
+    return {
       tmdbId: details.anilistId,
-      mediaType: "anime",
+      mediaType: "anime" as const,
       title: details.title,
       posterPath: details.coverImage,
       releaseDate,
       voteAverage: details.score ?? undefined,
-    });
+      animeSource: details.catalogSource,
+      ...(tier ? { tier } : {}),
+    };
+  }
+
+  function handleAdd() {
+    trackItemAdded(`anime-${details.anilistId}`, "anime", "details");
+    add(addInput());
   }
 
   function handleTierChange(tier: TierOrUnrated) {
     trackItemRanked(`anime-${details.anilistId}`, tier, ranked?.tier);
-    if (!ranked) {
-      add({
-        tmdbId: details.anilistId,
-        mediaType: "anime",
-        title: details.title,
-        posterPath: details.coverImage,
-        releaseDate,
-        voteAverage: details.score ?? undefined,
-        tier,
-      });
-    } else {
-      setTier(details.anilistId, "anime", tier);
-    }
+    if (!ranked) add(addInput(tier));
+    else setTier(details.anilistId, "anime", tier, undefined, details.catalogSource);
   }
 
   const altTitle = [details.titles.romaji, details.titles.native].find(
@@ -166,7 +168,11 @@ export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
                       );
                     })}
                   </div>
-                  <Button variant="destructive" size="sm" onClick={() => remove(details.anilistId, "anime")}>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => remove(details.anilistId, "anime", undefined, details.catalogSource)}
+                  >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
                     Remove
                   </Button>
@@ -176,6 +182,7 @@ export function AnimeDetailsView({ details }: { details: AnimeDetails }) {
               <CriteriaSection
                 tmdbId={details.anilistId}
                 mediaType={"anime"}
+                animeSource={details.catalogSource}
                 isRanked={Boolean(ranked)}
                 criteriaScores={ranked?.criteriaScores}
               />

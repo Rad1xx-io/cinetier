@@ -3,27 +3,39 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { GameSource } from "@/lib/types/game";
+import type { AnimeCatalogSource } from "@/lib/types/anime";
 import type { PullOutcome } from "@/lib/storage/sync-decision";
 
 /**
- * `ranked_titles.source` is `not null` (migration 031) so that the unique
- * constraint keeps deduplicating movie/tv/anime rows — Postgres treats every
- * `null` in a unique index as distinct from every other `null`, so a nullable
- * `source` would have silently stopped deduplicating the three media types
- * that were never ambiguous the moment it was added. `'native'` for those;
- * `'unknown'` for a game whose source genuinely isn't known (never recorded,
- * or ranked before this column existed) rather than guessed at.
+ * `ranked_titles.source` is `not null` (migration 031, extended for anime by
+ * 032) so that the unique constraint keeps deduplicating movie/tv rows —
+ * Postgres treats every `null` in a unique index as distinct from every other
+ * `null`, so a nullable `source` would have silently stopped deduplicating
+ * the two media types that were never ambiguous the moment it was added.
+ * `'native'` for those; `'unknown'` for a game or anime whose source
+ * genuinely isn't known (never recorded, or ranked before this column
+ * existed) rather than guessed at.
  */
-export type RankedTitleSourceColumn = "native" | "steam" | "igdb" | "unknown";
+export type RankedTitleSourceColumn = "native" | "steam" | "igdb" | "anilist" | "jikan" | "unknown";
 
-export function toSourceColumn(mediaType: MediaType, gameSource: GameSource | undefined): RankedTitleSourceColumn {
-  if (mediaType !== "game") return "native";
-  return gameSource ?? "unknown";
+export function toSourceColumn(
+  mediaType: MediaType,
+  gameSource: GameSource | undefined,
+  animeSource?: AnimeCatalogSource
+): RankedTitleSourceColumn {
+  if (mediaType === "game") return gameSource ?? "unknown";
+  if (mediaType === "anime") return animeSource ?? "unknown";
+  return "native";
 }
 
-/** The inverse of `toSourceColumn` — 'native' and 'unknown' both mean "not a known game source". */
-function fromSourceColumn(source: RankedTitleSourceColumn): GameSource | undefined {
-  return source === "steam" || source === "igdb" ? source : undefined;
+/** The inverse of `toSourceColumn` — 'native' and 'unknown' both mean "not a known catalogue source". */
+function fromSourceColumn(source: RankedTitleSourceColumn): {
+  gameSource?: GameSource;
+  animeSource?: AnimeCatalogSource;
+} {
+  if (source === "steam" || source === "igdb") return { gameSource: source };
+  if (source === "anilist" || source === "jikan") return { animeSource: source };
+  return {};
 }
 
 /**
@@ -53,7 +65,7 @@ function toRow(userId: string, t: RankedTitle): RankedTitleRow & { user_id: stri
     user_id: userId,
     tmdb_id: t.tmdbId,
     media_type: t.mediaType,
-    source: toSourceColumn(t.mediaType, t.gameSource),
+    source: toSourceColumn(t.mediaType, t.gameSource, t.animeSource),
     title: t.title,
     poster_path: t.posterPath,
     release_date: t.releaseDate,
@@ -66,11 +78,12 @@ function toRow(userId: string, t: RankedTitle): RankedTitleRow & { user_id: stri
 }
 
 function fromRow(row: RankedTitleRow): RankedTitle {
-  const gameSource = fromSourceColumn(row.source);
+  const { gameSource, animeSource } = fromSourceColumn(row.source);
   return {
     tmdbId: row.tmdb_id,
     mediaType: row.media_type,
     ...(gameSource ? { gameSource } : {}),
+    ...(animeSource ? { animeSource } : {}),
     title: row.title,
     posterPath: row.poster_path,
     releaseDate: row.release_date,
@@ -135,11 +148,14 @@ export async function pushCloudTitles(userId: string, titles: RankedTitle[]): Pr
 
   // `source` is part of the key here for the same reason it is part of the
   // upsert conflict target above: a Steam-sourced and an IGDB-sourced game
-  // can now share a tmdb_id, and without `source` in this comparison one
-  // would read as "stale" and be deleted out from under the other the moment
-  // they happened to collide.
+  // (or an AniList-sourced and a Jikan-sourced anime) can now share a
+  // tmdb_id, and without `source` in this comparison one would read as
+  // "stale" and be deleted out from under the other the moment they
+  // happened to collide.
   const localKeys = new Set(
-    titles.map((t) => `${t.mediaType}:${t.tmdbId}:${toSourceColumn(t.mediaType, t.gameSource)}`)
+    titles.map(
+      (t) => `${t.mediaType}:${t.tmdbId}:${toSourceColumn(t.mediaType, t.gameSource, t.animeSource)}`
+    )
   );
   const staleRows = (existing as Pick<RankedTitleRow, "tmdb_id" | "media_type" | "source">[]).filter(
     (row) => !localKeys.has(`${row.media_type}:${row.tmdb_id}:${row.source}`)

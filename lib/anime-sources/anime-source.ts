@@ -1,5 +1,6 @@
 import type { AnimeFormat, AnimeSortMode } from "@/lib/anilist/anime-filters";
 import type {
+  AnimeCatalogSource,
   AnimeDetails,
   AnimeSearchResponse,
   AnimeSeason,
@@ -12,8 +13,12 @@ import type {
  * Two of them exist because one is not enough: AniList went down in November
  * and took the whole tab with it. The interface below is what lets a second
  * source stand in without the routes or the UI knowing which one they got.
+ *
+ * Kept as its own export, aliasing `AnimeCatalogSource` (`lib/types/anime.ts`)
+ * rather than redefining it, so existing imports of `AnimeSourceId` need no
+ * change — the same move `lib/games/source.ts` makes for `GamesSource`.
  */
-export type AnimeSourceId = "anilist" | "jikan";
+export type AnimeSourceId = AnimeCatalogSource;
 
 /** Everything the discover page can ask for, in the vocabulary the UI already speaks. */
 export interface AnimeQuery {

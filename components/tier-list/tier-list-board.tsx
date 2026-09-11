@@ -307,14 +307,14 @@ export function TierListBoard() {
 
   const handleRemove = useCallback(
     (title: RankedTitle) => {
-      remove(title.tmdbId, title.mediaType, title.gameSource);
+      remove(title.tmdbId, title.mediaType, title.gameSource, title.animeSource);
     },
     [remove]
   );
 
   const handleQuickTierChange = useCallback(
     (title: RankedTitle, tier: TierOrUnrated) => {
-      setTier(title.tmdbId, title.mediaType, tier, title.gameSource);
+      setTier(title.tmdbId, title.mediaType, tier, title.gameSource, title.animeSource);
       flashSaved();
       trackItemRanked(`${title.mediaType}-${title.tmdbId}`, tier, title.tier);
       noteForkInteraction();

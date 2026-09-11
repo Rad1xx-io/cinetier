@@ -117,7 +117,7 @@ export function forkTitles(
     current,
     withoutCriteria,
     strategy,
-    (title) => titleKey(title.tmdbId, title.mediaType, title.gameSource),
+    (title) => titleKey(title.tmdbId, title.mediaType, title.gameSource, title.animeSource),
     now
   );
 }

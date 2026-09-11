@@ -202,6 +202,7 @@ export function AnimeDiscoverClient({ initialData }: AnimeDiscoverClientProps = 
       posterPath: anime.coverImage,
       releaseDate: anime.year ? `${anime.year}-01-01` : null,
       voteAverage: anime.score ?? undefined,
+      animeSource: anime.catalogSource,
     });
   }
 

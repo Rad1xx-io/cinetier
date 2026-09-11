@@ -45,21 +45,29 @@ export function activeAnimeSourceId(): AnimeSourceId {
  * ---------------------------------------------------------------------------
  * A WARNING FOR WHOEVER ADDS THE SETTINGS TOGGLE
  *
- * `AnimeSummary.anilistId` is not a source-neutral identifier. It is written
- * into every user's board as `RankedTitle.tmdbId` and mirrored to Supabase, so
- * it already exists in stored data — and AniList ids and MyAnimeList ids are
- * two different numbering schemes.
+ * `AnimeSummary.anilistId` is still not a source-neutral identifier — AniList
+ * ids and MyAnimeList ids are two different numbering schemes. They agree
+ * more often than you would expect, because AniList seeded its catalogue
+ * from MyAnimeList: 1 is Cowboy Bebop in both, 5114 is Fullmetal Alchemist:
+ * Brotherhood in both, 16498 is Attack on Titan in both (all three verified
+ * against the live Jikan API). Titles added after that import have no such
+ * guarantee, and there the same number means two different shows.
  *
- * They agree more often than you would expect, because AniList seeded its
- * catalogue from MyAnimeList: 1 is Cowboy Bebop in both, 5114 is Fullmetal
- * Alchemist: Brotherhood in both, 16498 is Attack on Titan in both (all three
- * verified against the live Jikan API). Titles added after that import have no
- * such guarantee, and there the same number means two different shows.
- *
- * So a per-user toggle cannot be a simple swap. Boards saved under one source
- * would silently repoint under the other. Before shipping one, `RankedTitle`
- * needs to record which catalogue an entry came from, and the id needs to be
- * resolved through that — AniList exposes `idMal` for exactly this mapping.
+ * The prerequisite this warning used to name — `RankedTitle` recording which
+ * catalogue an entry came from — is done: `AnimeSummary.catalogSource` and
+ * `RankedTitle.animeSource` (migration 032, 2026-09-10) mean a new entry from
+ * either catalogue can no longer collide with one from the other, in storage,
+ * in cloud sync, in a battle, or on a widget. What that does NOT yet give you
+ * is a safe live toggle: `/anime/[id]` (`app/anime/[id]/page.tsx`) still
+ * resolves purely through `getAnimeSource().getDetails(id)` — the *active*
+ * source only, no fallback to the other the way `getGameDetails` (`lib/games/
+ * source.ts`) tries IGDB then Steam. Flip `ANIME_SOURCE` today and an id
+ * saved under the source you just left behind either 404s or, on a
+ * pre-032 board sharing a number across catalogues, resolves as the wrong
+ * anime with no signal that anything went wrong. Before a toggle ships, that
+ * route needs the same double-lookup games already has — and AniList's own
+ * `idMal` field is still the tool for mapping one id to the other, unchanged
+ * from what this comment said before.
  * ---------------------------------------------------------------------------
  */
 export function getAnimeSource(id: AnimeSourceId = activeAnimeSourceId()): AnimeSource {

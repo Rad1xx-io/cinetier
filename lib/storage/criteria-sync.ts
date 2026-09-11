@@ -3,6 +3,7 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { MediaType } from "@/lib/types";
 import type { GameSource } from "@/lib/types/game";
+import type { AnimeCatalogSource } from "@/lib/types/anime";
 import type { CriterionScore } from "@/lib/types/criteria";
 import { toSourceColumn } from "@/lib/storage/cloud-sync";
 
@@ -24,22 +25,24 @@ async function findRatingId(
   userId: string,
   tmdbId: number,
   mediaType: MediaType,
-  gameSource: GameSource | undefined
+  gameSource: GameSource | undefined,
+  animeSource: AnimeCatalogSource | undefined
 ): Promise<string | null> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return null;
 
   // `source` narrows this to one row same as everywhere else `tmdb_id` alone
-  // stopped being enough to name a game (see RankedTitle.gameSource) — without
-  // it, two games sharing a number would make `.maybeSingle()` below throw
-  // instead of finding either one's breakdown.
+  // stopped being enough to name a game or anime (see RankedTitle.gameSource,
+  // RankedTitle.animeSource) — without it, two entries sharing a number would
+  // make `.maybeSingle()` below throw instead of finding either one's
+  // breakdown.
   const { data } = await supabase
     .from("ranked_titles")
     .select("id")
     .eq("user_id", userId)
     .eq("tmdb_id", tmdbId)
     .eq("media_type", mediaType)
-    .eq("source", toSourceColumn(mediaType, gameSource))
+    .eq("source", toSourceColumn(mediaType, gameSource, animeSource))
     .maybeSingle();
 
   return (data as { id: string } | null)?.id ?? null;
@@ -56,12 +59,13 @@ export async function pushCriteria(
   tmdbId: number,
   mediaType: MediaType,
   scores: CriterionScore[],
-  gameSource?: GameSource
+  gameSource?: GameSource,
+  animeSource?: AnimeCatalogSource
 ): Promise<void> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return;
 
-  const ratingId = await findRatingId(userId, tmdbId, mediaType, gameSource);
+  const ratingId = await findRatingId(userId, tmdbId, mediaType, gameSource, animeSource);
   // The rating itself has not reached the cloud yet; the next sync will carry
   // the breakdown along with it rather than orphaning it here.
   if (!ratingId) return;
@@ -100,12 +104,13 @@ export async function pullCriteria(
   userId: string,
   tmdbId: number,
   mediaType: MediaType,
-  gameSource?: GameSource
+  gameSource?: GameSource,
+  animeSource?: AnimeCatalogSource
 ): Promise<CriterionScore[]> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return [];
 
-  const ratingId = await findRatingId(userId, tmdbId, mediaType, gameSource);
+  const ratingId = await findRatingId(userId, tmdbId, mediaType, gameSource, animeSource);
   if (!ratingId) return [];
 
   const { data, error } = await supabase
