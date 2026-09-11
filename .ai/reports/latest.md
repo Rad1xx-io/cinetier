@@ -51,3 +51,10 @@ Evidence vocabulary: **VERIFIED** (measured here, right now) · **CODE VERIFIED*
 | `npm run build` | clean |
 | `npm test` | **1487 passed** (was 1480 — 7 new, all in the new anime-routes test file) |
 | CSP, live | see table in item 2 |
+
+## Also this session: why Supabase MCP kept dropping, and the anime-source id fix (PR #85)
+
+Two separate pieces of work landed between this report's first version and its merge into `main`, each with its own full record in `.ai/DECISIONS.md` rather than repeated here:
+
+- **The recurring `ECONNRESET` on the Supabase MCP connection** was traced to a live, unresolved Supabase platform incident ("Unresponsive Projects," started 2026-09-10, affects Database, Nano-tier projects) — not a token problem, not local network. 2026-09-11 entry.
+- **PR #85** (anime id-source label, migration 032) was merged, and turned out to have been sitting unmerged while its migration was already live on production — meaning the deployed app was still writing `source = 'native'` for anime against a constraint that no longer accepted it. Confirmed live (`CHECK_VIOLATION` on the exact row shape the deployed code sent) before the merge, and confirmed fixed after. 2026-09-11 entry, "исчезло из репозитория" / active-bug thread.

@@ -111,7 +111,7 @@ describe("CriteriaSection — lazy loading", () => {
       <CriteriaSection tmdbId={7} mediaType="movie" isRanked criteriaScores={undefined} />
     );
     await vi.waitFor(() =>
-      expect(pullCriteria).toHaveBeenCalledWith("user-1", 7, "movie", undefined)
+      expect(pullCriteria).toHaveBeenCalledWith("user-1", 7, "movie", undefined, undefined)
     );
   });
 

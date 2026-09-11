@@ -61,14 +61,20 @@ export function battleCategoryOf(mediaType: MediaType): BattleCategory | null {
 /**
  * The id a battle uses for a title.
  *
- * Suffixed with its source for a game whose source is known, so that a
- * Steam-sourced entry and an IGDB-sourced entry sharing a numeric id — the
- * two id spaces overlap, see `RankedTitle.gameSource` — end up as two
+ * Suffixed with its source for a game or anime whose source is known, so
+ * that a Steam-sourced entry and an IGDB-sourced entry (or an AniList- and a
+ * Jikan-sourced anime) sharing a numeric id — the id spaces overlap, see
+ * `RankedTitle.gameSource`/`RankedTitle.animeSource` — end up as two
  * distinct candidates rather than one silently overwriting the other's tier
  * in `toCreatorRatings`'s `Record<string, string>`.
  */
 export function battleItemId(title: RankedTitle): string {
-  const suffix = title.mediaType === "game" && title.gameSource ? `-${title.gameSource}` : "";
+  const suffix =
+    title.mediaType === "game" && title.gameSource
+      ? `-${title.gameSource}`
+      : title.mediaType === "anime" && title.animeSource
+        ? `-${title.animeSource}`
+        : "";
   return `${title.mediaType}-${title.tmdbId}${suffix}`;
 }
 

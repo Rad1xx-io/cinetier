@@ -2,6 +2,17 @@ export type AnimeSeason = "WINTER" | "SPRING" | "SUMMER" | "FALL";
 
 export type AnimeStatus = "FINISHED" | "RELEASING" | "NOT_YET_RELEASED" | "CANCELLED" | "HIATUS";
 
+/**
+ * Which catalogue `anilistId` actually names. Not called `AnimeSource` —
+ * that name is already `lib/anime-sources/anime-source.ts`'s interface for a
+ * catalogue *implementation* (search/getDetails/getGenres), a different
+ * shape entirely; reusing it here for a two-value id tag would collide two
+ * unrelated exports under one name. `lib/anime-sources/anime-source.ts`'s
+ * `AnimeSourceId` is this same type, re-exported under its established name
+ * so nothing importing it has to change.
+ */
+export type AnimeCatalogSource = "anilist" | "jikan";
+
 export interface AnimeTitleVariants {
   romaji: string | null;
   english: string | null;
@@ -11,6 +22,15 @@ export interface AnimeTitleVariants {
 /** Normalized shape used for anime search results and discovery listings. */
 export interface AnimeSummary {
   anilistId: number;
+  /**
+   * Which catalogue `anilistId` names. Stamped by the mapper that built this
+   * object (`lib/anilist/mappers.ts`, `lib/anime-sources/jikan-adapter.ts`),
+   * each of which unambiguously knows which one it is. Not to be confused
+   * with `AnimeDetails.source` below, MyAnimeList's own "source material"
+   * field (manga, light novel, original, …) — an unrelated concept that
+   * happened to claim the shorter name first.
+   */
+  catalogSource: AnimeCatalogSource;
   title: string;
   titles: AnimeTitleVariants;
   coverImage: string | null;
