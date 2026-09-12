@@ -53,6 +53,11 @@ export function battleCategoryOf(mediaType: MediaType): BattleCategory | null {
       return "anime";
     case "game":
       return "games";
+    // Mobile Games is not a Battle category yet — named explicitly rather
+    // than falling through "default" so a future reader sees a decision,
+    // not an oversight. toCandidates skips anything this returns null for.
+    case "mobile_game":
+      return null;
     default:
       return null;
   }

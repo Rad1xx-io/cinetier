@@ -30,7 +30,7 @@ const profile = (username: string, iso: string) => ({
 
 const entry = (slug: string, iso: string) => ({ slug, updatedAt: new Date(iso) });
 
-const NO_ENTRIES = { titles: [], anime: [], games: [] };
+const NO_ENTRIES = { titles: [], anime: [], games: [], mobileGames: [] };
 
 beforeEach(() => {
   // Every case opts in to whatever dynamic rows it needs; the default is a
@@ -172,6 +172,7 @@ describe("sitemap — catalogue pages", () => {
       titles: [entry("movie-27205", "2026-08-01T10:00:00Z"), entry("tv-1396", "2026-08-02T10:00:00Z")],
       anime: [entry("16498", "2026-08-03T10:00:00Z")],
       games: [entry("1091500", "2026-08-04T10:00:00Z")],
+      mobileGames: [entry("6448786147", "2026-08-04T11:00:00Z")],
     });
     listRankedChannels.mockResolvedValue([entry("UCX6OQ3DkcsbYNE6H8uQQuVA", "2026-08-05T10:00:00Z")]);
 
@@ -180,7 +181,9 @@ describe("sitemap — catalogue pages", () => {
     expect(urls).toContain(`${SITE_URL}/title/movie-27205`);
     expect(urls).toContain(`${SITE_URL}/title/tv-1396`);
     expect(urls).toContain(`${SITE_URL}/anime/16498`);
-    expect(urls).toContain(`${SITE_URL}/games/1091500`);
+    // PC and Mobile are separate catalogue pages now, not one shared /games.
+    expect(urls).toContain(`${SITE_URL}/games/pc/1091500`);
+    expect(urls).toContain(`${SITE_URL}/games/mobile/6448786147`);
     expect(urls).toContain(`${SITE_URL}/youtube/channel/UCX6OQ3DkcsbYNE6H8uQQuVA`);
   });
 
@@ -190,7 +193,7 @@ describe("sitemap — catalogue pages", () => {
       games: [entry("1091500", "2026-08-04T10:00:00Z")],
     });
 
-    const own = (await sitemap()).find((e) => e.url === `${SITE_URL}/games/1091500`);
+    const own = (await sitemap()).find((e) => e.url === `${SITE_URL}/games/pc/1091500`);
     expect(new Date(own!.lastModified as Date).toISOString()).toBe("2026-08-04T10:00:00.000Z");
   });
 

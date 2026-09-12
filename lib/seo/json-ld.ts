@@ -1,5 +1,6 @@
 import type { AnimeDetails } from "@/lib/types/anime";
 import type { GameDetails } from "@/lib/types/game";
+import type { MobileGameDetails } from "@/lib/types/mobile-game";
 import type { ChannelDetails } from "@/lib/types/youtube";
 import type { TitleDetails } from "@/lib/types";
 import { absoluteUrl } from "@/lib/seo/site";
@@ -145,6 +146,29 @@ export function gameJsonLd(details: GameDetails, path: string): JsonLd {
     author: organizations(details.developers),
     publisher: organizations(details.publishers),
     sameAs: details.website,
+    aggregateRating: aggregateRating(details.score, details.ratingCount),
+  });
+}
+
+/**
+ * A mobile game — its own builder rather than a reuse of gameJsonLd, matching
+ * this file's own one-builder-per-catalogue convention. iTunes always gives a
+ * precise release day, unlike Steam's "year only" placeholder, so no
+ * equivalent of gameReleaseDate's guard is needed here.
+ */
+export function mobileGameJsonLd(details: MobileGameDetails, path: string): JsonLd {
+  return compact({
+    "@context": "https://schema.org",
+    "@type": "VideoGame",
+    name: details.title,
+    url: absoluteUrl(path),
+    description: describe(details.shortDescription),
+    image: details.posterPath,
+    datePublished: details.releaseDate,
+    genre: details.genres,
+    gamePlatform: "iOS",
+    author: organizations([details.developer]),
+    sameAs: details.storeUrl,
     aggregateRating: aggregateRating(details.score, details.ratingCount),
   });
 }

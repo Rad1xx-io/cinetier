@@ -1,8 +1,9 @@
 import type { CriterionScore } from "@/lib/types/criteria";
 import type { GameSource } from "@/lib/types/game";
 import type { AnimeCatalogSource } from "@/lib/types/anime";
+import type { MobileGameSource } from "@/lib/types/mobile-game";
 
-export type MediaType = "movie" | "tv" | "anime" | "game";
+export type MediaType = "movie" | "tv" | "anime" | "game" | "mobile_game";
 
 /** TMDB only ever produces these two — narrower than the shared ranking MediaType so movie/tv-only components (mediaTypeLabel, DiscoverCard, TitleDetailsView) can't accidentally be handed "anime". */
 export type TMDBMediaType = "movie" | "tv";
@@ -88,6 +89,16 @@ export interface RankedTitle {
    * "the AniList catalogue", even though AniList is this app's default.
    */
   animeSource?: AnimeCatalogSource;
+  /**
+   * Which catalog `tmdbId` came from — meaningful only for `mediaType:
+   * "mobile_game"`. Unlike `gameSource`/`animeSource`, there is only one
+   * legal value today (`"app_store"`, see `lib/types/mobile-game.ts`) — added
+   * from this media type's first day anyway, not retrofitted after a second
+   * catalog forced the question the way 031/032 both had to for game/anime.
+   * Absent means "ranked before this field existed", not "unknown catalog";
+   * every row written by this app's own code sets it.
+   */
+  mobileGameSource?: MobileGameSource;
   /**
    * The user's own breakdown, when they filled one in. Absent on everything
    * ranked before criteria existed, and on anything judged by tier alone —

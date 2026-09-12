@@ -38,6 +38,7 @@ export type RateLimitTier =
   | "search"
   | "details"
   | "youtube-search"
+  | "mobile-games"
   | "reference"
   | "post-view"
   | "report"
@@ -73,6 +74,18 @@ const BUDGETS: Record<RateLimitTier, TierBudget> = {
    * be looser — but it is still an outbound call, so it is not unlimited.
    */
   details: { anonymous: 80, authenticated: 200, windowSeconds: 60 },
+
+  /*
+   * The App Store catalogue (lib/app-store) — one shared tier for search and
+   * details both, unlike the pairs above. iTunes Search documents a limit
+   * around 20 requests a MINUTE for the whole app, not per visitor the way
+   * TMDB/IGDB/AniList's quotas are — this tier is this app's own backstop
+   * against one visitor spending most of a budget that everyone else's
+   * searches also draw from. It is not the real defense against exceeding
+   * that global ceiling: lib/app-store/client.ts's own pacing gate is, since
+   * this counts per-address requests, not the shared upstream budget itself.
+   */
+  "mobile-games": { anonymous: 10, authenticated: 20, windowSeconds: 60 },
 
   /*
    * Genre lists and other near-static reference data. Long upstream cache

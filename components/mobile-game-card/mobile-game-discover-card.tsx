@@ -4,27 +4,25 @@ import Link from "next/link";
 import { Plus, Star } from "lucide-react";
 import { Poster } from "@/components/movie-card/poster";
 import { TierPill } from "@/components/movie-card/tier-pill";
-import { Badge } from "@/components/ui/badge";
 import { ContentTypeBadge } from "@/components/ui/content-type-badge";
-import type { GameSummary } from "@/lib/types/game";
+import type { MobileGameSummary } from "@/lib/types/mobile-game";
 import type { RankedTitle } from "@/lib/types";
 import { releaseYear } from "@/lib/utils/format";
 
-interface GameDiscoverCardProps {
-  game: GameSummary;
+interface MobileGameDiscoverCardProps {
+  game: MobileGameSummary;
   ranked?: RankedTitle;
-  onAdd: (game: GameSummary) => void;
+  onAdd: (game: MobileGameSummary) => void;
 }
 
-export function GameDiscoverCard({ game, ranked, onAdd }: GameDiscoverCardProps) {
-  const href = `/games/pc/${game.appId}`;
+export function MobileGameDiscoverCard({ game, ranked, onAdd }: MobileGameDiscoverCardProps) {
+  const href = `/games/mobile/${game.appId}`;
 
   return (
     <div className="group relative flex flex-col gap-2">
       <Link href={href} className="block">
         <Poster
           posterPath={game.posterPath}
-          fallbackSrc={game.fallbackImage}
           title={game.title}
           className="transition-transform group-hover:scale-[1.02]"
         />
@@ -50,7 +48,7 @@ export function GameDiscoverCard({ game, ranked, onAdd }: GameDiscoverCardProps)
           {game.title}
         </Link>
         <div className="flex items-center gap-2 text-xs text-muted">
-          <ContentTypeBadge type="game" />
+          <ContentTypeBadge type="mobile_game" />
           <span>{releaseYear(game.releaseDate)}</span>
           {game.score !== null && (
             <span className="flex items-center gap-0.5">
@@ -60,15 +58,6 @@ export function GameDiscoverCard({ game, ranked, onAdd }: GameDiscoverCardProps)
           )}
           <span className="hidden sm:inline">{game.isFree ? "Free" : game.price ?? ""}</span>
         </div>
-        {game.genres.length > 0 && (
-          <div className="hidden flex-wrap items-center gap-1 sm:flex">
-            {game.genres.slice(0, 2).map((g) => (
-              <Badge key={g} variant="outline" className="px-1.5 py-0 text-[10px]">
-                {g}
-              </Badge>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

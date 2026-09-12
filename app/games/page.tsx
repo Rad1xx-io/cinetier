@@ -1,72 +1,70 @@
 import type { Metadata } from "next";
-import { GamesDiscoverClient } from "@/components/games-search/games-discover-client";
-import { loadInitial } from "@/lib/catalog/initial-data";
-import { itemListJsonLd } from "@/lib/seo/json-ld";
-import { JsonLd } from "@/components/seo/json-ld";
-import { discoverGames } from "@/lib/games/source";
-import type { GameSearchResponse } from "@/lib/types/game";
+import Link from "next/link";
+import { Gamepad2, Smartphone } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
+import { CONTENT_TYPE_ACCENTS } from "@/lib/utils/content-type";
 
-/*
- * Rendered per request rather than prerendered.
- *
- * The listing is a client component that reads useSearchParams, and Next makes
- * that bail out to the client during a prerender unless it sits behind a
- * Suspense boundary — which would put the skeleton in the static HTML and undo
- * the whole point of this page. Rendering on demand removes the bailout.
- *
- * The upstream cost stays bounded anyway: the catalogue clients each cache
- * their fetch for five minutes, so repeated renders mostly hit that rather
- * than the API.
- */
-export const dynamic = "force-dynamic";
-
-const DESCRIPTION =
-  "Browse games by genre, platform and mode, then rank the ones you have played into tiers from S to F.";
+const DESCRIPTION = "PC or mobile — pick a catalog to browse and rank the games you have played.";
 
 export const metadata: Metadata = {
   title: "Games — TierListOnline",
   description: DESCRIPTION,
   alternates: { canonical: "/games" },
-  openGraph: {
-    title: "Games — TierListOnline",
-    description: DESCRIPTION,
-    url: "/games",
-  },
+  openGraph: { title: "Games — TierListOnline", description: DESCRIPTION, url: "/games" },
   twitter: { title: "Games — TierListOnline", description: DESCRIPTION },
 };
 
-export default async function GamesPage() {
-  // Reaches IGDB through the Twitch token the server mints for itself. When
-  // those credentials are missing the source falls back to Steam, and when
-  // both fail `loadInitial` answers null and the client takes over.
-  const discovered = await loadInitial("games", () =>
-    discoverGames({ sort: "popularity", page: 0 })
-  );
+const TILES = [
+  {
+    href: "/games/pc",
+    label: "PC",
+    description: "Steam and the wider PC catalog.",
+    icon: Gamepad2,
+    accent: CONTENT_TYPE_ACCENTS.game,
+  },
+  {
+    href: "/games/mobile",
+    label: "Mobile",
+    description: "iPhone and iPad games from the App Store.",
+    icon: Smartphone,
+    accent: CONTENT_TYPE_ACCENTS.game,
+  },
+];
 
-  const initialData: GameSearchResponse | null = discovered
-    ? {
-        results: discovered.results,
-        hasMore: discovered.hasMore,
-        ...(discovered.stale ? { stale: discovered.stale } : {}),
-      }
-    : null;
-
+/**
+ * A hub, not a list — see .ai/PLAN-nav-and-mobile-games.md (B.1). PC and
+ * mobile games are different products someone may rank side by side, not
+ * one catalog standing in for the other, so this page asks which one rather
+ * than picking for the visitor. The desktop header answers the same
+ * question through a menu on the "Games" tab itself; this page exists for
+ * the one surface that has nowhere to anchor a menu — the mobile tab bar
+ * links straight here instead.
+ */
+export default function GamesHubPage() {
   return (
-    <>
-      {initialData?.results.length ? (
-        <JsonLd
-          data={itemListJsonLd(
-            initialData.results.map((game) => ({
-              type: "VideoGame",
-              name: game.title,
-              path: `/games/${game.appId}`,
-            })),
-            "/games",
-            "Popular games"
-          )}
-        />
-      ) : null}
-      <GamesDiscoverClient initialData={initialData} />
-    </>
+    <div className="mx-auto flex max-w-3xl flex-col items-center gap-8 px-4 py-16 text-center md:py-24">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Games</h1>
+        <p className="mt-2 text-sm text-muted">{DESCRIPTION}</p>
+      </div>
+
+      <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
+        {TILES.map(({ href, label, description, icon: Icon, accent }) => (
+          <Link
+            key={href}
+            href={href}
+            className={cn(
+              "group flex flex-col items-center gap-3 rounded-2xl border border-border bg-surface px-6 py-10 transition-colors",
+              accent.hoverBorder,
+              accent.hoverBg
+            )}
+          >
+            <Icon className={cn("h-10 w-10 transition-colors", accent.text)} aria-hidden />
+            <span className="text-lg font-semibold">{label}</span>
+            <span className="text-sm text-muted">{description}</span>
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }

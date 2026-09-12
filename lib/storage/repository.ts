@@ -2,6 +2,7 @@ import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { CriterionScore } from "@/lib/types/criteria";
 import type { GameSource } from "@/lib/types/game";
 import type { AnimeCatalogSource } from "@/lib/types/anime";
+import type { MobileGameSource } from "@/lib/types/mobile-game";
 
 export interface AddTitleInput {
   tmdbId: number;
@@ -15,6 +16,8 @@ export interface AddTitleInput {
   gameSource?: GameSource;
   /** Only meaningful for `mediaType: "anime"` — see `RankedTitle.animeSource`. */
   animeSource?: AnimeCatalogSource;
+  /** Only meaningful for `mediaType: "mobile_game"` — see `RankedTitle.mobileGameSource`. */
+  mobileGameSource?: MobileGameSource;
 }
 
 /**

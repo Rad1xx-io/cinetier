@@ -49,6 +49,13 @@ export const CONTENT_TYPE_ACCENTS: Record<ContentType, ContentTypeAccent> = {
     hoverBorder: "hover:border-emerald-500/40",
     hoverBg: "hover:bg-emerald-500/10",
   },
+  mobile_game: {
+    label: "Mobile Game",
+    badge: "border-sky-500/30 bg-sky-500/15 text-sky-300",
+    text: "text-sky-400",
+    hoverBorder: "hover:border-sky-500/40",
+    hoverBg: "hover:bg-sky-500/10",
+  },
   youtube: {
     label: "YouTube",
     badge: "border-red-500/30 bg-red-500/15 text-red-300",
@@ -75,6 +82,7 @@ const CATALOG_PROSE: { types: MediaType[]; label: string }[] = [
   { types: ["tv"], label: "TV series" },
   { types: ["anime"], label: "anime" },
   { types: ["game"], label: "games" },
+  { types: ["mobile_game"], label: "mobile games" },
 ];
 
 /**
@@ -122,6 +130,7 @@ export const CATALOG_FILTERS: { value: ContentType; label: string }[] = [
   { value: "tv", label: "TV" },
   { value: "anime", label: "Anime" },
   { value: "game", label: "Games" },
+  { value: "mobile_game", label: "Mobile Games" },
   { value: "youtube", label: "YouTube" },
 ];
 

@@ -131,6 +131,9 @@ export class LocalStorageRepository implements RankingRepository {
       voteAverage: input.voteAverage,
       ...(input.mediaType === "game" && input.gameSource ? { gameSource: input.gameSource } : {}),
       ...(input.mediaType === "anime" && input.animeSource ? { animeSource: input.animeSource } : {}),
+      ...(input.mediaType === "mobile_game" && input.mobileGameSource
+        ? { mobileGameSource: input.mobileGameSource }
+        : {}),
       addedAt: now,
       updatedAt: now,
     };

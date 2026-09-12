@@ -4,27 +4,40 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { GameSource } from "@/lib/types/game";
 import type { AnimeCatalogSource } from "@/lib/types/anime";
+import type { MobileGameSource } from "@/lib/types/mobile-game";
 import type { PullOutcome } from "@/lib/storage/sync-decision";
 
 /**
  * `ranked_titles.source` is `not null` (migration 031, extended for anime by
- * 032) so that the unique constraint keeps deduplicating movie/tv rows —
- * Postgres treats every `null` in a unique index as distinct from every other
- * `null`, so a nullable `source` would have silently stopped deduplicating
- * the two media types that were never ambiguous the moment it was added.
- * `'native'` for those; `'unknown'` for a game or anime whose source
- * genuinely isn't known (never recorded, or ranked before this column
- * existed) rather than guessed at.
+ * 032 and mobile games by 036) so that the unique constraint keeps
+ * deduplicating movie/tv rows — Postgres treats every `null` in a unique
+ * index as distinct from every other `null`, so a nullable `source` would
+ * have silently stopped deduplicating the media types that were never
+ * ambiguous the moment it was added. `'native'` for those; `'unknown'` for a
+ * game or anime whose source genuinely isn't known (never recorded, or
+ * ranked before this column existed) rather than guessed at. Mobile games
+ * have no `'unknown'` bucket of their own — `'app_store'` from day one, no
+ * media type that existed before this column had a chance to leave one
+ * unrecorded.
  */
-export type RankedTitleSourceColumn = "native" | "steam" | "igdb" | "anilist" | "jikan" | "unknown";
+export type RankedTitleSourceColumn =
+  | "native"
+  | "steam"
+  | "igdb"
+  | "anilist"
+  | "jikan"
+  | "app_store"
+  | "unknown";
 
 export function toSourceColumn(
   mediaType: MediaType,
   gameSource: GameSource | undefined,
-  animeSource?: AnimeCatalogSource
+  animeSource?: AnimeCatalogSource,
+  mobileGameSource?: MobileGameSource
 ): RankedTitleSourceColumn {
   if (mediaType === "game") return gameSource ?? "unknown";
   if (mediaType === "anime") return animeSource ?? "unknown";
+  if (mediaType === "mobile_game") return mobileGameSource ?? "app_store";
   return "native";
 }
 
@@ -32,9 +45,11 @@ export function toSourceColumn(
 function fromSourceColumn(source: RankedTitleSourceColumn): {
   gameSource?: GameSource;
   animeSource?: AnimeCatalogSource;
+  mobileGameSource?: MobileGameSource;
 } {
   if (source === "steam" || source === "igdb") return { gameSource: source };
   if (source === "anilist" || source === "jikan") return { animeSource: source };
+  if (source === "app_store") return { mobileGameSource: source };
   return {};
 }
 
@@ -65,7 +80,7 @@ function toRow(userId: string, t: RankedTitle): RankedTitleRow & { user_id: stri
     user_id: userId,
     tmdb_id: t.tmdbId,
     media_type: t.mediaType,
-    source: toSourceColumn(t.mediaType, t.gameSource, t.animeSource),
+    source: toSourceColumn(t.mediaType, t.gameSource, t.animeSource, t.mobileGameSource),
     title: t.title,
     poster_path: t.posterPath,
     release_date: t.releaseDate,
@@ -78,12 +93,13 @@ function toRow(userId: string, t: RankedTitle): RankedTitleRow & { user_id: stri
 }
 
 function fromRow(row: RankedTitleRow): RankedTitle {
-  const { gameSource, animeSource } = fromSourceColumn(row.source);
+  const { gameSource, animeSource, mobileGameSource } = fromSourceColumn(row.source);
   return {
     tmdbId: row.tmdb_id,
     mediaType: row.media_type,
     ...(gameSource ? { gameSource } : {}),
     ...(animeSource ? { animeSource } : {}),
+    ...(mobileGameSource ? { mobileGameSource } : {}),
     title: row.title,
     posterPath: row.poster_path,
     releaseDate: row.release_date,
@@ -154,7 +170,8 @@ export async function pushCloudTitles(userId: string, titles: RankedTitle[]): Pr
   // happened to collide.
   const localKeys = new Set(
     titles.map(
-      (t) => `${t.mediaType}:${t.tmdbId}:${toSourceColumn(t.mediaType, t.gameSource, t.animeSource)}`
+      (t) =>
+        `${t.mediaType}:${t.tmdbId}:${toSourceColumn(t.mediaType, t.gameSource, t.animeSource, t.mobileGameSource)}`
     )
   );
   const staleRows = (existing as Pick<RankedTitleRow, "tmdb_id" | "media_type" | "source">[]).filter(

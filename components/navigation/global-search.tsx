@@ -14,9 +14,10 @@ import { posterUrl } from "@/lib/utils/tmdb-image";
 import type { SearchResponse } from "@/lib/types";
 import type { AnimeSearchResponse } from "@/lib/types/anime";
 import type { GameSearchResponse } from "@/lib/types/game";
+import type { MobileGameSearchResponse } from "@/lib/types/mobile-game";
 import type { ChannelSearchResponse } from "@/lib/types/youtube";
 
-type Category = "movie" | "tv" | "anime" | "game" | "youtube";
+type Category = "movie" | "tv" | "anime" | "game" | "mobile_game" | "youtube";
 
 interface QuickResult {
   key: string;
@@ -32,6 +33,7 @@ const CATEGORY_LABEL: Record<Category, string> = {
   tv: "TV",
   anime: "ANIME",
   game: "GAME",
+  mobile_game: "MOBILE",
   youtube: "YOUTUBE",
 };
 
@@ -49,10 +51,11 @@ async function safeFetch<T>(url: string, signal: AbortSignal): Promise<T | null>
 
 async function runQuickSearch(query: string, signal: AbortSignal): Promise<QuickResult[]> {
   const q = encodeURIComponent(query);
-  const [tmdb, anime, games, youtube] = await Promise.all([
+  const [tmdb, anime, games, mobileGames, youtube] = await Promise.all([
     safeFetch<SearchResponse>(`/api/tmdb/search?query=${q}&type=all`, signal),
     safeFetch<AnimeSearchResponse>(`/api/anime/search?query=${q}&sort=popularity`, signal),
     safeFetch<GameSearchResponse>(`/api/games/search?query=${q}`, signal),
+    safeFetch<MobileGameSearchResponse>(`/api/mobile-games/search?query=${q}`, signal),
     safeFetch<ChannelSearchResponse>(`/api/youtube/search?query=${q}`, signal),
   ]);
 
@@ -83,11 +86,22 @@ async function runQuickSearch(query: string, signal: AbortSignal): Promise<Quick
   for (const g of games?.results.slice(0, RESULTS_PER_CATEGORY) ?? []) {
     results.push({
       key: `game-${g.appId}`,
-      href: `/games/${g.appId}`,
+      href: `/games/pc/${g.appId}`,
       title: g.title,
       subtitle: g.releaseDate?.slice(0, 4) ?? "",
       category: "game",
       thumbnail: g.posterPath,
+    });
+  }
+
+  for (const m of mobileGames?.results.slice(0, RESULTS_PER_CATEGORY) ?? []) {
+    results.push({
+      key: `mobile_game-${m.appId}`,
+      href: `/games/mobile/${m.appId}`,
+      title: m.title,
+      subtitle: m.releaseDate?.slice(0, 4) ?? "",
+      category: "mobile_game",
+      thumbnail: m.posterPath,
     });
   }
 

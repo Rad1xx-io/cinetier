@@ -40,6 +40,7 @@ const CLEAR_LIST_NOUN: Record<ContentType, { singular: string; plural: string }>
   tv: { singular: "TV title", plural: "TV titles" },
   anime: { singular: "Anime title", plural: "Anime titles" },
   game: { singular: "Game title", plural: "Game titles" },
+  mobile_game: { singular: "Mobile game title", plural: "Mobile game titles" },
   youtube: { singular: "YouTube channel", plural: "YouTube channels" },
 };
 

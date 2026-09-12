@@ -102,7 +102,7 @@ export function GamesDiscoverClient({ initialData }: GamesDiscoverClientProps = 
     if (filters.category) sp.set("category", filters.category);
     if (filters.sort !== "popularity") sp.set("sort", filters.sort);
     const qs = sp.toString();
-    router.replace(qs ? `/games?${qs}` : "/games", { scroll: false });
+    router.replace(qs ? `/games/pc?${qs}` : "/games/pc", { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery, filters]);
 

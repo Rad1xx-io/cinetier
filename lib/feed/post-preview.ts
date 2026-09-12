@@ -237,6 +237,11 @@ export function suggestedPostCategory(
 ): PostCategory {
   const counts = new Map<PostCategory, number>();
   for (const title of titles) {
+    // Mobile Games has no feed category of its own yet (posts.category is
+    // untouched by that migration on purpose — see .ai/DECISIONS.md) — such
+    // titles fall out of the count entirely rather than being mapped onto
+    // "game", which would misrepresent them as PC games in the feed.
+    if (title.mediaType === "mobile_game") continue;
     counts.set(title.mediaType, (counts.get(title.mediaType) ?? 0) + 1);
   }
   if (channels.length > 0) counts.set("youtube", channels.length);

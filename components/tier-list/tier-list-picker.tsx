@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Clapperboard, Drama, Gamepad2, SquarePlay, Tv } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Drama, Gamepad2, Smartphone, SquarePlay, Tv } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { CATALOG_FILTERS, type ContentType } from "@/lib/utils/content-type";
 import { cn } from "@/lib/utils/cn";
@@ -14,6 +14,7 @@ const ICONS: Record<ContentType, LucideIcon> = {
   tv: Tv,
   anime: Drama,
   game: Gamepad2,
+  mobile_game: Smartphone,
   youtube: SquarePlay,
 };
 
