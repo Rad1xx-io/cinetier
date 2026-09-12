@@ -170,7 +170,14 @@ export function TierListBoard() {
    * meaning the same thing while switching between lists.
    */
   const catalogCounts = useMemo<CatalogCounts>(() => {
-    const counts: CatalogCounts = { movie: 0, tv: 0, anime: 0, game: 0, youtube: channels.length };
+    const counts: CatalogCounts = {
+      movie: 0,
+      tv: 0,
+      anime: 0,
+      game: 0,
+      mobile_game: 0,
+      youtube: channels.length,
+    };
     for (const title of titles) counts[title.mediaType] += 1;
     return counts;
   }, [titles, channels]);

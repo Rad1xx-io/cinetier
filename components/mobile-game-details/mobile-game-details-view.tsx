@@ -1,76 +1,56 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Plus, Star, Trash2 } from "lucide-react";
 import { useRankedTitles } from "@/lib/hooks/use-ranked-titles";
 import { Poster } from "@/components/movie-card/poster";
-import { isUnoptimizedSource } from "@/lib/utils/image-source";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CriteriaSection } from "@/components/criteria/criteria-section";
 import type { TierOrUnrated } from "@/lib/types";
 import { TIER_ORDER } from "@/lib/types";
-import type { GameDetails } from "@/lib/types/game";
+import type { MobileGameDetails } from "@/lib/types/mobile-game";
 import { releaseYear } from "@/lib/utils/format";
 import { tierColorVar, tierLabel } from "@/lib/utils/tier-style";
 import { cn } from "@/lib/utils/cn";
 import { trackItemAdded, trackItemRanked } from "@/lib/analytics/events";
 
-export function GameDetailsView({ details }: { details: GameDetails }) {
+export function MobileGameDetailsView({ details }: { details: MobileGameDetails }) {
   const { titles, add, remove, setTier, hydrated } = useRankedTitles();
 
-  // Matched on source too, same as the storage layer: an old entry ranked
-  // before a game's source was recorded (gameSource absent) and today's
-  // lookup (details.source always set) are treated as different records
-  // rather than guessed to be the same game — see RankedTitle.gameSource.
-  const ranked = titles.find(
-    (t) => t.tmdbId === details.appId && t.mediaType === "game" && t.gameSource === details.source
-  );
+  const ranked = titles.find((t) => t.tmdbId === details.appId && t.mediaType === "mobile_game");
 
   function addInput(tier?: TierOrUnrated) {
     return {
       tmdbId: details.appId,
-      mediaType: "game" as const,
+      mediaType: "mobile_game" as const,
       title: details.title,
       posterPath: details.posterPath,
       releaseDate: details.releaseDate,
       voteAverage: details.score ?? undefined,
-      gameSource: details.source,
+      mobileGameSource: details.source,
       ...(tier ? { tier } : {}),
     };
   }
 
   function handleAdd() {
-    trackItemAdded(`game-${details.appId}`, "game", "details");
+    trackItemAdded(`mobile_game-${details.appId}`, "mobile_game", "details");
     add(addInput());
   }
 
   function handleTierChange(tier: TierOrUnrated) {
-    trackItemRanked(`game-${details.appId}`, tier, ranked?.tier);
+    trackItemRanked(`mobile_game-${details.appId}`, tier, ranked?.tier);
     if (!ranked) add(addInput(tier));
-    else setTier(details.appId, "game", tier, details.source);
+    else setTier(details.appId, "mobile_game", tier);
   }
 
   return (
     <div>
-      <div className="relative h-56 w-full overflow-hidden bg-surface-raised sm:h-72 md:h-96">
-        {details.headerImage ? (
-          <Image
-            src={details.headerImage}
-            alt=""
-            fill
-            priority
-            className="object-cover"
-            sizes="100vw"
-            unoptimized={isUnoptimizedSource(details.headerImage)}
-          />
-        ) : (
-          <div className="h-full w-full bg-gradient-to-br from-surface-raised to-surface" />
-        )}
+      <div className="relative flex h-56 w-full items-end justify-center overflow-hidden bg-surface-raised sm:h-72 md:h-96">
+        <div className="h-full w-full bg-gradient-to-br from-surface-raised to-surface" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
         <Link
-          href="/games/pc"
+          href="/games/mobile"
           className="absolute left-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-background/70 backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:left-6"
           aria-label="Back to search"
         >
@@ -82,7 +62,6 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
         <div className="flex flex-col gap-6 sm:flex-row">
           <Poster
             posterPath={details.posterPath}
-            fallbackSrc={details.fallbackImage}
             title={details.title}
             size="w500"
             priority
@@ -99,14 +78,11 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
                   {details.score.toFixed(1)}
                 </span>
               )}
-              {details.platforms.length > 0 && <span>{details.platforms.join(" · ")}</span>}
               <Badge variant="outline">{details.isFree ? "Free" : details.price ?? "—"}</Badge>
             </div>
 
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{details.title}</h1>
-            {details.developers.length > 0 && (
-              <p className="mt-1 text-sm text-muted">{details.developers.join(", ")}</p>
-            )}
+            {details.developer && <p className="mt-1 text-sm text-muted">{details.developer}</p>}
 
             {details.genres.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
@@ -121,13 +97,13 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
             </p>
 
             <a
-              href={`https://store.steampowered.com/app/${details.appId}/`}
+              href={details.storeUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-3 inline-flex items-center gap-1 text-xs text-muted hover:text-accent"
             >
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-              Open on Steam
+              Open on the App Store
             </a>
 
             <div className="mt-6 space-y-3">
@@ -172,11 +148,7 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
                       );
                     })}
                   </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => remove(details.appId, "game", details.source)}
-                  >
+                  <Button variant="destructive" size="sm" onClick={() => remove(details.appId, "mobile_game")}>
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
                     Remove
                   </Button>
@@ -185,8 +157,7 @@ export function GameDetailsView({ details }: { details: GameDetails }) {
 
               <CriteriaSection
                 tmdbId={details.appId}
-                mediaType={"game"}
-                gameSource={details.source}
+                mediaType={"mobile_game"}
                 isRanked={Boolean(ranked)}
                 criteriaScores={ranked?.criteriaScores}
               />

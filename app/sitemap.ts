@@ -73,7 +73,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...staticRoutes,
     ...entryUrls("/title", entries.titles),
     ...entryUrls("/anime", entries.anime),
-    ...entryUrls("/games", entries.games),
+    ...entryUrls("/games/pc", entries.games),
+    ...entryUrls("/games/mobile", entries.mobileGames),
     ...entryUrls("/youtube/channel", channels),
     ...profiles.map((profile) => ({
       url: absoluteUrl(`/u/${encodeURIComponent(profile.username)}`),

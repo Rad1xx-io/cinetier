@@ -27,7 +27,7 @@ async function loadGame(id: string): Promise<LoadResult> {
   }
 }
 
-export async function generateMetadata(props: PageProps<"/games/[id]">): Promise<Metadata> {
+export async function generateMetadata(props: PageProps<"/games/pc/[id]">): Promise<Metadata> {
   const { id } = await props.params;
   const result = await loadGame(id);
   if (result.kind === "ok") {
@@ -35,13 +35,13 @@ export async function generateMetadata(props: PageProps<"/games/[id]">): Promise
       title: result.details.title,
       description: result.details.shortDescription,
       image: result.details.posterPath,
-      path: `/games/${id}`,
+      path: `/games/pc/${id}`,
     });
   }
   return { title: "TierListOnline" };
 }
 
-export default async function GameDetailsPage(props: PageProps<"/games/[id]">) {
+export default async function GameDetailsPage(props: PageProps<"/games/pc/[id]">) {
   const { id } = await props.params;
   const result = await loadGame(id);
 
@@ -50,7 +50,7 @@ export default async function GameDetailsPage(props: PageProps<"/games/[id]">) {
 
   return (
     <>
-      <JsonLd data={gameJsonLd(result.details, `/games/${id}`)} />
+      <JsonLd data={gameJsonLd(result.details, `/games/pc/${id}`)} />
       <GameDetailsView details={result.details} />
     </>
   );

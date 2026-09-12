@@ -266,6 +266,25 @@ const nextConfig: NextConfig = {
         destination: "/discover",
         permanent: true,
       },
+      /**
+       * A PC game's details page lived at /games/[id] until it moved to
+       * /games/pc/[id] (PR #88) so that /games itself could become a hub
+       * rather than the PC listing — see .ai/DECISIONS.md, 2026-09-12. The
+       * old path is what production already indexed and what an external
+       * link points at, so it needs the same permanent redirect /films got
+       * rather than a bare 404.
+       *
+       * The id is constrained to digits so this cannot also match
+       * /games/pc or /games/mobile themselves — both are letters, not a
+       * game id, but the pattern says so rather than relying on that.
+       * Every existing PC game id is a Steam appid or an IGDB id (both
+       * `number` — lib/types/game.ts), so nothing legitimate is excluded.
+       */
+      {
+        source: "/games/:id(\\d+)",
+        destination: "/games/pc/:id",
+        permanent: true,
+      },
     ];
   },
 

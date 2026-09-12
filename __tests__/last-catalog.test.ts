@@ -13,6 +13,7 @@ const empty: Record<ContentType, number> = {
   tv: 0,
   anime: 0,
   game: 0,
+  mobile_game: 0,
   youtube: 0,
 };
 

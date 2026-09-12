@@ -18,11 +18,17 @@ import type { MediaType, RankedTitle } from "@/lib/types";
 import { shareUrl } from "@/lib/seo/site";
 import { cn } from "@/lib/utils/cn";
 
+// Mobile Games is a real MediaType (see .ai/DECISIONS.md) but not a votable
+// one yet — CATEGORY_LABELS/byCategory below satisfy Record<MediaType, ...>'s
+// exhaustiveness because the type is shared, not because this feature covers
+// it; CATEGORIES is the actual, separate list of what the UI offers, and it
+// stays exactly the four it already was.
 const CATEGORY_LABELS: Record<MediaType, string> = {
   movie: "Films",
   tv: "TV",
   anime: "Anime",
   game: "Games",
+  mobile_game: "Mobile Games",
 };
 const CATEGORIES: MediaType[] = ["movie", "tv", "anime", "game"];
 
@@ -46,7 +52,13 @@ export function CreateVotingSessionModal({ open, onClose, titles }: CreateVoting
   const ref = useRef<HTMLDialogElement>(null);
 
   const byCategory = useMemo(() => {
-    const grouped: Record<MediaType, RankedTitle[]> = { movie: [], tv: [], anime: [], game: [] };
+    const grouped: Record<MediaType, RankedTitle[]> = {
+      movie: [],
+      tv: [],
+      anime: [],
+      game: [],
+      mobile_game: [],
+    };
     for (const title of titles) {
       if (isRatedTier(title.tier) && title.mediaType in grouped) grouped[title.mediaType].push(title);
     }

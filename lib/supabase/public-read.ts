@@ -179,9 +179,10 @@ export async function listRankedEntries(limit = RANKED_ENTRY_LIMIT): Promise<{
   titles: RankedEntryRef[];
   anime: RankedEntryRef[];
   games: RankedEntryRef[];
+  mobileGames: RankedEntryRef[];
 }> {
   const supabase = getPublicClient();
-  const empty = { titles: [], anime: [], games: [] };
+  const empty = { titles: [], anime: [], games: [], mobileGames: [] };
   if (!supabase) return empty;
 
   try {
@@ -197,6 +198,7 @@ export async function listRankedEntries(limit = RANKED_ENTRY_LIMIT): Promise<{
     const titles: { slug: string; updated: string | null }[] = [];
     const anime: { slug: string; updated: string | null }[] = [];
     const games: { slug: string; updated: string | null }[] = [];
+    const mobileGames: { slug: string; updated: string | null }[] = [];
 
     for (const row of rows) {
       if (!Number.isFinite(row.tmdb_id)) continue;
@@ -213,6 +215,9 @@ export async function listRankedEntries(limit = RANKED_ENTRY_LIMIT): Promise<{
         case "game":
           games.push({ slug: String(row.tmdb_id), updated: row.updated_at });
           break;
+        case "mobile_game":
+          mobileGames.push({ slug: String(row.tmdb_id), updated: row.updated_at });
+          break;
       }
     }
 
@@ -220,6 +225,7 @@ export async function listRankedEntries(limit = RANKED_ENTRY_LIMIT): Promise<{
       titles: newestPerSlug(titles),
       anime: newestPerSlug(anime),
       games: newestPerSlug(games),
+      mobileGames: newestPerSlug(mobileGames),
     };
   } catch {
     return empty;

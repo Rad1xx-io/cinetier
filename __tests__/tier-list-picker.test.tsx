@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { TierListPicker, type CatalogCounts } from "@/components/tier-list/tier-list-picker";
 import { firstStockedCatalog, type ContentType } from "@/lib/utils/content-type";
 
-const counts: CatalogCounts = { movie: 8, tv: 0, anime: 3, game: 0, youtube: 2 };
+const counts: CatalogCounts = { movie: 8, tv: 0, anime: 3, game: 0, mobile_game: 0, youtube: 2 };
 
 function renderPicker(value: ContentType = "movie") {
   const onChange = vi.fn();
@@ -20,12 +20,12 @@ describe("choosing which list the board shows", () => {
     expect(screen.getByRole("button", { name: /showing anime/i })).toBeTruthy();
   });
 
-  it("offers the five catalogs and nothing that mixes them", () => {
+  it("offers the six catalogs and nothing that mixes them", () => {
     const { open } = renderPicker();
     open();
 
     const options = screen.getAllByRole("menuitemradio").map((el) => el.textContent ?? "");
-    expect(options).toHaveLength(5);
+    expect(options).toHaveLength(6);
     // A tier holding films, games and channels together ranks them against each
     // other, which is not a comparison anybody made.
     expect(options.some((label) => /^all/i.test(label))) .toBe(false);
@@ -53,7 +53,8 @@ describe("choosing which list the board shows", () => {
   it("reports the chosen list and closes", () => {
     const { onChange, open } = renderPicker();
     open();
-    fireEvent.click(screen.getByRole("menuitemradio", { name: /games/i }));
+    // Anchored so it cannot also match "Mobile Games".
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /^games/i }));
 
     expect(onChange).toHaveBeenCalledWith("game");
     expect(screen.queryByRole("menu")).toBeNull();
@@ -80,15 +81,23 @@ describe("choosing which list the board shows", () => {
 
 describe("which list opens first", () => {
   it("opens on the first catalog that actually holds something", () => {
-    expect(firstStockedCatalog({ movie: 0, tv: 0, anime: 4, game: 2, youtube: 0 })).toBe("anime");
-    expect(firstStockedCatalog({ movie: 0, tv: 0, anime: 0, game: 0, youtube: 7 })).toBe("youtube");
+    expect(
+      firstStockedCatalog({ movie: 0, tv: 0, anime: 4, game: 2, mobile_game: 0, youtube: 0 })
+    ).toBe("anime");
+    expect(
+      firstStockedCatalog({ movie: 0, tv: 0, anime: 0, game: 0, mobile_game: 0, youtube: 7 })
+    ).toBe("youtube");
   });
 
   it("prefers films when several hold something, so the order is predictable", () => {
-    expect(firstStockedCatalog({ movie: 1, tv: 9, anime: 9, game: 9, youtube: 9 })).toBe("movie");
+    expect(
+      firstStockedCatalog({ movie: 1, tv: 9, anime: 9, game: 9, mobile_game: 9, youtube: 9 })
+    ).toBe("movie");
   });
 
   it("falls back to films for somebody who has ranked nothing at all", () => {
-    expect(firstStockedCatalog({ movie: 0, tv: 0, anime: 0, game: 0, youtube: 0 })).toBe("movie");
+    expect(
+      firstStockedCatalog({ movie: 0, tv: 0, anime: 0, game: 0, mobile_game: 0, youtube: 0 })
+    ).toBe("movie");
   });
 });

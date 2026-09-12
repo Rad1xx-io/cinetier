@@ -9,7 +9,7 @@ import { trackEvent } from "@/lib/analytics/tracker";
  */
 
 /** The catalogs a list or item can belong to. Mirrors the ranking media types plus channels. */
-export type AnalyticsCategory = "movie" | "tv" | "anime" | "game" | "youtube";
+export type AnalyticsCategory = "movie" | "tv" | "anime" | "game" | "mobile_game" | "youtube";
 
 /** What a shareable thing is. Kept open-ended — a shared object need not be a list forever. */
 export type ShareableContentType = "tier_list" | "profile" | "title" | "battle";

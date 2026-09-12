@@ -12,6 +12,11 @@ function isAnimeSource(value: unknown): boolean {
   return value === undefined || value === "anilist" || value === "jikan";
 }
 
+/** Only meaningful on a mobile game, and only ever "app_store" when present. */
+function isMobileGameSource(value: unknown): boolean {
+  return value === undefined || value === "app_store";
+}
+
 export function isValidTier(value: unknown): value is TierOrUnrated {
   return typeof value === "string" && (VALID_TIERS as string[]).includes(value);
 }
@@ -50,7 +55,8 @@ export function isRankedTitle(value: unknown): value is RankedTitle {
     (v.mediaType === "movie" ||
       v.mediaType === "tv" ||
       v.mediaType === "anime" ||
-      v.mediaType === "game") &&
+      v.mediaType === "game" ||
+      v.mediaType === "mobile_game") &&
     typeof v.title === "string" &&
     (v.posterPath === null || typeof v.posterPath === "string") &&
     (v.releaseDate === null || typeof v.releaseDate === "string") &&
@@ -59,6 +65,7 @@ export function isRankedTitle(value: unknown): value is RankedTitle {
     (v.voteAverage === undefined || typeof v.voteAverage === "number") &&
     isGameSource(v.gameSource) &&
     isAnimeSource(v.animeSource) &&
+    isMobileGameSource(v.mobileGameSource) &&
     isCriteriaScores(v.criteriaScores) &&
     isAffiliateLinks(v.affiliateLinks) &&
     typeof v.addedAt === "number" &&

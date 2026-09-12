@@ -63,7 +63,12 @@ export const SITEMAP_ROUTES: SitemapRoute[] = [
   { path: "/feed", changeFrequency: "daily", priority: 0.9 },
   { path: "/discover", changeFrequency: "daily", priority: 0.8 },
   { path: "/anime", changeFrequency: "daily", priority: 0.8 },
-  { path: "/games", changeFrequency: "daily", priority: 0.8 },
+  // /games itself is now a two-tile hub (PC/Mobile), not a catalog — kept in
+  // the sitemap as a real landing page (same reasoning as /tier-list below),
+  // just below the two lists it points at.
+  { path: "/games", changeFrequency: "monthly", priority: 0.5 },
+  { path: "/games/pc", changeFrequency: "daily", priority: 0.8 },
+  { path: "/games/mobile", changeFrequency: "daily", priority: 0.8 },
   { path: "/youtube", changeFrequency: "daily", priority: 0.8 },
   // The boards themselves. A visitor with no account sees an empty state and a
   // way in, which is a real landing page rather than a dead one.
