@@ -2,6 +2,7 @@ import type { MediaType, RankedTitle } from "@/lib/types";
 import type { CriterionScore } from "@/lib/types/criteria";
 import type { GameSource } from "@/lib/types/game";
 import type { AnimeCatalogSource } from "@/lib/types/anime";
+import type { MobileGameSource } from "@/lib/types/mobile-game";
 import type { AddTitleInput, RankingRepository } from "@/lib/storage/repository";
 import { titleKey } from "@/lib/storage/repository";
 import { validateImportedTitles } from "@/lib/storage/validation";
@@ -97,12 +98,13 @@ export class LocalStorageRepository implements RankingRepository {
     tmdbId: number,
     mediaType: MediaType,
     gameSource?: GameSource,
-    animeSource?: AnimeCatalogSource
+    animeSource?: AnimeCatalogSource,
+    mobileGameSource?: MobileGameSource
   ): RankedTitle | undefined {
     return this.readCache().find(
       (t) =>
-        titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource) ===
-        titleKey(tmdbId, mediaType, gameSource, animeSource)
+        titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource, t.mobileGameSource) ===
+        titleKey(tmdbId, mediaType, gameSource, animeSource, mobileGameSource)
     );
   }
 
@@ -110,8 +112,14 @@ export class LocalStorageRepository implements RankingRepository {
     const titles = this.readCache();
     const existing = titles.find(
       (t) =>
-        titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource) ===
-        titleKey(input.tmdbId, input.mediaType, input.gameSource, input.animeSource)
+        titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource, t.mobileGameSource) ===
+        titleKey(
+          input.tmdbId,
+          input.mediaType,
+          input.gameSource,
+          input.animeSource,
+          input.mobileGameSource
+        )
     );
     if (existing) return existing;
 
@@ -141,11 +149,19 @@ export class LocalStorageRepository implements RankingRepository {
     return record;
   }
 
-  remove(tmdbId: number, mediaType: MediaType, gameSource?: GameSource, animeSource?: AnimeCatalogSource): void {
+  remove(
+    tmdbId: number,
+    mediaType: MediaType,
+    gameSource?: GameSource,
+    animeSource?: AnimeCatalogSource,
+    mobileGameSource?: MobileGameSource
+  ): void {
     const titles = this.readCache();
-    const key = titleKey(tmdbId, mediaType, gameSource, animeSource);
+    const key = titleKey(tmdbId, mediaType, gameSource, animeSource, mobileGameSource);
     this.write(
-      titles.filter((t) => titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource) !== key)
+      titles.filter(
+        (t) => titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource, t.mobileGameSource) !== key
+      )
     );
   }
 
@@ -154,16 +170,17 @@ export class LocalStorageRepository implements RankingRepository {
     mediaType: MediaType,
     tier: RankedTitle["tier"],
     gameSource?: GameSource,
-    animeSource?: AnimeCatalogSource
+    animeSource?: AnimeCatalogSource,
+    mobileGameSource?: MobileGameSource
   ): RankedTitle | undefined {
     const titles = this.readCache();
-    const key = titleKey(tmdbId, mediaType, gameSource, animeSource);
+    const key = titleKey(tmdbId, mediaType, gameSource, animeSource, mobileGameSource);
     const maxOrder = titles
       .filter((t) => t.tier === tier)
       .reduce((max, t) => Math.max(max, t.order), -1);
     let updated: RankedTitle | undefined;
     const next = titles.map((t) => {
-      if (titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource) === key) {
+      if (titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource, t.mobileGameSource) === key) {
         updated = { ...t, tier, order: maxOrder + 1, updatedAt: Date.now() };
         return updated;
       }
@@ -178,14 +195,15 @@ export class LocalStorageRepository implements RankingRepository {
     mediaType: MediaType,
     criteriaScores: CriterionScore[],
     gameSource?: GameSource,
-    animeSource?: AnimeCatalogSource
+    animeSource?: AnimeCatalogSource,
+    mobileGameSource?: MobileGameSource
   ): RankedTitle | undefined {
     const titles = this.readCache();
-    const key = titleKey(tmdbId, mediaType, gameSource, animeSource);
+    const key = titleKey(tmdbId, mediaType, gameSource, animeSource, mobileGameSource);
     let updated: RankedTitle | undefined;
 
     const next = titles.map((t) => {
-      if (titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource) !== key) return t;
+      if (titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource, t.mobileGameSource) !== key) return t;
       // An empty list means "no breakdown" rather than "a breakdown of nothing",
       // so the field goes away entirely and exports stay clean.
       const rest = { ...t };
@@ -226,8 +244,10 @@ export class LocalStorageRepository implements RankingRepository {
 
     const existing = this.readCache();
     const merged = new Map<string, RankedTitle>();
-    for (const t of existing) merged.set(titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource), t);
-    for (const t of valid) merged.set(titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource), t);
+    for (const t of existing)
+      merged.set(titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource, t.mobileGameSource), t);
+    for (const t of valid)
+      merged.set(titleKey(t.tmdbId, t.mediaType, t.gameSource, t.animeSource, t.mobileGameSource), t);
 
     this.write(Array.from(merged.values()));
     return { imported: valid.length };

@@ -41,7 +41,7 @@ export function MobileGameDetailsView({ details }: { details: MobileGameDetails 
   function handleTierChange(tier: TierOrUnrated) {
     trackItemRanked(`mobile_game-${details.appId}`, tier, ranked?.tier);
     if (!ranked) add(addInput(tier));
-    else setTier(details.appId, "mobile_game", tier);
+    else setTier(details.appId, "mobile_game", tier, undefined, undefined, details.source);
   }
 
   return (
@@ -148,7 +148,11 @@ export function MobileGameDetailsView({ details }: { details: MobileGameDetails 
                       );
                     })}
                   </div>
-                  <Button variant="destructive" size="sm" onClick={() => remove(details.appId, "mobile_game")}>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => remove(details.appId, "mobile_game", undefined, undefined, details.source)}
+                  >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
                     Remove
                   </Button>
@@ -158,6 +162,7 @@ export function MobileGameDetailsView({ details }: { details: MobileGameDetails 
               <CriteriaSection
                 tmdbId={details.appId}
                 mediaType={"mobile_game"}
+                mobileGameSource={details.source}
                 isRanked={Boolean(ranked)}
                 criteriaScores={ranked?.criteriaScores}
               />

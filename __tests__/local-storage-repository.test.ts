@@ -62,6 +62,59 @@ describe("LocalStorageRepository", () => {
     expect(repo.getAll()).toHaveLength(0);
   });
 
+  describe("mobileGameSource identity", () => {
+    // Proves the fix, not just the type: titleKey() previously had no branch
+    // for "mobile_game" at all, so remove/updateTier/getByKey computed a key
+    // with no source suffix while `add()` had already stored one WITH the
+    // suffix — the two never matched, so a mobile game could be added but
+    // never removed or re-tiered through its own details page.
+    it("removes a mobile game by its stored source, not a bare id match", () => {
+      repo.add({
+        tmdbId: 6448786147,
+        mediaType: "mobile_game",
+        title: "Monument Valley",
+        posterPath: null,
+        releaseDate: null,
+        mobileGameSource: "app_store",
+      });
+
+      repo.remove(6448786147, "mobile_game", undefined, undefined, "app_store");
+      expect(repo.getAll()).toHaveLength(0);
+    });
+
+    it("does not remove a mobile game when the source is left unspecified", () => {
+      // Documents the current, correct behaviour rather than papering over it:
+      // once a row has a source, an identity check omitting it is a genuine
+      // miss, exactly as it already is for a sourced game or anime.
+      repo.add({
+        tmdbId: 6448786147,
+        mediaType: "mobile_game",
+        title: "Monument Valley",
+        posterPath: null,
+        releaseDate: null,
+        mobileGameSource: "app_store",
+      });
+
+      repo.remove(6448786147, "mobile_game");
+      expect(repo.getAll()).toHaveLength(1);
+    });
+
+    it("re-tiers a mobile game found by its stored source", () => {
+      repo.add({
+        tmdbId: 6448786147,
+        mediaType: "mobile_game",
+        title: "Monument Valley",
+        posterPath: null,
+        releaseDate: null,
+        mobileGameSource: "app_store",
+      });
+
+      const updated = repo.updateTier(6448786147, "mobile_game", "S", undefined, undefined, "app_store");
+      expect(updated?.tier).toBe("S");
+      expect(repo.getByKey(6448786147, "mobile_game", undefined, undefined, "app_store")?.tier).toBe("S");
+    });
+  });
+
   it("persists across repository instances via localStorage", () => {
     repo.add({ tmdbId: 1, mediaType: "tv", title: "Breaking Bad", posterPath: null, releaseDate: null });
     const otherInstance = new LocalStorageRepository();
