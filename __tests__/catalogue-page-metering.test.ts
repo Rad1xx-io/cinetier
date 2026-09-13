@@ -25,6 +25,8 @@ const CATALOGUE_CLIENTS = [
   "@/lib/tmdb/client",
   "@/lib/anime-sources",
   "@/lib/tmdb/watch-providers",
+  "@/lib/games/source",
+  "@/lib/app-store/discovery",
 ];
 
 function pageFiles(dir: string): string[] {
@@ -71,7 +73,14 @@ describe("dynamic catalogue pages are metered", () => {
       // call has already paid for the request it was meant to refuse.
       const gate = source.indexOf("catalogueGate(");
       const firstSpend = Math.min(
-        ...["youtubeFetch(", "tmdbFetch(", "getWatchProviders(", "getAnimeSource("]
+        ...[
+          "youtubeFetch(",
+          "tmdbFetch(",
+          "getWatchProviders(",
+          "getAnimeSource(",
+          "getGameDetails(",
+          "getMobileGameDetails(",
+        ]
           .map((call) => source.indexOf(call))
           .filter((at) => at >= 0)
       );

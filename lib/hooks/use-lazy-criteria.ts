@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type { MediaType } from "@/lib/types";
 import type { GameSource } from "@/lib/types/game";
 import type { AnimeCatalogSource } from "@/lib/types/anime";
+import type { MobileGameSource } from "@/lib/types/mobile-game";
 import type { CriterionScore } from "@/lib/types/criteria";
 
 /**
@@ -29,6 +30,8 @@ export interface UseLazyCriteriaOptions {
   gameSource?: GameSource;
   /** Only meaningful when `mediaType` is "anime" — see `RankedTitle.animeSource`. */
   animeSource?: AnimeCatalogSource;
+  /** Only meaningful when `mediaType` is "mobile_game" — see `RankedTitle.mobileGameSource`. */
+  mobileGameSource?: MobileGameSource;
   /** Signed-in user id, or null when browsing as a guest. */
   userId: string | null;
   /** True once the item is actually on screen — nothing is fetched for a closed card. */
@@ -40,7 +43,8 @@ export interface UseLazyCriteriaOptions {
     tmdbId: number,
     mediaType: MediaType,
     gameSource?: GameSource,
-    animeSource?: AnimeCatalogSource
+    animeSource?: AnimeCatalogSource,
+    mobileGameSource?: MobileGameSource
   ) => Promise<CriterionScore[]>;
   onLoaded: (scores: CriterionScore[]) => void;
 }
@@ -57,6 +61,7 @@ export function useLazyCriteria({
   mediaType,
   gameSource,
   animeSource,
+  mobileGameSource,
   userId,
   isOpen,
   hasLocalScores,
@@ -66,17 +71,20 @@ export function useLazyCriteria({
   useEffect(() => {
     if (!isOpen || !userId || hasLocalScores) return;
 
-    // gameSource/animeSource join the key for the same reason either joins
-    // every other ranked-title key in the app: two different games, or two
-    // different anime, can now share a tmdb_id (see RankedTitle.gameSource,
-    // RankedTitle.animeSource), and without it here, one entry's fetch would
-    // mark the *other* entry's breakdown "already attempted".
+    // gameSource/animeSource/mobileGameSource join the key for the same
+    // reason any of them joins every other ranked-title key in the app: two
+    // different games, anime, or (potentially, one day) mobile games can
+    // share a tmdb_id (see RankedTitle.gameSource, RankedTitle.animeSource,
+    // RankedTitle.mobileGameSource), and without it here, one entry's fetch
+    // would mark the *other* entry's breakdown "already attempted".
     const suffix =
       mediaType === "game" && gameSource
         ? `-${gameSource}`
         : mediaType === "anime" && animeSource
           ? `-${animeSource}`
-          : "";
+          : mediaType === "mobile_game" && mobileGameSource
+            ? `-${mobileGameSource}`
+            : "";
     const key = `${userId}:${mediaType}-${tmdbId}${suffix}`;
     if (attempted.has(key)) return;
     // Marked before the request, not after: two cards mounting in the same tick
@@ -84,7 +92,7 @@ export function useLazyCriteria({
     attempted.add(key);
 
     let cancelled = false;
-    pull(userId, tmdbId, mediaType, gameSource, animeSource)
+    pull(userId, tmdbId, mediaType, gameSource, animeSource, mobileGameSource)
       .then((scores) => {
         // An empty answer is still an answer — `attempted` already records it,
         // and writing nothing locally keeps "no breakdown" meaning exactly that.
@@ -99,5 +107,16 @@ export function useLazyCriteria({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, userId, hasLocalScores, tmdbId, mediaType, gameSource, animeSource, pull, onLoaded]);
+  }, [
+    isOpen,
+    userId,
+    hasLocalScores,
+    tmdbId,
+    mediaType,
+    gameSource,
+    animeSource,
+    mobileGameSource,
+    pull,
+    onLoaded,
+  ]);
 }

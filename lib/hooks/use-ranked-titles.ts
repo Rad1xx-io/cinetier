@@ -5,6 +5,7 @@ import type { MediaType, RankedTitle, TierOrUnrated } from "@/lib/types";
 import type { CriterionScore } from "@/lib/types/criteria";
 import type { GameSource } from "@/lib/types/game";
 import type { AnimeCatalogSource } from "@/lib/types/anime";
+import type { MobileGameSource } from "@/lib/types/mobile-game";
 import {
   addTitle,
   clearAll,
@@ -51,8 +52,13 @@ export function useRankedTitles() {
     return added;
   }, []);
   const remove = useCallback(
-    (tmdbId: number, mediaType: MediaType, gameSource?: GameSource, animeSource?: AnimeCatalogSource) =>
-      removeTitle(tmdbId, mediaType, gameSource, animeSource),
+    (
+      tmdbId: number,
+      mediaType: MediaType,
+      gameSource?: GameSource,
+      animeSource?: AnimeCatalogSource,
+      mobileGameSource?: MobileGameSource
+    ) => removeTitle(tmdbId, mediaType, gameSource, animeSource, mobileGameSource),
     []
   );
   const setCriteria = useCallback(
@@ -61,8 +67,9 @@ export function useRankedTitles() {
       mediaType: MediaType,
       criteriaScores: CriterionScore[],
       gameSource?: GameSource,
-      animeSource?: AnimeCatalogSource
-    ) => updateCriteria(tmdbId, mediaType, criteriaScores, gameSource, animeSource),
+      animeSource?: AnimeCatalogSource,
+      mobileGameSource?: MobileGameSource
+    ) => updateCriteria(tmdbId, mediaType, criteriaScores, gameSource, animeSource, mobileGameSource),
     []
   );
   const setTier = useCallback(
@@ -71,8 +78,9 @@ export function useRankedTitles() {
       mediaType: MediaType,
       tier: TierOrUnrated,
       gameSource?: GameSource,
-      animeSource?: AnimeCatalogSource
-    ) => updateTier(tmdbId, mediaType, tier, gameSource, animeSource),
+      animeSource?: AnimeCatalogSource,
+      mobileGameSource?: MobileGameSource
+    ) => updateTier(tmdbId, mediaType, tier, gameSource, animeSource, mobileGameSource),
     []
   );
 

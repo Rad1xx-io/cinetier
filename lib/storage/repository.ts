@@ -31,21 +31,24 @@ export interface RankingRepository {
     tmdbId: number,
     mediaType: MediaType,
     gameSource?: GameSource,
-    animeSource?: AnimeCatalogSource
+    animeSource?: AnimeCatalogSource,
+    mobileGameSource?: MobileGameSource
   ): RankedTitle | undefined;
   add(input: AddTitleInput): RankedTitle;
   remove(
     tmdbId: number,
     mediaType: MediaType,
     gameSource?: GameSource,
-    animeSource?: AnimeCatalogSource
+    animeSource?: AnimeCatalogSource,
+    mobileGameSource?: MobileGameSource
   ): void;
   updateTier(
     tmdbId: number,
     mediaType: MediaType,
     tier: TierOrUnrated,
     gameSource?: GameSource,
-    animeSource?: AnimeCatalogSource
+    animeSource?: AnimeCatalogSource,
+    mobileGameSource?: MobileGameSource
   ): RankedTitle | undefined;
   /** Replaces the whole breakdown; an empty array clears it. */
   updateCriteria(
@@ -53,7 +56,8 @@ export interface RankingRepository {
     mediaType: MediaType,
     criteriaScores: CriterionScore[],
     gameSource?: GameSource,
-    animeSource?: AnimeCatalogSource
+    animeSource?: AnimeCatalogSource,
+    mobileGameSource?: MobileGameSource
   ): RankedTitle | undefined;
   /** Overwrites the full list, used to persist drag-and-drop tier/order changes in one write. */
   reorderAll(titles: RankedTitle[]): void;
@@ -65,26 +69,36 @@ export interface RankingRepository {
 /**
  * The identity string every store keys a ranked title on.
  *
- * `gameSource`/`animeSource` only ever change the result for their own
- * `mediaType`, and only when actually known — both absent produces exactly
- * the key this function has always produced, so every title ranked before
- * either parameter existed keeps the same key it already has on disk. A
- * *new* game or anime with a known source gets a key no old, unlabelled
- * entry can collide with, which is the point: see `RankedTitle.gameSource`
- * and `RankedTitle.animeSource` for why a bare `mediaType:tmdbId` stopped
- * being a safe identity for either.
+ * `gameSource`/`animeSource`/`mobileGameSource` only ever change the result
+ * for their own `mediaType`, and only when actually known — all three absent
+ * produces exactly the key this function has always produced, so every title
+ * ranked before any of them existed keeps the same key it already has on
+ * disk. A *new* game, anime or mobile game with a known source gets a key no
+ * old, unlabelled entry can collide with, which is the point: see
+ * `RankedTitle.gameSource`/`animeSource`/`mobileGameSource` for why a bare
+ * `mediaType:tmdbId` stopped being a safe identity for any of them.
+ *
+ * `mobileGameSource` has exactly one legal value today (`"app_store"`), so
+ * this cannot actually collide with anything yet — added anyway, the same
+ * lesson `gameSource`/`animeSource` already paid for once each: threading it
+ * through identity from day one costs one parameter, where retrofitting it
+ * after a second mobile catalog existed would mean every already-ranked
+ * mobile game becoming as unlabelled as a pre-031 game once was.
  */
 export function titleKey(
   tmdbId: number,
   mediaType: MediaType,
   gameSource?: GameSource,
-  animeSource?: AnimeCatalogSource
+  animeSource?: AnimeCatalogSource,
+  mobileGameSource?: MobileGameSource
 ): string {
   const suffix =
     mediaType === "game" && gameSource
       ? `:${gameSource}`
       : mediaType === "anime" && animeSource
         ? `:${animeSource}`
-        : "";
+        : mediaType === "mobile_game" && mobileGameSource
+          ? `:${mobileGameSource}`
+          : "";
   return `${mediaType}:${tmdbId}${suffix}`;
 }

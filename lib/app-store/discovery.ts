@@ -1,6 +1,6 @@
 import "server-only";
 import { appStoreFetch } from "@/lib/app-store/client";
-import { mapITunesToDetails, mapITunesToSummary } from "@/lib/app-store/mappers";
+import { isGameResult, mapITunesToDetails, mapITunesToSummary } from "@/lib/app-store/mappers";
 import type { ITunesSearchResponse } from "@/lib/app-store/types";
 import type { MobileGameDetails, MobileGameSummary } from "@/lib/types/mobile-game";
 
@@ -46,13 +46,20 @@ export async function discoverMobileGames({
   });
 
   const data = await appStoreFetch<ITunesSearchResponse>(`${SEARCH_URL}?${params}`);
-  const results = data.results.map(mapITunesToSummary);
-  return { results, hasMore: results.length >= MOBILE_GAMES_PAGE_SIZE };
+  // hasMore reads the RAW page, before the games-only filter below — a full
+  // raw page that happens to be mostly non-games must not read as "nothing
+  // more to fetch" just because few of this page's rows survived filtering.
+  const hasMore = data.results.length >= MOBILE_GAMES_PAGE_SIZE;
+  const results = data.results.filter(isGameResult).map(mapITunesToSummary);
+  return { results, hasMore };
 }
 
 export async function getMobileGameDetails(id: number): Promise<MobileGameDetails | null> {
   const params = new URLSearchParams({ id: String(id), country: "us" });
   const data = await appStoreFetch<ITunesSearchResponse>(`${LOOKUP_URL}?${params}`);
   const result = data.results[0];
-  return result ? mapITunesToDetails(result) : null;
+  // A non-game app id (someone typing a track id by hand, or an old link) is
+  // "not found" here for the same reason it never appears in search — this
+  // catalogue's whole promise is that everything in it is a game.
+  return result && isGameResult(result) ? mapITunesToDetails(result) : null;
 }

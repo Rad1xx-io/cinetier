@@ -7,6 +7,8 @@ export interface ITunesSoftwareResult {
   artworkUrl100?: string;
   description?: string;
   releaseDate?: string;
+  /** Apple's own top-level classification — always exactly "Games" for a real game, verified live against 16 real titles spanning every sub-genre (Action, Puzzle, Strategy, Roleplaying, Board, Word, Racing, …). Sub-genres only ever show up in `genres` below, never here. */
+  primaryGenreName?: string;
   genres?: string[];
   averageUserRating?: number;
   userRatingCount?: number;
